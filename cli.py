@@ -331,33 +331,239 @@ def journal():
 
 
 @journal.command("new")
-def journal_new():
+@click.option("--type", "entry_type", type=click.Choice(["daily", "interview", "study", "project", "reflection"]),
+              prompt="Entry type", help="Type of journal entry.")
+@click.option("--mood", default=None, help="Optional mood (e.g. focused, frustrated).")
+@click.option("--time", "time_spent", default=None, type=int, help="Minutes spent.")
+def journal_new(entry_type, mood, time_spent):
     """Create a new journal entry."""
-    console.print("[yellow]Coming soon — Phase 3[/yellow]")
+    from src.journal.entries import JournalManager
+
+    console.print("[dim]Enter your journal entry (press Enter twice to finish):[/dim]")
+    lines = []
+    while True:
+        line = console.input("")
+        if line == "" and lines and lines[-1] == "":
+            lines.pop()  # remove trailing blank
+            break
+        lines.append(line)
+
+    content = "\n".join(lines).strip()
+    if not content:
+        console.print("[yellow]Empty entry, cancelled.[/yellow]")
+        return
+
+    manager = JournalManager()
+    filename = manager.create_entry(entry_type, content, mood=mood, time_spent=time_spent)
+    console.print(f"[green]Entry saved: {filename}[/green]")
 
 
 @journal.command("list")
-def journal_list():
+@click.option("--days", default=30, help="Number of days to look back.")
+@click.option("--type", "entry_type", default=None, help="Filter by entry type.")
+def journal_list(days, entry_type):
     """Show recent journal entries."""
-    console.print("[yellow]Coming soon — Phase 3[/yellow]")
+    from src.journal.entries import JournalManager
+
+    manager = JournalManager()
+    entries = manager.list_entries(days_back=days, entry_type=entry_type)
+
+    if not entries:
+        console.print("[yellow]No entries found.[/yellow]")
+        return
+
+    table = Table(title=f"Journal Entries ({len(entries)} found)")
+    table.add_column("Date", style="bold")
+    table.add_column("Type")
+    table.add_column("Tags")
+    table.add_column("Mood")
+    table.add_column("File", style="dim")
+
+    for e in entries:
+        tags_str = ", ".join(e["tags"]) if e["tags"] else ""
+        table.add_row(e["date"], e["type"], tags_str, str(e["mood"]), e["filename"])
+
+    console.print(table)
+
+
+@journal.command("show")
+@click.argument("filename")
+def journal_show(filename):
+    """Display a specific journal entry."""
+    from rich.markdown import Markdown
+    from src.journal.entries import JournalManager
+
+    manager = JournalManager()
+    entry = manager.get_entry(filename)
+
+    if not entry:
+        console.print(f"[red]Entry not found: {filename}[/red]")
+        return
+
+    header = f"[bold]{entry.get('date', '?')}[/bold] ({entry.get('type', '?')})"
+    if entry.get("tags"):
+        header += f"  tags: {', '.join(entry['tags'])}"
+    if entry.get("mood"):
+        header += f"  mood: {entry['mood']}"
+
+    console.print(header)
+    console.print()
+    console.print(Markdown(entry.get("content", "")))
 
 
 @journal.command("insights")
 def journal_insights():
-    """Run weekly summary via Claude."""
-    console.print("[yellow]Coming soon — Phase 3[/yellow]")
+    """Run weekly summary on last 7 days of entries."""
+    from src.journal.entries import JournalManager
+    from src.journal.insights import InsightsEngine
+
+    manager = JournalManager()
+    entries_meta = manager.list_entries(days_back=7)
+
+    if not entries_meta:
+        console.print("[yellow]No entries in the last 7 days.[/yellow]")
+        return
+
+    # Load full content for each entry
+    entries = []
+    for meta in entries_meta:
+        full = manager.get_entry(meta["filename"])
+        if full:
+            entries.append(full)
+
+    engine = InsightsEngine()
+
+    console.print("[bold]Weekly Summary[/bold]")
+    console.print()
+    summary = engine.weekly_summary(entries)
+    if summary:
+        console.print(Panel(summary, title="Weekly Insights", border_style="cyan"))
+    else:
+        console.print("[red]Failed to generate summary.[/red]")
+
+    console.print()
+    momentum = engine.momentum_check(entries)
+    status_colors = {"strong": "green", "steady": "blue", "slipping": "yellow", "stalled": "red"}
+    color = status_colors.get(momentum["status"], "white")
+    console.print(f"Momentum: [{color}]{momentum['status'].upper()}[/{color}]")
+    if momentum["explanation"]:
+        console.print(f"  {momentum['explanation']}")
 
 
-@cli.command()
-def skills():
+@journal.command("search")
+@click.argument("keyword")
+def journal_search(keyword):
+    """Search journal entries for a keyword."""
+    from src.journal.entries import JournalManager
+
+    manager = JournalManager()
+    results = manager.search_entries(keyword)
+
+    if not results:
+        console.print(f"[yellow]No entries matching '{keyword}'.[/yellow]")
+        return
+
+    table = Table(title=f"Search: '{keyword}' ({len(results)} matches)")
+    table.add_column("File", style="bold")
+    table.add_column("Snippet")
+
+    for r in results:
+        table.add_row(r["filename"], r["snippet"])
+
+    console.print(table)
+
+
+@cli.group(invoke_without_command=True)
+@click.pass_context
+def skills(ctx):
     """Show skill inventory with gap visualization."""
-    console.print("[yellow]Coming soon — Phase 3[/yellow]")
+    if ctx.invoked_subcommand is not None:
+        return
+
+    from src.skills.tracker import SkillTracker
+
+    tracker = SkillTracker()
+    tracker.seed_defaults()
+    skill_data = tracker.display_skills()
+    tracker.close()
+
+    if not skill_data:
+        console.print("[yellow]No skills found.[/yellow]")
+        return
+
+    table = Table(title="Skill Inventory")
+    table.add_column("Skill", style="bold")
+    table.add_column("Category")
+    table.add_column("Level", justify="center")
+    table.add_column("Target", justify="center")
+    table.add_column("Gap", justify="center")
+    table.add_column("Progress")
+    table.add_column("Last Practiced", style="dim")
+
+    for s in skill_data:
+        gap = s["gap"]
+        if gap == 0:
+            gap_str = "[green]0[/green]"
+        elif gap == 1:
+            gap_str = f"[yellow]{gap}[/yellow]"
+        else:
+            gap_str = f"[red]{gap}[/red]"
+
+        table.add_row(
+            s["name"], s["category"],
+            str(s["current_level"]), str(s["target_level"]),
+            gap_str, s["bar"],
+            s["last_practiced"][:10] if s["last_practiced"] else "",
+        )
+
+    console.print(table)
+
+
+@skills.command("update")
+@click.argument("name")
+@click.argument("level", type=int)
+def skills_update(name, level):
+    """Update a skill level (1-5)."""
+    from src.skills.tracker import SkillTracker
+
+    if not 1 <= level <= 5:
+        console.print("[red]Level must be between 1 and 5.[/red]")
+        return
+
+    tracker = SkillTracker()
+    tracker.seed_defaults()
+    if tracker.update_skill(name, level):
+        console.print(f"[green]Updated '{name}' to level {level}.[/green]")
+    else:
+        console.print(f"[red]Skill '{name}' not found.[/red]")
+    tracker.close()
 
 
 @cli.command()
-def roadmap():
-    """Generate study roadmap via Claude."""
-    console.print("[yellow]Coming soon — Phase 3[/yellow]")
+@click.option("--hours", default=15, help="Available study hours per week (default 15).")
+def roadmap(hours):
+    """Generate a study roadmap from skill gaps via Claude."""
+    from src.skills.roadmap import RoadmapGenerator
+    from src.skills.tracker import SkillTracker
+
+    tracker = SkillTracker()
+    tracker.seed_defaults()
+    gaps = tracker.get_gaps()
+    tracker.close()
+
+    if not gaps:
+        console.print("[green]No skill gaps! All skills at target level.[/green]")
+        return
+
+    console.print(f"[dim]Generating roadmap for {len(gaps)} skill gap(s) ({hours} hrs/week)...[/dim]")
+
+    generator = RoadmapGenerator()
+    roadmap_text = generator.generate_roadmap(gaps, available_hours_per_week=hours)
+
+    if roadmap_text:
+        console.print(Panel(roadmap_text, title="Study Roadmap", border_style="cyan"))
+    else:
+        console.print("[red]Failed to generate roadmap. Check logs.[/red]")
 
 
 @cli.command()
