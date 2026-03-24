@@ -653,24 +653,35 @@ def search(profile_ids):
     tracker = ApplicationTracker()
     analyzer = JobAnalyzer()
 
-    console.print("\n[dim]Per-job actions: [s]ave to tracker, [a]nalyze fit, [o]pen in browser, [n]ext, [q]uit[/dim]\n")
+    console.print(
+        "\n[dim]Per-job actions: [s]ave to tracker, [A]pply, "
+        "[a]nalyze fit, [o]pen in browser, [n]ext, [q]uit[/dim]\n"
+    )
+
+    from src.jobs.applicant import JobApplicant
+    applicant = JobApplicant()
 
     for i, r in enumerate(results, 1):
         console.rule(f"[bold]{i}. {r.get('title', '?')} at {r.get('company', '?')}[/bold]")
         console.print(f"  Location: {r.get('location', '?')}  |  Salary: {r.get('salary', '') or 'N/A'}")
         console.print(f"  Source: {r.get('source', '?')}  |  Posted: {r.get('posted_date', '') or 'N/A'}")
+        easy_apply = r.get("easy_apply", False)
+        console.print(f"  Easy Apply: {'[green]Yes[/green]' if easy_apply else '[dim]No[/dim]'}")
         if r.get("url"):
             console.print(f"  URL: {r['url'][:80]}")
 
         while True:
             action = console.input(
-                "  [bold][s][/bold]ave  [bold][a][/bold]nalyze  [bold][o][/bold]pen  [bold][n][/bold]ext  [bold][q][/bold]uit: "
-            ).strip().lower()
+                "  [bold][s][/bold]ave  [bold][A][/bold]pply  [bold][a][/bold]nalyze  "
+                "[bold][o][/bold]pen  [bold][n][/bold]ext  [bold][q][/bold]uit: "
+            ).strip()
 
-            if action == "s":
+            if action.lower() == "s":
                 job_id = tracker.save_job(r)
                 console.print(f"  [green]Saved to tracker (id={job_id})[/green]")
-            elif action == "a":
+            elif action == "A":
+                _apply_job_flow(r, applicant, console)
+            elif action.lower() == "a":
                 console.print("  [dim]Analyzing fit...[/dim]")
                 job_desc = (
                     f"Title: {r.get('title', '')}\n"
@@ -684,23 +695,85 @@ def search(profile_ids):
                     _display_fit_analysis(analysis)
                 else:
                     console.print("  [red]Analysis failed.[/red]")
-            elif action == "o":
+            elif action.lower() == "o":
                 url = r.get("url", "")
                 if url:
                     webbrowser.open(url)
                     console.print("  [cyan]Opened in browser.[/cyan]")
                 else:
                     console.print("  [yellow]No URL available.[/yellow]")
-            elif action == "n":
+            elif action.lower() == "n":
                 break
-            elif action == "q":
+            elif action.lower() == "q":
                 tracker.close()
+                applicant.close()
                 return
             else:
-                console.print("  [red]Invalid choice. Enter s, a, o, n, or q.[/red]")
+                console.print("  [red]Invalid choice. Enter s, A, a, o, n, or q.[/red]")
 
     tracker.close()
+    applicant.close()
     console.print("\n[dim]Search complete.[/dim]")
+
+
+def _apply_job_flow(job_data, applicant, con):
+    """Interactive apply flow for a single job."""
+    easy_apply = job_data.get("easy_apply", False)
+    method = "easy_apply" if easy_apply else "browser"
+
+    # Show job details panel
+    details = (
+        f"[bold]{job_data.get('title', '?')}[/bold] at {job_data.get('company', '?')}\n"
+        f"Location: {job_data.get('location', '?')}  |  Salary: {job_data.get('salary', '') or 'N/A'}\n"
+        f"Source: {job_data.get('source', '?')}  |  Easy Apply: {'Yes' if easy_apply else 'No'}"
+    )
+    if job_data.get("url"):
+        details += f"\nURL: {job_data['url'][:80]}"
+    con.print(Panel(details, title="Apply", border_style="green"))
+
+    confirm = con.input("  Apply to this position? [y/n]: ").strip().lower()
+    if confirm != "y":
+        con.print("  [dim]Skipped.[/dim]")
+        return
+
+    # Execute apply flow
+    if easy_apply:
+        result = applicant.apply_dice_easy(job_data)
+    else:
+        result = applicant.apply_with_resume(job_data)
+
+    if result.get("opened"):
+        con.print("  [cyan]Opened in browser.[/cyan]")
+    if result.get("clipboard"):
+        con.print("  [green]Profile copied to clipboard — paste into application form.[/green]")
+
+    # Clipboard field picker
+    con.print("  [dim]Copy field: [n]ame [e]mail [p]hone [a]ddress [l]inkedIn [r]esume summary[/dim]")
+    while True:
+        field_choice = con.input("  Copy field (or Enter to continue): ").strip().lower()
+        if not field_choice:
+            break
+        field_key = {
+            "n": "name", "e": "email", "p": "phone",
+            "a": "address", "l": "linkedin", "r": "summary",
+        }.get(field_choice)
+        if field_key:
+            val = applicant.copy_field(field_key)
+            if val:
+                con.print(f"  [green]Copied {field_key}: {val[:60]}[/green]")
+            else:
+                con.print(f"  [yellow]{field_key} not set in profile.[/yellow]")
+        else:
+            con.print("  [red]Invalid field.[/red]")
+
+    # Confirm actual submission
+    tracker_id = result.get("tracker_id")
+    did_apply = con.input("  Mark as applied? [y/n]: ").strip().lower()
+    if did_apply == "y" and tracker_id:
+        applicant.mark_applied(tracker_id, method=method)
+        con.print(f"  [green]Marked as applied (id={tracker_id}).[/green]")
+    else:
+        con.print("  [dim]Not marked — you can update the tracker later.[/dim]")
 
 
 def _display_fit_analysis(analysis):
@@ -734,6 +807,77 @@ def _display_fit_analysis(analysis):
         console.print("  [red]Red flags:[/red]")
         for f in flags:
             console.print(f"    - {f}")
+
+
+@cli.command()
+def apply():
+    """Batch apply to tracked jobs (status: found or interested)."""
+    from src.jobs.applicant import JobApplicant
+
+    applicant = JobApplicant()
+    jobs = applicant.get_actionable_jobs()
+
+    if not jobs:
+        console.print("[yellow]No actionable jobs (found/interested) in tracker.[/yellow]")
+        applicant.close()
+        return
+
+    # Display jobs table
+    table = Table(title=f"Actionable Jobs ({len(jobs)})")
+    table.add_column("#", style="dim", width=4)
+    table.add_column("Title", style="bold")
+    table.add_column("Company")
+    table.add_column("Location")
+    table.add_column("Status")
+    table.add_column("Easy Apply", width=10)
+
+    for i, j in enumerate(jobs, 1):
+        table.add_row(
+            str(i),
+            str(j.get("title", ""))[:40],
+            str(j.get("company", ""))[:25],
+            str(j.get("location", ""))[:20],
+            j.get("status", ""),
+            "[green]Yes[/green]" if j.get("easy_apply") else "[dim]No[/dim]",
+        )
+
+    console.print(table)
+
+    selection = console.input(
+        "\nSelect jobs to apply (comma-separated numbers, ranges like 1-3, or 'all'): "
+    ).strip()
+    if not selection:
+        console.print("[dim]No selection made.[/dim]")
+        applicant.close()
+        return
+
+    selected = applicant.batch_select(jobs, selection)
+    if not selected:
+        console.print("[yellow]No valid jobs selected.[/yellow]")
+        applicant.close()
+        return
+
+    console.print(f"\n[bold]Applying to {len(selected)} job(s)...[/bold]\n")
+
+    applied_count = 0
+    skipped_count = 0
+
+    for j in selected:
+        _apply_job_flow(j, applicant, console)
+        # Check if it was marked applied
+        updated = applicant._tracker.get_job(j["id"])
+        if updated and updated.get("status") == "applied":
+            applied_count += 1
+        else:
+            skipped_count += 1
+        console.print()
+
+    applicant.close()
+    console.print(
+        f"\n[bold]Batch complete:[/bold] "
+        f"[green]{applied_count} applied[/green], "
+        f"[dim]{skipped_count} skipped[/dim]"
+    )
 
 
 @cli.group(invoke_without_command=True)
@@ -904,6 +1048,36 @@ def tracker_update(job_id):
         console.print("[red]Update failed.[/red]")
 
     t.close()
+
+
+@tracker.command("applied-today")
+def tracker_applied_today():
+    """Show jobs applied to today."""
+    from src.jobs.applicant import JobApplicant
+
+    applicant = JobApplicant()
+    jobs = applicant.get_applied_today()
+    applicant.close()
+
+    if not jobs:
+        console.print("[dim]No applications submitted today.[/dim]")
+        return
+
+    table = Table(title=f"Applied Today ({len(jobs)})")
+    table.add_column("ID", style="dim", width=5)
+    table.add_column("Title", style="bold")
+    table.add_column("Company")
+    table.add_column("Notes")
+
+    for j in jobs:
+        table.add_row(
+            str(j["id"]),
+            str(j.get("title", ""))[:40],
+            str(j.get("company", ""))[:25],
+            str(j.get("notes", ""))[:30],
+        )
+
+    console.print(table)
 
 
 @cli.command()

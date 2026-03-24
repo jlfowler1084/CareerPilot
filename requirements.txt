@@ -7,4 +7,5 @@ python-dotenv
 pytz
 rich
 click
+pyperclip
 pytest
