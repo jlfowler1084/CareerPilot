@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from config import settings
@@ -61,7 +61,44 @@ CREATE TABLE IF NOT EXISTS kv_store (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS ats_portals (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    company TEXT NOT NULL,
+    ats_type TEXT NOT NULL,
+    portal_url TEXT NOT NULL,
+    email_used TEXT NOT NULL DEFAULT 'jlfowler1084@gmail.com',
+    username TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    last_checked TEXT,
+    notes TEXT,
+    active INTEGER DEFAULT 1 CHECK(active IN (0, 1))
+);
 """
+
+
+def _column_exists(conn, table, column):
+    """Check if a column exists in a table."""
+    rows = conn.execute(f"PRAGMA table_info({table})").fetchall()
+    return any(row[1] == column for row in rows)
+
+
+def _migrate_applications(conn):
+    """Add new columns to applications table if they don't exist."""
+    migrations = [
+        ("portal_id", "INTEGER REFERENCES ats_portals(id)"),
+        ("external_status", "TEXT"),
+        ("external_status_updated", "TEXT"),
+        ("withdraw_date", "TEXT"),
+    ]
+    for col_name, col_def in migrations:
+        if not _column_exists(conn, "applications", col_name):
+            try:
+                conn.execute(f"ALTER TABLE applications ADD COLUMN {col_name} {col_def}")
+                logger.debug("Migrated applications: added column '%s'", col_name)
+            except sqlite3.OperationalError:
+                logger.warning("Failed to add column '%s' to applications", col_name)
+    conn.commit()
 
 
 def get_connection(db_path: Path = None) -> sqlite3.Connection:
@@ -73,6 +110,13 @@ def get_connection(db_path: Path = None) -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     conn.executescript(SCHEMA_SQL)
+
+    # --- Migrations ---
+    _migrate_applications(conn)
+
+    # Re-issue after executescript may have reset it
+    conn.execute("PRAGMA foreign_keys = ON")
+
     return conn
 
 
@@ -176,3 +220,73 @@ def set_kv(conn, key, value):
         (key, str(value)),
     )
     conn.commit()
+
+
+# --- ATS Portal CRUD ---
+
+
+VALID_ATS_TYPES = {"Workday", "Greenhouse", "Lever", "iCIMS", "Taleo", "Custom"}
+
+
+def add_portal(conn, company, ats_type, portal_url, email_used="jlfowler1084@gmail.com",
+               username=None, notes=None):
+    """Insert a new ATS portal. Returns the row id."""
+    cursor = conn.execute(
+        "INSERT INTO ats_portals (company, ats_type, portal_url, email_used, username, notes) "
+        "VALUES (?, ?, ?, ?, ?, ?)",
+        (company, ats_type, portal_url, email_used, username, notes),
+    )
+    conn.commit()
+    logger.debug("Added portal: %s (%s)", company, ats_type)
+    return cursor.lastrowid
+
+
+def list_portals(conn, active_only=True):
+    """Get all portals. If active_only, exclude deactivated."""
+    sql = "SELECT * FROM ats_portals"
+    if active_only:
+        sql += " WHERE active = 1"
+    sql += " ORDER BY company"
+    rows = conn.execute(sql).fetchall()
+    return [dict(r) for r in rows]
+
+
+def update_portal(conn, portal_id, **kwargs):
+    """Update portal fields. Returns True if found."""
+    if not kwargs:
+        return False
+    row = conn.execute("SELECT id FROM ats_portals WHERE id = ?", (portal_id,)).fetchone()
+    if not row:
+        return False
+    sets = ", ".join(f"{k} = ?" for k in kwargs)
+    conn.execute(
+        f"UPDATE ats_portals SET {sets} WHERE id = ?",
+        (*kwargs.values(), portal_id),
+    )
+    conn.commit()
+    return True
+
+
+def deactivate_portal(conn, portal_id):
+    """Set a portal as inactive. Returns True if found."""
+    return update_portal(conn, portal_id, active=0)
+
+
+def get_stale_portals(conn, days=7):
+    """Get active portals not checked in `days` with pending applications.
+
+    Pending = application status NOT IN ('withdrawn', 'rejected', 'ghosted').
+    """
+    cutoff = (datetime.now() - timedelta(days=days)).isoformat()
+    rows = conn.execute(
+        "SELECT p.*, COUNT(a.id) AS pending_app_count "
+        "FROM ats_portals p "
+        "JOIN applications a ON a.portal_id = p.id "
+        "WHERE p.active = 1 "
+        "  AND a.status NOT IN ('withdrawn', 'rejected', 'ghosted') "
+        "  AND (p.last_checked IS NULL OR p.last_checked < ?) "
+        "GROUP BY p.id "
+        "ORDER BY p.last_checked ASC",
+        (cutoff,),
+    ).fetchall()
+    return [dict(r) for r in rows]

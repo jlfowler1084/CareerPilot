@@ -1107,6 +1107,287 @@ def tracker_applied_today():
     console.print(table)
 
 
+@tracker.command("status")
+@click.argument("job_id", type=int)
+@click.argument("status", type=str)
+def tracker_ext_status(job_id, status):
+    """Set external ATS status on an application."""
+    from src.jobs.tracker import ApplicationTracker
+
+    t = ApplicationTracker()
+    job = t.get_job(job_id)
+
+    if not job:
+        console.print(f"[red]Job id={job_id} not found.[/red]")
+        t.close()
+        return
+
+    old_ext = job.get("external_status") or "(none)"
+    if t.update_external_status(job_id, status):
+        console.print(f"[bold]{job['title']}[/bold] at {job['company']}")
+        console.print(f"  External status: {old_ext} → [green]{status}[/green]")
+    else:
+        console.print("[red]Update failed.[/red]")
+
+    t.close()
+
+
+@tracker.command("withdraw")
+@click.argument("job_id", type=int)
+def tracker_withdraw(job_id):
+    """Withdraw an application."""
+    from src.jobs.tracker import ApplicationTracker
+
+    t = ApplicationTracker()
+    job = t.get_job(job_id)
+
+    if not job:
+        console.print(f"[red]Job id={job_id} not found.[/red]")
+        t.close()
+        return
+
+    if t.withdraw_application(job_id):
+        console.print(
+            f"[yellow]Withdrawn:[/yellow] [bold]{job['title']}[/bold] at {job['company']}"
+        )
+    else:
+        console.print("[red]Withdraw failed.[/red]")
+
+    t.close()
+
+
+@tracker.command("stale")
+def tracker_stale():
+    """Show applications with no status update in 14+ days."""
+    from datetime import datetime
+
+    from src.jobs.tracker import ApplicationTracker
+
+    t = ApplicationTracker()
+    stale = t.get_stale_applications()
+    t.close()
+
+    if not stale:
+        console.print("[green]No stale applications.[/green]")
+        return
+
+    table = Table(title=f"Stale Applications ({len(stale)})")
+    table.add_column("ID", style="dim", width=5)
+    table.add_column("Title", style="bold")
+    table.add_column("Company")
+    table.add_column("Status")
+    table.add_column("External Status")
+    table.add_column("Days Since Update", justify="center")
+
+    for j in stale:
+        days = ""
+        ref = j.get("external_status_updated") or j.get("date_found") or ""
+        if ref:
+            try:
+                dt = datetime.fromisoformat(ref)
+                days = str((datetime.now() - dt).days)
+            except (ValueError, TypeError):
+                pass
+
+        table.add_row(
+            str(j["id"]),
+            str(j.get("title", ""))[:40],
+            str(j.get("company", ""))[:25],
+            j.get("status", ""),
+            j.get("external_status") or "(none)",
+            days,
+        )
+
+    console.print(table)
+
+
+@cli.group(invoke_without_command=True)
+@click.pass_context
+def portals(ctx):
+    """Manage ATS portal accounts."""
+    if ctx.invoked_subcommand is not None:
+        return
+    ctx.invoke(portals_list)
+
+
+@portals.command("list")
+def portals_list():
+    """List all ATS portal accounts."""
+    from datetime import datetime
+
+    from src.db import models
+
+    conn = models.get_connection()
+    all_portals = models.list_portals(conn)
+
+    if not all_portals:
+        console.print("[yellow]No portal accounts tracked. Run 'portals add' to add one.[/yellow]")
+        conn.close()
+        return
+
+    table = Table(title=f"ATS Portal Accounts ({len(all_portals)})")
+    table.add_column("ID", style="dim", width=5)
+    table.add_column("Company", style="bold")
+    table.add_column("ATS Type")
+    table.add_column("Portal URL")
+    table.add_column("Email")
+    table.add_column("Last Checked")
+    table.add_column("Apps", justify="center")
+
+    for p in all_portals:
+        # Count pending apps for this portal
+        app_count = conn.execute(
+            "SELECT COUNT(*) as cnt FROM applications "
+            "WHERE portal_id = ? AND status NOT IN ('withdrawn', 'rejected', 'ghosted')",
+            (p["id"],),
+        ).fetchone()["cnt"]
+
+        # Determine staleness color
+        style = ""
+        if app_count > 0 and p["last_checked"]:
+            try:
+                last = datetime.fromisoformat(p["last_checked"])
+                days_ago = (datetime.now() - last).days
+                if days_ago >= 14:
+                    style = "red"
+                elif days_ago >= 7:
+                    style = "yellow"
+            except (ValueError, TypeError):
+                pass
+        elif app_count > 0 and not p["last_checked"]:
+            style = "red"
+
+        last_checked_display = ""
+        if p["last_checked"]:
+            try:
+                last = datetime.fromisoformat(p["last_checked"])
+                days_ago = (datetime.now() - last).days
+                if days_ago == 0:
+                    last_checked_display = "Today"
+                elif days_ago == 1:
+                    last_checked_display = "Yesterday"
+                else:
+                    last_checked_display = f"{days_ago} days ago"
+            except (ValueError, TypeError):
+                last_checked_display = p["last_checked"][:10]
+        else:
+            last_checked_display = "Never"
+
+        table.add_row(
+            str(p["id"]),
+            f"[{style}]{p['company']}[/{style}]" if style else p["company"],
+            p["ats_type"],
+            str(p["portal_url"])[:40],
+            p["email_used"],
+            last_checked_display,
+            str(app_count),
+        )
+
+    console.print(table)
+    conn.close()
+
+
+@portals.command("add")
+def portals_add():
+    """Add a new ATS portal account."""
+    from src.db import models
+
+    company = click.prompt("Company")
+    ats_type = click.prompt(
+        "ATS type",
+        type=click.Choice(["Workday", "Greenhouse", "Lever", "iCIMS", "Taleo", "Custom"]),
+    )
+    portal_url = click.prompt("Portal URL")
+    email_used = click.prompt("Email", default="jlfowler1084@gmail.com")
+    notes = click.prompt("Notes", default="", show_default=False)
+
+    conn = models.get_connection()
+    pid = models.add_portal(
+        conn, company=company, ats_type=ats_type, portal_url=portal_url,
+        email_used=email_used, notes=notes or None,
+    )
+    conn.close()
+
+    console.print(f"[green]Portal added (id={pid}): {company} ({ats_type})[/green]")
+
+
+@portals.command("check")
+@click.argument("portal_id", type=int)
+def portals_check(portal_id):
+    """Open a portal in the browser and mark as checked."""
+    import webbrowser
+    from datetime import datetime
+
+    from src.db import models
+
+    conn = models.get_connection()
+    portal_list = models.list_portals(conn, active_only=False)
+    portal = None
+    for p in portal_list:
+        if p["id"] == portal_id:
+            portal = p
+            break
+
+    if not portal:
+        console.print(f"[red]Portal id={portal_id} not found.[/red]")
+        conn.close()
+        return
+
+    console.print(f"Opening [bold]{portal['company']}[/bold] ({portal['ats_type']})")
+    console.print(f"  URL: {portal['portal_url']}")
+
+    webbrowser.open(portal["portal_url"])
+    models.update_portal(conn, portal_id, last_checked=datetime.now().isoformat())
+    conn.close()
+
+    console.print("[green]Marked as checked.[/green]")
+
+
+@portals.command("stale")
+def portals_stale():
+    """Show portals not checked in 7+ days with pending applications."""
+    from datetime import datetime
+
+    from src.db import models
+
+    conn = models.get_connection()
+    stale = models.get_stale_portals(conn)
+    conn.close()
+
+    if not stale:
+        console.print("[green]All portals are up to date.[/green]")
+        return
+
+    console.print(Panel("[bold yellow]Stale Portals[/bold yellow] — not checked in 7+ days", border_style="yellow"))
+
+    table = Table()
+    table.add_column("ID", style="dim", width=5)
+    table.add_column("Company", style="bold yellow")
+    table.add_column("ATS Type")
+    table.add_column("Portal URL")
+    table.add_column("Last Checked")
+    table.add_column("Pending Apps", justify="center")
+
+    for p in stale:
+        last = "Never"
+        if p["last_checked"]:
+            try:
+                days_ago = (datetime.now() - datetime.fromisoformat(p["last_checked"])).days
+                last = f"{days_ago} days ago"
+            except (ValueError, TypeError):
+                last = p["last_checked"][:10]
+        table.add_row(
+            str(p["id"]),
+            p["company"],
+            p["ats_type"],
+            str(p["portal_url"])[:40],
+            last,
+            str(p["pending_app_count"]),
+        )
+
+    console.print(table)
+
+
 @cli.command()
 @click.argument("job_id", type=int)
 @click.option("--resume", default=None, help="Path to resume text file.")
@@ -1842,6 +2123,60 @@ def morning():
                 console.print(
                     f"  [red]Stale:[/red] {st['subject'][:60]} ({days} day{'s' if days != 1 else ''})"
                 )
+    except Exception:
+        pass
+
+    # --- Portal check reminders ---
+    # Note: `datetime` and `models` are already imported at the top of morning()
+    try:
+        _conn = models.get_connection()
+        # Get all active portals with pending app counts
+        _portals = _conn.execute(
+            "SELECT p.*, COUNT(a.id) AS pending_app_count "
+            "FROM ats_portals p "
+            "LEFT JOIN applications a ON a.portal_id = p.id "
+            "  AND a.status NOT IN ('withdrawn', 'rejected', 'ghosted') "
+            "WHERE p.active = 1 "
+            "GROUP BY p.id "
+            "HAVING pending_app_count > 0 "
+            "ORDER BY p.last_checked ASC",
+        ).fetchall()
+
+        if _portals:
+            console.print()
+            console.print("[bold]📋 Portal Check Reminders:[/bold]")
+            for _p in _portals:
+                _p = dict(_p)
+                if _p["last_checked"]:
+                    try:
+                        _last = datetime.fromisoformat(_p["last_checked"])
+                        _days_ago = (datetime.now() - _last).days
+                        if _days_ago == 0:
+                            _time_str = "checked today"
+                        elif _days_ago == 1:
+                            _time_str = "last checked yesterday"
+                        else:
+                            _time_str = f"last checked {_days_ago} days ago"
+                    except (ValueError, TypeError):
+                        _time_str = "unknown last check"
+                        _days_ago = 999
+                else:
+                    _time_str = "never checked"
+                    _days_ago = 999
+
+                _app_label = "application" if _p["pending_app_count"] == 1 else "applications"
+
+                if _days_ago >= 7:
+                    console.print(
+                        f"  [yellow]⚠ {_p['company']} ({_p['ats_type']})[/yellow] — "
+                        f"{_time_str}, {_p['pending_app_count']} pending {_app_label}"
+                    )
+                else:
+                    console.print(
+                        f"  [green]✅ {_p['company']}[/green] — {_time_str}"
+                    )
+
+        _conn.close()
     except Exception:
         pass
 

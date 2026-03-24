@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -177,6 +177,66 @@ class ApplicationTracker:
             "response_rate": response_rate,
             "avg_days_to_response": avg_days_to_response,
         }
+
+    def update_external_status(self, job_id: int, status: str,
+                               portal_id: int = None) -> bool:
+        """Update the external ATS status on an application."""
+        row = self._conn.execute(
+            "SELECT id FROM applications WHERE id = ?", (job_id,)
+        ).fetchone()
+        if not row:
+            logger.warning("Application id=%d not found", job_id)
+            return False
+
+        now = datetime.now().isoformat()
+        updates = ["external_status = ?", "external_status_updated = ?"]
+        params = [status, now]
+
+        if portal_id is not None:
+            updates.append("portal_id = ?")
+            params.append(portal_id)
+
+        params.append(job_id)
+        self._conn.execute(
+            f"UPDATE applications SET {', '.join(updates)} WHERE id = ?",
+            params,
+        )
+        self._conn.commit()
+        logger.info("Updated external status for id=%d: '%s'", job_id, status)
+        return True
+
+    def withdraw_application(self, job_id: int) -> bool:
+        """Withdraw an application — sets status and withdraw_date."""
+        row = self._conn.execute(
+            "SELECT id FROM applications WHERE id = ?", (job_id,)
+        ).fetchone()
+        if not row:
+            logger.warning("Application id=%d not found", job_id)
+            return False
+
+        now = datetime.now().isoformat()
+        self._conn.execute(
+            "UPDATE applications SET status = 'withdrawn', withdraw_date = ? WHERE id = ?",
+            (now, job_id),
+        )
+        self._conn.commit()
+        logger.info("Withdrew application id=%d", job_id)
+        return True
+
+    def get_stale_applications(self, days: int = 14) -> List[Dict]:
+        """Get applications with no external status update in `days`.
+
+        Excludes withdrawn, rejected, and ghosted applications.
+        """
+        cutoff = (datetime.now() - timedelta(days=days)).isoformat()
+        rows = self._conn.execute(
+            "SELECT * FROM applications "
+            "WHERE status NOT IN ('withdrawn', 'rejected', 'ghosted') "
+            "  AND (external_status_updated IS NULL OR external_status_updated < ?) "
+            "ORDER BY date_found DESC",
+            (cutoff,),
+        ).fetchall()
+        return [dict(r) for r in rows]
 
     def close(self):
         """Close the database connection."""
