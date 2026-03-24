@@ -1816,6 +1816,547 @@ def status():
     console.print(Panel("\n".join(parts), title="CareerPilot Status", border_style="cyan"))
 
 
+# ─── Profile Commands ───────────────────────────────────────────────
+
+
+@cli.group(invoke_without_command=True)
+@click.pass_context
+def profile(ctx):
+    """Manage candidate profile for auto-fill and exports."""
+    if ctx.invoked_subcommand is not None:
+        return
+    ctx.invoke(profile_show)
+
+
+@profile.command("show")
+def profile_show():
+    """Display full profile in Rich panels, organized by section."""
+    from src.profile.manager import ProfileManager
+
+    mgr = ProfileManager()
+    p = mgr.get_profile()
+    mgr.close()
+
+    personal = p.get("personal", {})
+    if not personal:
+        console.print("[yellow]No profile data. Run 'profile setup' or 'profile import' first.[/yellow]")
+        return
+
+    # Personal info panel
+    personal_lines = []
+    if personal.get("full_name"):
+        personal_lines.append(f"[bold]{personal['full_name']}[/bold]")
+    for field, label in [("email", "Email"), ("phone", "Phone")]:
+        if personal.get(field):
+            personal_lines.append(f"{label}: {personal[field]}")
+    addr_parts = [personal.get(f, "") for f in ("street", "city", "state", "zip")]
+    addr = ", ".join(part for part in addr_parts if part)
+    if addr:
+        personal_lines.append(f"Address: {addr}")
+    for field, label in [("linkedin_url", "LinkedIn"), ("github_url", "GitHub"),
+                         ("website", "Website")]:
+        if personal.get(field):
+            personal_lines.append(f"{label}: {personal[field]}")
+    if personal.get("work_authorization"):
+        personal_lines.append(f"Work Authorization: {personal['work_authorization'].replace('_', ' ').title()}")
+    if personal.get("remote_preference"):
+        personal_lines.append(f"Remote Preference: {personal['remote_preference'].replace('_', ' ').title()}")
+    if personal.get("desired_salary_min") or personal.get("desired_salary_max"):
+        sal = f"${personal.get('desired_salary_min', '?')} - ${personal.get('desired_salary_max', '?')}"
+        personal_lines.append(f"Desired Salary: {sal}")
+    if personal.get("available_start_date"):
+        personal_lines.append(f"Available: {personal['available_start_date']}")
+    console.print(Panel("\n".join(personal_lines), title="Personal Information", border_style="cyan"))
+
+    # Work history
+    work = p.get("work_history", [])
+    if work:
+        work_table = Table(title="Work History", border_style="green")
+        work_table.add_column("ID", style="dim", width=4)
+        work_table.add_column("Title", style="bold")
+        work_table.add_column("Company")
+        work_table.add_column("Location")
+        work_table.add_column("Dates")
+        work_table.add_column("Current", justify="center", width=7)
+        for w in work:
+            end = w.get("end_date") or "Present"
+            current = "[green]Yes[/green]" if w.get("is_current") else ""
+            work_table.add_row(
+                str(w["id"]), w["title"], w["company"],
+                w.get("location", ""),
+                f"{w.get('start_date', '')} - {end}",
+                current,
+            )
+        console.print(work_table)
+
+    # Education
+    edu = p.get("education", [])
+    if edu:
+        edu_table = Table(title="Education", border_style="blue")
+        edu_table.add_column("ID", style="dim", width=4)
+        edu_table.add_column("School", style="bold")
+        edu_table.add_column("Degree")
+        edu_table.add_column("Field")
+        edu_table.add_column("Date")
+        edu_table.add_column("GPA", width=5)
+        for e in edu:
+            edu_table.add_row(
+                str(e["id"]), e["school"], e.get("degree", ""),
+                e.get("field_of_study", ""), e.get("graduation_date", ""),
+                e.get("gpa") or "",
+            )
+        console.print(edu_table)
+
+    # Certifications
+    certs = p.get("certifications", [])
+    if certs:
+        cert_table = Table(title="Certifications", border_style="yellow")
+        cert_table.add_column("ID", style="dim", width=4)
+        cert_table.add_column("Name", style="bold")
+        cert_table.add_column("Issuer")
+        cert_table.add_column("Date Obtained")
+        cert_table.add_column("Status")
+        for c in certs:
+            status = "[yellow]In Progress[/yellow]" if c.get("in_progress") else "[green]Complete[/green]"
+            cert_table.add_row(
+                str(c["id"]), c["name"], c.get("issuer", ""),
+                c.get("date_obtained", ""), status,
+            )
+        console.print(cert_table)
+
+    # References
+    refs = p.get("references", [])
+    if refs:
+        ref_table = Table(title="References", border_style="magenta")
+        ref_table.add_column("ID", style="dim", width=4)
+        ref_table.add_column("Name", style="bold")
+        ref_table.add_column("Title")
+        ref_table.add_column("Company")
+        ref_table.add_column("Phone")
+        ref_table.add_column("Email")
+        ref_table.add_column("Relationship")
+        for r in refs:
+            ref_table.add_row(
+                str(r["id"]), r["name"], r.get("title", ""),
+                r.get("company", ""), r.get("phone", ""),
+                r.get("email", ""), r.get("relationship", ""),
+            )
+        console.print(ref_table)
+
+    # EEO (if populated)
+    eeo = p.get("eeo", {})
+    if any(eeo.get(f) for f in ("gender", "race_ethnicity", "veteran_status", "disability_status")):
+        eeo_lines = []
+        for field, label in [("gender", "Gender"), ("race_ethnicity", "Race/Ethnicity"),
+                             ("veteran_status", "Veteran Status"),
+                             ("disability_status", "Disability Status")]:
+            if eeo.get(field):
+                eeo_lines.append(f"{label}: {eeo[field]}")
+        console.print(Panel("\n".join(eeo_lines), title="EEO (Private)", border_style="red"))
+
+
+@profile.command("setup")
+def profile_setup():
+    """Interactive wizard to walk through all profile sections."""
+    from rich.prompt import Confirm, Prompt
+
+    from src.profile.manager import ProfileManager
+
+    mgr = ProfileManager()
+    console.print(Panel("[bold]Profile Setup Wizard[/bold]\nPress Enter to skip any field.",
+                        border_style="cyan"))
+
+    # --- Personal Info ---
+    console.print("\n[bold cyan]== Personal Information ==[/bold cyan]")
+    current = mgr.get_personal() or {}
+
+    personal_fields = [
+        ("full_name", "Full Name"),
+        ("email", "Email"),
+        ("phone", "Phone"),
+        ("street", "Street Address"),
+        ("city", "City"),
+        ("state", "State"),
+        ("zip", "ZIP Code"),
+        ("linkedin_url", "LinkedIn URL"),
+        ("github_url", "GitHub URL"),
+        ("website", "Website"),
+    ]
+    updates = {}
+    for field, label in personal_fields:
+        cur = current.get(field, "")
+        display = f" [dim]({cur})[/dim]" if cur else ""
+        val = Prompt.ask(f"  {label}{display}", default=cur or "")
+        if val:
+            updates[field] = val
+
+    # Work authorization
+    cur_auth = current.get("work_authorization", "")
+    console.print(f"\n  Work Authorization [dim]({cur_auth or 'not set'})[/dim]")
+    console.print("    1) US Citizen  2) Permanent Resident  3) Require Sponsorship")
+    auth_map = {"1": "us_citizen", "2": "permanent_resident", "3": "require_sponsorship"}
+    auth_choice = Prompt.ask("  Choice", default="")
+    if auth_choice in auth_map:
+        updates["work_authorization"] = auth_map[auth_choice]
+
+    # Remote preference
+    cur_remote = current.get("remote_preference", "")
+    console.print(f"\n  Remote Preference [dim]({cur_remote or 'not set'})[/dim]")
+    console.print("    1) Remote Only  2) Hybrid  3) Onsite  4) Flexible")
+    remote_map = {"1": "remote_only", "2": "hybrid", "3": "onsite", "4": "flexible"}
+    remote_choice = Prompt.ask("  Choice", default="")
+    if remote_choice in remote_map:
+        updates["remote_preference"] = remote_map[remote_choice]
+
+    # Salary
+    cur_min = current.get("desired_salary_min") or ""
+    cur_max = current.get("desired_salary_max") or ""
+    sal_min = Prompt.ask(f"  Desired Salary Min [dim]({cur_min})[/dim]", default=str(cur_min) if cur_min else "")
+    sal_max = Prompt.ask(f"  Desired Salary Max [dim]({cur_max})[/dim]", default=str(cur_max) if cur_max else "")
+    if sal_min:
+        updates["desired_salary_min"] = int(sal_min)
+    if sal_max:
+        updates["desired_salary_max"] = int(sal_max)
+
+    # Relocate
+    cur_relocate = current.get("willing_to_relocate", False)
+    updates["willing_to_relocate"] = Confirm.ask(
+        f"  Willing to relocate?", default=bool(cur_relocate))
+
+    # Available start
+    cur_avail = current.get("available_start_date", "")
+    avail = Prompt.ask(f"  Available Start Date [dim]({cur_avail or 'not set'})[/dim]",
+                       default=cur_avail or "")
+    if avail:
+        updates["available_start_date"] = avail
+
+    if updates:
+        mgr.update_personal(**updates)
+        console.print("[green]Personal info saved.[/green]")
+
+    # --- Work History ---
+    console.print("\n[bold cyan]== Work History ==[/bold cyan]")
+    existing_work = mgr.get_all_work_history()
+    if existing_work:
+        console.print(f"  {len(existing_work)} entries on file.")
+    if Confirm.ask("  Add a new work history entry?", default=False):
+        company = Prompt.ask("  Company")
+        title = Prompt.ask("  Title")
+        location = Prompt.ask("  Location", default="")
+        start = Prompt.ask("  Start Date (YYYY-MM)", default="")
+        end = Prompt.ask("  End Date (YYYY-MM, blank=current)", default="")
+        desc = Prompt.ask("  Description", default="")
+        is_current = end == ""
+        mgr.add_work_history(company, title, location=location,
+                             start_date=start, end_date=end or None,
+                             description=desc, is_current=is_current)
+        console.print("[green]Work history entry added.[/green]")
+
+    # --- Education ---
+    console.print("\n[bold cyan]== Education ==[/bold cyan]")
+    existing_edu = mgr.get_all_education()
+    if existing_edu:
+        console.print(f"  {len(existing_edu)} entries on file.")
+    if Confirm.ask("  Add a new education entry?", default=False):
+        school = Prompt.ask("  School")
+        degree = Prompt.ask("  Degree", default="")
+        field = Prompt.ask("  Field of Study", default="")
+        grad = Prompt.ask("  Graduation Date", default="")
+        gpa = Prompt.ask("  GPA (optional)", default="")
+        mgr.add_education(school, degree=degree, field_of_study=field,
+                          graduation_date=grad, gpa=gpa or None)
+        console.print("[green]Education entry added.[/green]")
+
+    # --- Certifications ---
+    console.print("\n[bold cyan]== Certifications ==[/bold cyan]")
+    existing_certs = mgr.get_all_certifications()
+    if existing_certs:
+        console.print(f"  {len(existing_certs)} entries on file.")
+    if Confirm.ask("  Add a new certification?", default=False):
+        cert_name = Prompt.ask("  Certification Name")
+        issuer = Prompt.ask("  Issuer", default="")
+        obtained = Prompt.ask("  Date Obtained", default="")
+        expiry = Prompt.ask("  Expiry Date (optional)", default="")
+        in_prog = Confirm.ask("  In progress?", default=False)
+        mgr.add_certification(cert_name, issuer=issuer, date_obtained=obtained,
+                              expiry_date=expiry or None, in_progress=in_prog)
+        console.print("[green]Certification added.[/green]")
+
+    # --- References ---
+    console.print("\n[bold cyan]== References ==[/bold cyan]")
+    existing_refs = mgr.get_all_references()
+    if existing_refs:
+        console.print(f"  {len(existing_refs)} entries on file.")
+    if Confirm.ask("  Add a new reference?", default=False):
+        ref_name = Prompt.ask("  Name")
+        ref_title = Prompt.ask("  Title", default="")
+        ref_company = Prompt.ask("  Company", default="")
+        ref_phone = Prompt.ask("  Phone", default="")
+        ref_email = Prompt.ask("  Email", default="")
+        ref_rel = Prompt.ask("  Relationship", default="")
+        mgr.add_reference(ref_name, title=ref_title, company=ref_company,
+                          phone=ref_phone, email=ref_email, relationship=ref_rel)
+        console.print("[green]Reference added.[/green]")
+
+    # --- EEO ---
+    console.print("\n[bold cyan]== EEO (Optional, Private) ==[/bold cyan]")
+    if Confirm.ask("  Set EEO fields?", default=False):
+        eeo_updates = {}
+        gender = Prompt.ask("  Gender", default="")
+        if gender:
+            eeo_updates["gender"] = gender
+        race = Prompt.ask("  Race/Ethnicity", default="")
+        if race:
+            eeo_updates["race_ethnicity"] = race
+        veteran = Prompt.ask("  Veteran Status", default="")
+        if veteran:
+            eeo_updates["veteran_status"] = veteran
+        disability = Prompt.ask("  Disability Status", default="")
+        if disability:
+            eeo_updates["disability_status"] = disability
+        if eeo_updates:
+            mgr.update_eeo(**eeo_updates)
+            console.print("[green]EEO data saved.[/green]")
+
+    mgr.close()
+    console.print(Panel("[bold green]Profile setup complete![/bold green]", border_style="green"))
+
+
+@profile.command("edit")
+@click.argument("section", type=click.Choice(
+    ["personal", "work", "education", "certs", "references", "eeo", "preferences"]))
+def profile_edit(section):
+    """Edit a specific section of the profile."""
+    from rich.prompt import Confirm, Prompt
+
+    from src.profile.manager import ProfileManager
+
+    mgr = ProfileManager()
+
+    if section == "personal":
+        current = mgr.get_personal() or {}
+        updates = {}
+        for field, label in [("full_name", "Full Name"), ("email", "Email"),
+                             ("phone", "Phone"), ("street", "Street"),
+                             ("city", "City"), ("state", "State"), ("zip", "ZIP"),
+                             ("linkedin_url", "LinkedIn"), ("github_url", "GitHub"),
+                             ("website", "Website")]:
+            cur = current.get(field, "")
+            val = Prompt.ask(f"  {label} [dim]({cur})[/dim]", default=cur or "")
+            if val:
+                updates[field] = val
+        if updates:
+            mgr.update_personal(**updates)
+            console.print("[green]Personal info updated.[/green]")
+
+    elif section == "work":
+        entries = mgr.get_all_work_history()
+        if entries:
+            for w in entries:
+                end = w.get("end_date") or "Present"
+                console.print(f"  [dim]{w['id']}[/dim] {w['title']} at {w['company']} ({w.get('start_date', '')} - {end})")
+        action = Prompt.ask("  [a]dd / [d]elete by ID / [s]kip", default="s")
+        if action.lower() == "a":
+            company = Prompt.ask("  Company")
+            title = Prompt.ask("  Title")
+            location = Prompt.ask("  Location", default="")
+            start = Prompt.ask("  Start Date (YYYY-MM)", default="")
+            end = Prompt.ask("  End Date (blank=current)", default="")
+            desc = Prompt.ask("  Description", default="")
+            mgr.add_work_history(company, title, location=location,
+                                 start_date=start, end_date=end or None,
+                                 description=desc, is_current=end == "")
+            console.print("[green]Added.[/green]")
+        elif action.lower() == "d":
+            del_id = Prompt.ask("  ID to delete")
+            if mgr.remove_work_history(int(del_id)):
+                console.print("[green]Deleted.[/green]")
+            else:
+                console.print("[red]Not found.[/red]")
+
+    elif section == "education":
+        entries = mgr.get_all_education()
+        if entries:
+            for e in entries:
+                console.print(f"  [dim]{e['id']}[/dim] {e.get('degree', '')} — {e['school']}")
+        action = Prompt.ask("  [a]dd / [d]elete by ID / [s]kip", default="s")
+        if action.lower() == "a":
+            school = Prompt.ask("  School")
+            degree = Prompt.ask("  Degree", default="")
+            field = Prompt.ask("  Field of Study", default="")
+            grad = Prompt.ask("  Graduation Date", default="")
+            gpa = Prompt.ask("  GPA (optional)", default="")
+            mgr.add_education(school, degree=degree, field_of_study=field,
+                              graduation_date=grad, gpa=gpa or None)
+            console.print("[green]Added.[/green]")
+        elif action.lower() == "d":
+            del_id = Prompt.ask("  ID to delete")
+            if mgr.remove_education(int(del_id)):
+                console.print("[green]Deleted.[/green]")
+            else:
+                console.print("[red]Not found.[/red]")
+
+    elif section == "certs":
+        entries = mgr.get_all_certifications()
+        if entries:
+            for c in entries:
+                status = "(In Progress)" if c.get("in_progress") else ""
+                console.print(f"  [dim]{c['id']}[/dim] {c['name']} {status}")
+        action = Prompt.ask("  [a]dd / [d]elete by ID / [s]kip", default="s")
+        if action.lower() == "a":
+            cert_name = Prompt.ask("  Name")
+            issuer = Prompt.ask("  Issuer", default="")
+            obtained = Prompt.ask("  Date Obtained", default="")
+            expiry = Prompt.ask("  Expiry Date (optional)", default="")
+            in_prog = Confirm.ask("  In progress?", default=False)
+            mgr.add_certification(cert_name, issuer=issuer, date_obtained=obtained,
+                                  expiry_date=expiry or None, in_progress=in_prog)
+            console.print("[green]Added.[/green]")
+        elif action.lower() == "d":
+            del_id = Prompt.ask("  ID to delete")
+            if mgr.remove_certification(int(del_id)):
+                console.print("[green]Deleted.[/green]")
+            else:
+                console.print("[red]Not found.[/red]")
+
+    elif section == "references":
+        entries = mgr.get_all_references()
+        if entries:
+            for r in entries:
+                console.print(f"  [dim]{r['id']}[/dim] {r['name']} — {r.get('company', '')}")
+        action = Prompt.ask("  [a]dd / [d]elete by ID / [s]kip", default="s")
+        if action.lower() == "a":
+            ref_name = Prompt.ask("  Name")
+            ref_title = Prompt.ask("  Title", default="")
+            ref_company = Prompt.ask("  Company", default="")
+            ref_phone = Prompt.ask("  Phone", default="")
+            ref_email = Prompt.ask("  Email", default="")
+            ref_rel = Prompt.ask("  Relationship", default="")
+            mgr.add_reference(ref_name, title=ref_title, company=ref_company,
+                              phone=ref_phone, email=ref_email, relationship=ref_rel)
+            console.print("[green]Added.[/green]")
+        elif action.lower() == "d":
+            del_id = Prompt.ask("  ID to delete")
+            if mgr.remove_reference(int(del_id)):
+                console.print("[green]Deleted.[/green]")
+            else:
+                console.print("[red]Not found.[/red]")
+
+    elif section == "eeo":
+        current_eeo = mgr.get_eeo() or {}
+        updates = {}
+        for field, label in [("gender", "Gender"), ("race_ethnicity", "Race/Ethnicity"),
+                             ("veteran_status", "Veteran Status"),
+                             ("disability_status", "Disability Status")]:
+            cur = current_eeo.get(field, "")
+            val = Prompt.ask(f"  {label} [dim]({cur})[/dim]", default=cur or "")
+            if val:
+                updates[field] = val
+        if updates:
+            mgr.update_eeo(**updates)
+            console.print("[green]EEO data updated.[/green]")
+
+    elif section == "preferences":
+        current = mgr.get_personal() or {}
+        updates = {}
+        # Work auth
+        console.print(f"  Work Authorization: {current.get('work_authorization', 'not set')}")
+        console.print("    1) US Citizen  2) Permanent Resident  3) Require Sponsorship")
+        auth_map = {"1": "us_citizen", "2": "permanent_resident", "3": "require_sponsorship"}
+        choice = Prompt.ask("  Choice (blank=skip)", default="")
+        if choice in auth_map:
+            updates["work_authorization"] = auth_map[choice]
+        # Remote
+        console.print(f"  Remote Preference: {current.get('remote_preference', 'not set')}")
+        console.print("    1) Remote Only  2) Hybrid  3) Onsite  4) Flexible")
+        remote_map = {"1": "remote_only", "2": "hybrid", "3": "onsite", "4": "flexible"}
+        choice = Prompt.ask("  Choice (blank=skip)", default="")
+        if choice in remote_map:
+            updates["remote_preference"] = remote_map[choice]
+        # Salary
+        sal_min = Prompt.ask(f"  Salary Min [dim]({current.get('desired_salary_min', '')})[/dim]", default="")
+        sal_max = Prompt.ask(f"  Salary Max [dim]({current.get('desired_salary_max', '')})[/dim]", default="")
+        if sal_min:
+            updates["desired_salary_min"] = int(sal_min)
+        if sal_max:
+            updates["desired_salary_max"] = int(sal_max)
+        # Relocate
+        updates["willing_to_relocate"] = Confirm.ask("  Willing to relocate?",
+                                                      default=bool(current.get("willing_to_relocate", False)))
+        # Available
+        avail = Prompt.ask(f"  Available [dim]({current.get('available_start_date', '')})[/dim]", default="")
+        if avail:
+            updates["available_start_date"] = avail
+        if updates:
+            mgr.update_personal(**updates)
+            console.print("[green]Preferences updated.[/green]")
+
+    mgr.close()
+
+
+@profile.command("export")
+@click.option("--format", "fmt", type=click.Choice(["json", "text", "ats"]),
+              default="json", help="Export format.")
+@click.option("--output", "-o", "outfile", default=None, help="Save to file instead of stdout.")
+def profile_export(fmt, outfile):
+    """Export profile to specified format."""
+    from src.profile.manager import ProfileManager
+
+    mgr = ProfileManager()
+
+    if fmt == "json":
+        result = mgr.export_json()
+    elif fmt == "text":
+        result = mgr.export_text()
+    elif fmt == "ats":
+        import json
+        result = json.dumps(mgr.export_ats_fields(), indent=2)
+
+    mgr.close()
+
+    if outfile:
+        from pathlib import Path
+        Path(outfile).write_text(result, encoding="utf-8")
+        console.print(f"[green]Exported to {outfile}[/green]")
+    else:
+        click.echo(result)
+
+
+@profile.command("import")
+def profile_import():
+    """Import profile from resume via Claude API."""
+    from src.profile.manager import ProfileManager
+
+    console.print("[cyan]Importing profile from built-in resume data via Claude API...[/cyan]")
+
+    mgr = ProfileManager()
+    try:
+        data = mgr.import_from_resume()
+        console.print("[green]Profile imported successfully![/green]")
+        sections = {k: v for k, v in data.items() if v}
+        for section, content in sections.items():
+            if isinstance(content, list):
+                console.print(f"  {section}: {len(content)} entries")
+            elif isinstance(content, dict):
+                filled = sum(1 for v in content.values() if v)
+                console.print(f"  {section}: {filled} fields populated")
+    except Exception as e:
+        console.print(f"[red]Import failed: {e}[/red]")
+    finally:
+        mgr.close()
+
+
+@profile.command("seed")
+def profile_seed():
+    """Pre-populate profile with Joseph's data (no API call)."""
+    from src.profile.manager import ProfileManager
+
+    mgr = ProfileManager()
+    mgr.seed_joseph_data()
+    mgr.close()
+    console.print("[green]Profile seeded with Joseph Fowler's data.[/green]")
+
+
 if __name__ == "__main__":
     try:
         cli()
