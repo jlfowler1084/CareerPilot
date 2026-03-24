@@ -93,6 +93,7 @@ class JobSearcher:
                     "url": INDEED_MCP_URL,
                     "name": "indeed",
                 }],
+                betas=["mcp-client-2025-04-04"],
                 messages=[{"role": "user", "content": user_msg}],
             )
 
@@ -145,6 +146,7 @@ class JobSearcher:
                     "url": DICE_MCP_URL,
                     "name": "dice",
                 }],
+                betas=["mcp-client-2025-04-04"],
                 messages=[{"role": "user", "content": user_msg}],
             )
 
