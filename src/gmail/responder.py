@@ -71,12 +71,14 @@ class RecruiterResponder:
             self._claude_client = anthropic.Anthropic(api_key=self._api_key)
         return self._claude_client
 
-    def draft_response(self, email_data, mode="interested"):
+    def draft_response(self, email_data, mode="interested", availability_text=None):
         """Generate a personalized reply using Claude.
 
         Args:
             email_data: Dict with sender, subject, body keys.
             mode: One of "interested", "not_interested", "more_info".
+            availability_text: Formatted availability string from CalendarScheduler.
+                               Included in "interested" mode prompts when provided.
 
         Returns:
             The generated reply text, or empty string on failure.
@@ -87,6 +89,16 @@ class RecruiterResponder:
 
         context_block = format_context_block()
         mode_instruction = MODE_INSTRUCTIONS[mode]
+
+        # When calendar availability is provided for interested mode, inject it
+        if mode == "interested" and availability_text:
+            mode_instruction = (
+                "Express genuine interest in the role. "
+                "Keep it to 3-5 sentences. "
+                "Suggest these specific times for a call: "
+                f"{availability_text}. "
+                "Briefly highlight relevant experience without overselling."
+            )
 
         user_content = (
             f"--- CANDIDATE INFO ---\n{context_block}\n\n"

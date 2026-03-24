@@ -98,8 +98,19 @@ def scan(days):
     # Create responder using scanner's authenticated service
     responder = RecruiterResponder(scanner._service)
 
+    # Try to set up calendar for availability (non-blocking)
+    cal_scheduler = None
+    try:
+        from src.calendar.scheduler import CalendarScheduler
+        cal_scheduler = CalendarScheduler()
+        cal_scheduler.authenticate()
+        console.print("[dim]Calendar connected — availability will be included in responses.[/dim]")
+    except Exception:
+        console.print("[dim]Calendar not available — using placeholder times in responses.[/dim]")
+        cal_scheduler = None
+
     console.print(
-        f"[bold]{len(actionable)} actionable email(s) found.[/bold] "
+        f"\n[bold]{len(actionable)} actionable email(s) found.[/bold] "
         "Drafts are saved to Gmail — [bold]nothing is sent[/bold] without your approval.\n"
     )
 
@@ -126,7 +137,26 @@ def scan(days):
             console.print("[red]Failed to fetch email details, skipping.[/red]")
             continue
 
-        _handle_draft_flow(responder, email_data, mode, r["message_id"])
+        # Pull availability for interested mode
+        availability_text = None
+        avail_slots = []
+        if mode == "interested" and cal_scheduler:
+            try:
+                avail_slots = cal_scheduler.get_availability(days_ahead=5)
+                if avail_slots:
+                    availability_text = cal_scheduler.format_slots(avail_slots, max_slots=3)
+                    console.print(f"  [cyan]Available slots: {availability_text}[/cyan]")
+                else:
+                    console.print("  [yellow]No open slots found in the next 5 days.[/yellow]")
+            except Exception:
+                console.print("  [dim]Could not fetch availability.[/dim]")
+
+        _handle_draft_flow(
+            responder, email_data, mode, r["message_id"],
+            availability_text=availability_text,
+            cal_scheduler=cal_scheduler,
+            company=r.get("company", ""),
+        )
         console.print()
 
 
@@ -145,9 +175,12 @@ def _prompt_action():
         console.print("[red]Invalid choice. Enter r, d, m, s, or q.[/red]")
 
 
-def _handle_draft_flow(responder, email_data, mode, message_id):
+def _handle_draft_flow(responder, email_data, mode, message_id,
+                       availability_text=None, cal_scheduler=None, company=""):
     """Generate a draft, show it, and let user approve/edit/cancel."""
-    draft_text = responder.draft_response(email_data, mode=mode)
+    draft_text = responder.draft_response(
+        email_data, mode=mode, availability_text=availability_text,
+    )
 
     if not draft_text:
         console.print("[red]Failed to generate draft. Check logs.[/red]")
@@ -173,11 +206,15 @@ def _handle_draft_flow(responder, email_data, mode, message_id):
                 console.print(f"[green]Draft saved to Gmail (draft_id={draft_id}). NOT sent.[/green]")
             else:
                 console.print("[red]Failed to save draft. Check logs.[/red]")
+
+            # Offer calendar hold for interested responses
+            if mode == "interested" and cal_scheduler:
+                _offer_calendar_hold(cal_scheduler, company)
+
             return
 
         elif choice == "e":
             feedback = console.input("What should be different? ")
-            # Re-generate with feedback appended
             augmented = dict(email_data)
             augmented["body"] = (
                 email_data.get("body", "") +
@@ -185,11 +222,12 @@ def _handle_draft_flow(responder, email_data, mode, message_id):
                 f"Previous draft:\n{draft_text}\n\n"
                 f"Requested changes: {feedback}"
             )
-            draft_text = responder.draft_response(augmented, mode=mode)
+            draft_text = responder.draft_response(
+                augmented, mode=mode, availability_text=availability_text,
+            )
             if not draft_text:
                 console.print("[red]Failed to re-generate draft. Check logs.[/red]")
                 return
-            # Loop back to show the new draft
 
         elif choice == "c":
             console.print("[yellow]Draft cancelled.[/yellow]")
@@ -199,10 +237,91 @@ def _handle_draft_flow(responder, email_data, mode, message_id):
             console.print("[red]Invalid choice. Enter a, e, or c.[/red]")
 
 
+def _offer_calendar_hold(cal_scheduler, company=""):
+    """After approving an interested draft, offer to create calendar holds."""
+    hold_choice = console.input(
+        "Create calendar hold for suggested times? [bold][y][/bold]/[bold][n][/bold]: "
+    ).strip().lower()
+
+    if hold_choice != "y":
+        return
+
+    try:
+        slots = cal_scheduler.get_availability(days_ahead=5)
+        if not slots:
+            console.print("[yellow]No available slots to hold.[/yellow]")
+            return
+
+        title = f"Interview — {company}" if company else "Interview Hold"
+        # Create holds for up to 3 slots
+        for slot in slots[:3]:
+            event_id = cal_scheduler.create_hold(title, slot)
+            if event_id:
+                console.print(
+                    f"  [green]Hold created: {slot.strftime('%A %B %#d at %#I:%M %p %Z')}[/green]"
+                )
+            else:
+                console.print(
+                    f"  [red]Failed to create hold for {slot.strftime('%A %B %#d')}[/red]"
+                )
+    except Exception:
+        console.print("[red]Failed to create calendar holds. Check logs.[/red]")
+
+
 @cli.command()
-def calendar():
+@click.option("--days", default=5, help="Number of days to look ahead (default 5).")
+def calendar(days):
     """Show Google Calendar availability for the next 5 days."""
-    console.print("[yellow]Coming soon — Phase 2[/yellow]")
+    from src.calendar.scheduler import CalendarScheduler
+
+    scheduler = CalendarScheduler()
+    try:
+        scheduler.authenticate()
+    except FileNotFoundError as e:
+        console.print(f"[red]{e}[/red]")
+        return
+    except Exception:
+        console.print("[red]Calendar authentication failed. Check logs for details.[/red]")
+        return
+
+    # Show existing events
+    events = scheduler.get_events(days_ahead=days)
+    if events:
+        events_table = Table(title=f"Calendar Events (next {days} days)")
+        events_table.add_column("Event", style="bold")
+        events_table.add_column("Start")
+        events_table.add_column("End")
+        events_table.add_column("Status")
+
+        for evt in events:
+            status_color = "green" if evt["status"] == "tentative" else "white"
+            events_table.add_row(
+                evt["title"],
+                evt["start"],
+                evt["end"],
+                f"[{status_color}]{evt['status']}[/{status_color}]",
+            )
+        console.print(events_table)
+        console.print()
+
+    # Show available slots
+    slots = scheduler.get_availability(days_ahead=days)
+    if slots:
+        avail_table = Table(title=f"Available Interview Slots (next {days} days)")
+        avail_table.add_column("Day", style="bold")
+        avail_table.add_column("Time")
+        avail_table.add_column("Status", style="green")
+
+        for slot in slots:
+            avail_table.add_row(
+                slot.strftime("%A %B %#d"),
+                slot.strftime("%#I:%M %p %Z"),
+                "open",
+            )
+        console.print(avail_table)
+        console.print(f"\n[dim]Formatted: {scheduler.format_slots(slots, max_slots=5)}[/dim]")
+    else:
+        console.print("[yellow]No available slots found in the next {days} days.[/yellow]")
 
 
 @cli.group()
