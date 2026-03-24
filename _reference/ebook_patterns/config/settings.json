@@ -1,0 +1,86 @@
+{
+  "paths": {
+    "inbox":         "inbox",
+    "processing":    "processing",
+    "archive":       "archive",
+    "logs":          "logs",
+    "dictionaries":  "dictionaries",
+    "audiobooks":    "output\\audiobooks",
+    "balabolka_txt": "output\\balabolka-txt",
+    "kindle":        "output\\kindle",
+    "episodes":      "output\\episodes",
+    "balcon":        "tools\\balcon\\balcon.exe",
+    "ffmpeg":        "ffmpeg",
+    "python":        "python",
+    "calibre":       "C:\\Program Files\\Calibre2\\ebook-convert.exe",
+    "tesseract":     "C:\\Program Files\\Tesseract-OCR\\tesseract.exe",
+    "poppler":       "tools\\poppler",
+    "data":          "tools\\data",
+    "ghostscript":   ""
+  },
+  "tts": {
+    "enabled":         true,
+    "input_formats":   ["pdf", "epub", "mobi", "azw", "azw3", "djvu", "txt", "docx"],
+    "output_suffix":   "_balabolka.txt"
+  },
+  "kindle": {
+    "enabled":         true,
+    "input_formats":   ["epub", "pdf", "txt", "docx", "mobi", "azw"],
+    "output_format":   "kfx",
+    "calibre_options": "--output-profile kindle_pw3 --embed-all-fonts"
+  },
+  "mp3": {
+    "enabled":  false,
+    "voice":    "Microsoft Steffan Online",
+    "speed":    0,
+    "volume":   100,
+    "bitrate":  "128k"
+  },
+  "scheduler": {
+    "interval_minutes": 15,
+    "task_name":        "EbookAutomation",
+    "run_on_login":     true
+  },
+  "notifications": {
+    "enabled":          true,
+    "show_toast":       true
+  },
+  "visual_qa": {
+    "enabled":        false,
+    "dpi":            100,
+    "max_pages":      8,
+    "pass_threshold": 70,
+    "rubric_path":    "tools\\visual_qa_rubric.md"
+  },
+  "classify": {
+    "enabled": true,
+    "sample_pages": 3,
+    "min_text_density_digital": 500,
+    "min_text_density_scan_with_text": 50,
+    "scan_producers": ["Google", "ABBYY", "Xerox", "Kofax", "ScanSnap", "Fujitsu", "Canon", "Epson", "HP Scan"]
+  },
+  "converge_loop": {
+    "enabled":                 true,
+    "max_iterations":          4,
+    "target_score":            85,
+    "stall_threshold":         3,
+    "cost_limit_per_book_usd": 2.00
+  },
+  "kindle_delivery": {
+    "enabled": true,
+    "calibre_library": "C:\\Users\\Joe\\Calibre Library",
+    "auto_send": false,
+    "delete_from_library_after_send": true,
+    "email": {
+      "kindle_address": "jlfowler1084_OaYN2h@kindle.com",
+      "smtp_server": "smtp.gmail.com",
+      "smtp_port": 587,
+      "smtp_user": "jlfowler1084@gmail.com",
+      "smtp_app_password_env": "EBOOK_SMTP_PASSWORD",
+      "convert_subject": true,
+      "max_email_size_mb": 50
+    }
+  },
+  "archive_originals":  true,
+  "log_level":          "INFO"
+}

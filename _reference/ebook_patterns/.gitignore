@@ -1,0 +1,57 @@
+# Large source files (PDFs, ebooks)
+archive/
+inbox/
+
+# Generated output
+output/
+
+# Intermediate processing files
+processing/
+
+# Ebook formats (binary, large)
+*.pdf
+*.epub
+*.mobi
+*.azw3
+*.kfx
+
+# Audio files
+*.mp3
+*.wav
+
+# Python
+__pycache__/
+*.pyc
+
+# Environment
+.env
+
+# Logs
+*.log
+logs/
+
+# Debug output
+debug/
+debug-*/
+debug_paragraphs.txt
+
+# Binary tools (download separately)
+tools/balcon/
+tools/poppler/
+
+# Credentials and session data
+tools/data/foh_credentials.json
+tools/data/foh_session.json
+
+# Pattern database (local run data)
+data/ebook_patterns.db
+data/covers/
+
+# Local Claude settings (user-specific permissions)
+.claude/settings.local.json
+
+# Test corpus (books are copyrighted, but baselines/expectations are committed)
+test-corpus/*
+!test-corpus/README.md
+!test-corpus/*.baseline.json
+!test-corpus/*.expect.json

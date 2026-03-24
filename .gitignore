@@ -1,0 +1,47 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Environment
+.env
+
+# SQLite databases
+data/*.db
+
+# Google OAuth tokens
+data/gmail_token.json
+data/calendar_token.json
+
+# Google credentials (downloaded from Cloud Console)
+config/google_credentials.json
+
+# Logs
+*.log
+logs/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# pytest
+.pytest_cache/
+
+# Local Claude settings (user-specific permissions)
+.claude/settings.local.json
+.claude/hooks/billing-events.log
