@@ -54,55 +54,19 @@ class TestSearchProfiles:
 
 
 class TestSearchIndeed:
-    def test_returns_parsed_results(self):
-        """Parses Indeed MCP response into structured results."""
-        results_json = json.dumps([
-            {"title": "Systems Administrator", "company": "Acme Corp",
-             "location": "Indianapolis, IN", "salary": "$80k-$100k",
-             "url": "https://indeed.com/job/1", "posted_date": "2 days ago",
-             "job_type": "Full-time"},
-            {"title": "IT Admin", "company": "Beta Inc",
-             "location": "Remote", "salary": "",
-             "url": "https://indeed.com/job/2", "posted_date": "1 day ago",
-             "job_type": "Full-time"},
-        ])
-
+    def test_skipped_returns_empty(self):
+        """Indeed is disabled — returns empty list with a warning."""
         searcher = JobSearcher(anthropic_api_key="fake-key")
-        with patch.object(searcher, "_get_client") as mock_fn:
-            mock_client = MagicMock()
-            mock_client.beta.messages.create.return_value = _mock_beta_response(results_json)
-            mock_fn.return_value = mock_client
-
-            results = searcher.search_indeed("systems administrator", "Indianapolis, IN")
-
-        assert len(results) == 2
-        assert results[0]["title"] == "Systems Administrator"
-        assert results[0]["source"] == "indeed"
-        assert results[1]["company"] == "Beta Inc"
-
-    def test_mcp_failure_returns_empty(self):
-        """Returns empty list on MCP failure."""
-        searcher = JobSearcher(anthropic_api_key="fake-key")
-        with patch.object(searcher, "_get_client") as mock_fn:
-            mock_client = MagicMock()
-            mock_client.beta.messages.create.side_effect = Exception("MCP error")
-            mock_fn.return_value = mock_client
-
-            results = searcher.search_indeed("test", "test")
-
+        results = searcher.search_indeed("systems administrator", "Indianapolis, IN")
         assert results == []
 
-    def test_bad_json_returns_empty(self):
-        """Returns empty list when response is not JSON."""
+    def test_logs_warning(self):
+        """Logs a warning explaining Indeed is not yet supported."""
         searcher = JobSearcher(anthropic_api_key="fake-key")
-        with patch.object(searcher, "_get_client") as mock_fn:
-            mock_client = MagicMock()
-            mock_client.beta.messages.create.return_value = _mock_beta_response("not json")
-            mock_fn.return_value = mock_client
-
-            results = searcher.search_indeed("test", "test")
-
-        assert results == []
+        with patch("src.jobs.searcher.logger") as mock_logger:
+            searcher.search_indeed("test", "test")
+            mock_logger.warning.assert_called_once()
+            assert "Indeed" in mock_logger.warning.call_args[0][0]
 
 
 # --- Dice Search Tests ---

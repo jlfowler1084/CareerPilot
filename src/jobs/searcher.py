@@ -72,6 +72,10 @@ class JobSearcher:
     def search_indeed(self, keyword: str, location: str) -> List[Dict]:
         """Search Indeed via MCP server.
 
+        Indeed MCP requires Claude.ai connector auth and is not yet supported
+        via direct API calls. This method currently logs a warning and returns
+        an empty list. Once Indeed auth is resolved, re-enable the MCP call below.
+
         Args:
             keyword: Job title or search keywords.
             location: City/state or "remote".
@@ -79,41 +83,12 @@ class JobSearcher:
         Returns:
             List of job result dicts, or empty list on failure.
         """
-        loc_display = location if location else "remote"
-        user_msg = f'Search for "{keyword}" jobs in {loc_display}. Return up to 15 results.'
-
-        try:
-            client = self._get_client()
-            response = client.beta.messages.create(
-                model="claude-sonnet-4-6",
-                max_tokens=4096,
-                system=SEARCH_SYSTEM_PROMPT,
-                mcp_servers=[{
-                    "type": "url",
-                    "url": INDEED_MCP_URL,
-                    "name": "indeed",
-                }],
-                betas=["mcp-client-2025-04-04"],
-                messages=[{"role": "user", "content": user_msg}],
-            )
-
-            # Extract text from response content blocks
-            text = self._extract_text(response)
-            results = _parse_json_response(text)
-            if results is None:
-                return []
-
-            # Normalize source field
-            for r in results:
-                r.setdefault("source", "indeed")
-                r.setdefault("easy_apply", False)
-
-            logger.info("Indeed search '%s' in %s: %d results", keyword, loc_display, len(results))
-            return results
-
-        except Exception:
-            logger.error("Indeed MCP search failed for '%s'", keyword, exc_info=True)
-            return []
+        logger.warning(
+            "Indeed search skipped — Indeed MCP requires Claude.ai connector auth "
+            "(not yet supported via direct API). Query: '%s' in %s",
+            keyword, location if location else "remote",
+        )
+        return []
 
     def search_dice(
         self, keyword: str, location: str, contract_only: bool = False,
