@@ -1588,6 +1588,7 @@ DASHBOARD_MENU = """\
 [bold][5][/bold] Interviews \u2014 Analyze, history, mock
 [bold][6][/bold] Calendar \u2014 View availability
 [bold][7][/bold] Daily Summary \u2014 AI end-of-day recap
+[bold][8][/bold] Inbox \u2014 Threaded email dashboard
 [bold][q][/bold] Quit"""
 
 
@@ -1633,6 +1634,8 @@ def dashboard(ctx):
                 ctx.invoke(calendar, days=5)
             elif choice == "7":
                 ctx.invoke(daily)
+            elif choice == "8":
+                ctx.invoke(inbox)
             elif choice == "q":
                 console.print("[dim]Goodbye.[/dim]")
                 return
@@ -1799,6 +1802,46 @@ def morning():
             f"[bold]Pipeline:[/bold] {applied} awaiting response, "
             f"{interviewing} interviewing, {stats['total']} total tracked"
         )
+    except Exception:
+        pass
+
+    # --- Inbox digest ---
+    inbox_digest_text = ""
+    try:
+        from src.gmail.auth import get_gmail_service
+        from src.gmail.dashboard import EmailDashboard
+        from src.gmail.thread_actions import ThreadActions
+
+        svc = get_gmail_service()
+        dash = EmailDashboard(svc)
+        thread_actions = ThreadActions(svc)
+
+        inbox_threads = dash.fetch_threads(max_results=50)
+        awaiting = 0
+        stale_threads = []
+        for t in inbox_threads:
+            snoozed, _ = thread_actions.is_snoozed(t["thread_id"])
+            if snoozed:
+                continue
+            si = dash.classify_thread_status(t)
+            if si["status"] == "awaiting_reply":
+                awaiting += 1
+                if si["is_stale"]:
+                    stale_threads.append(t)
+
+        parts = [f"{awaiting} threads awaiting reply"]
+        if stale_threads:
+            parts.append(f"[red]{len(stale_threads)} stale[/red]")
+        inbox_digest_text = f"Inbox: {', '.join(parts)}"
+        console.print(f"[bold]{inbox_digest_text}[/bold]")
+
+        if stale_threads:
+            for st in stale_threads[:5]:
+                si = dash.classify_thread_status(st)
+                days = int(si["hours_since_last"] / 24)
+                console.print(
+                    f"  [red]Stale:[/red] {st['subject'][:60]} ({days} day{'s' if days != 1 else ''})"
+                )
     except Exception:
         pass
 
@@ -3046,6 +3089,424 @@ def filters_nuke():
     for f in cp_filters:
         mgr.delete_filter(f["id"])
     console.print(f"[green]Removed {len(cp_filters)} filter(s). Labels are preserved.[/green]")
+
+
+@cli.command()
+def inbox():
+    """Threaded email dashboard with one-click actions."""
+    from src.gmail.auth import get_gmail_service
+    from src.gmail.dashboard import EmailDashboard
+    from src.gmail.thread_actions import ThreadActions
+
+    # Authenticate
+    try:
+        service = get_gmail_service()
+    except FileNotFoundError as e:
+        console.print(f"[red]{e}[/red]")
+        return
+    except Exception:
+        console.print("[red]Gmail authentication failed. Check logs for details.[/red]")
+        return
+
+    dashboard_obj = EmailDashboard(service)
+    responder = None
+    cal_scheduler = None
+
+    # Set up responder
+    try:
+        from src.gmail.responder import RecruiterResponder
+        responder = RecruiterResponder(service)
+    except Exception:
+        pass
+
+    # Set up calendar (non-blocking)
+    try:
+        from src.calendar.scheduler import CalendarScheduler
+        cal_scheduler = CalendarScheduler()
+        cal_scheduler.authenticate()
+    except Exception:
+        cal_scheduler = None
+
+    actions = ThreadActions(service, responder=responder, cal_scheduler=cal_scheduler)
+
+    # Fetch threads
+    console.print("[dim]Fetching inbox threads...[/dim]")
+    threads = dashboard_obj.fetch_threads(max_results=50)
+
+    if not threads:
+        console.print("[yellow]No threads found in CareerPilot labels.[/yellow]")
+        return
+
+    # Classify all threads and check snooze status
+    enriched = []
+    for t in threads:
+        snoozed, snooze_info = actions.is_snoozed(t["thread_id"])
+        if snoozed:
+            continue  # Hide snoozed threads
+
+        status_info = dashboard_obj.classify_thread_status(t)
+        t["status"] = status_info["status"]
+        t["hours_since_last"] = status_info["hours_since_last"]
+        t["is_stale"] = status_info["is_stale"]
+
+        # Check if snooze just expired
+        if snooze_info and not snoozed:
+            t["snooze_expired"] = True
+        else:
+            t["snooze_expired"] = False
+
+        # Check linked job
+        linked_job = actions.get_linked_job(t["thread_id"])
+        t["linked_job_id"] = linked_job
+
+        enriched.append(t)
+
+    # Digest header
+    digest = {
+        "awaiting_reply": sum(1 for t in enriched if t["status"] == "awaiting_reply"),
+        "stale_count": sum(1 for t in enriched if t["is_stale"]),
+        "interview_count": sum(1 for t in enriched if t["category"] == "Interviews"),
+        "new_24h": sum(
+            1 for t in enriched
+            if t["last_message_date"].tzinfo
+            and (
+                __import__("datetime").datetime.now(__import__("datetime").timezone.utc)
+                - t["last_message_date"]
+            ).total_seconds() < 86400
+        ),
+    }
+
+    digest_parts = []
+    digest_parts.append(f"{digest['awaiting_reply']} awaiting reply")
+    if digest["stale_count"]:
+        digest_parts.append(f"[red]{digest['stale_count']} stale![/red]")
+    if digest["new_24h"]:
+        digest_parts.append(f"{digest['new_24h']} new today")
+    if digest["interview_count"]:
+        digest_parts.append(f"{digest['interview_count']} interview(s)")
+
+    console.print(Panel(
+        f"[bold]Inbox:[/bold] {', '.join(digest_parts)}",
+        border_style="cyan",
+    ))
+    console.print()
+
+    # Thread table
+    table = Table(title=f"Email Threads ({len(enriched)})")
+    table.add_column("#", style="dim", width=4)
+    table.add_column("Status", width=12)
+    table.add_column("Category", width=16)
+    table.add_column("From/Company")
+    table.add_column("Subject")
+    table.add_column("Last Activity", width=14)
+    table.add_column("Age", width=8)
+
+    STATUS_COLORS = {
+        "awaiting_reply": "yellow",
+        "awaiting_response": "green",
+        "scheduled": "cyan",
+        "unknown": "dim",
+    }
+
+    for i, t in enumerate(enriched, 1):
+        status = t["status"]
+        color = STATUS_COLORS.get(status, "white")
+        if t["is_stale"]:
+            color = "red"
+
+        status_display = status.replace("_", " ")
+        if t["snooze_expired"]:
+            status_display = "follow up!"
+            color = "bright_magenta"
+
+        # Participant display (first non-self sender)
+        from_display = ""
+        for p in t["participants"]:
+            user_email = dashboard_obj._get_user_email()
+            if user_email and user_email.lower() not in p.lower():
+                from_display = p[:30]
+                break
+        if not from_display and t["participants"]:
+            from_display = t["participants"][0][:30]
+
+        # Age display
+        hours = t["hours_since_last"]
+        if hours < 24:
+            age = f"{int(hours)}h"
+        else:
+            age = f"{int(hours / 24)}d"
+
+        last_date = t["last_message_date"].strftime("%m/%d %H:%M")
+
+        linked = ""
+        if t["linked_job_id"]:
+            linked = f" [dim](#{t['linked_job_id']})[/dim]"
+
+        table.add_row(
+            str(i),
+            f"[{color}]{status_display}[/{color}]",
+            t["category"],
+            from_display,
+            t["subject"][:40] + linked,
+            last_date,
+            age,
+        )
+
+    console.print(table)
+    console.print()
+
+    # Interactive thread selection
+    while True:
+        choice = console.input("Select thread # or [bold][q][/bold]uit: ").strip().lower()
+        if choice == "q":
+            return
+
+        try:
+            idx = int(choice) - 1
+            if not 0 <= idx < len(enriched):
+                console.print("[red]Invalid thread number.[/red]")
+                continue
+        except ValueError:
+            console.print("[red]Enter a number or 'q'.[/red]")
+            continue
+
+        thread = enriched[idx]
+        _inbox_thread_actions(thread, actions, dashboard_obj, console)
+
+
+def _inbox_thread_actions(thread, actions, dashboard_obj, console):
+    """Handle per-thread actions after selecting from inbox."""
+    from rich.panel import Panel
+
+    # Show preview (last 2 messages)
+    messages = dashboard_obj.get_thread_messages(thread["thread_id"])
+    if messages:
+        preview_msgs = messages[-2:] if len(messages) > 1 else messages
+        for msg in preview_msgs:
+            if msg["is_from_me"]:
+                border = "green"
+                label = "You"
+            else:
+                border = "cyan"
+                label = msg["sender"][:50]
+            body_preview = (msg["body"] or "")[:500]
+            console.print(Panel(
+                body_preview,
+                title=f"{label} ({msg['date']})",
+                border_style=border,
+            ))
+
+    # Show linked application if tracked
+    if thread.get("linked_job_id"):
+        try:
+            from src.jobs.tracker import ApplicationTracker
+            t = ApplicationTracker()
+            job = t.get_job(thread["linked_job_id"])
+            t.close()
+            if job:
+                console.print(
+                    f"  [dim]Linked:[/dim] {job.get('title', '?')} at "
+                    f"{job.get('company', '?')} ({job.get('status', '?')})"
+                )
+        except Exception:
+            pass
+
+    console.print()
+    console.print(
+        "[bold][r][/bold]eply  [bold][b][/bold]ook  [bold][s][/bold]nooze  "
+        "[bold][a][/bold]rchive  [bold][t][/bold]rack  [bold][v][/bold]iew full  "
+        "[bold][q][/bold]back"
+    )
+
+    while True:
+        action = console.input("Action: ").strip().lower()
+
+        if action == "q":
+            return
+
+        elif action == "r":
+            _inbox_reply_flow(thread, actions, console)
+
+        elif action == "b":
+            _inbox_book_flow(thread, actions, console)
+
+        elif action == "s":
+            days_input = console.input("Snooze for how many days? [3]: ").strip()
+            days = int(days_input) if days_input.isdigit() else 3
+            if actions.snooze(thread["thread_id"], days=days, subject=thread["subject"]):
+                console.print(f"[green]Snoozed for {days} days.[/green]")
+            else:
+                console.print("[red]Failed to snooze.[/red]")
+            return
+
+        elif action == "a":
+            confirm = console.input("Archive this thread? [y/n]: ").strip().lower()
+            if confirm == "y":
+                if actions.archive(thread["thread_id"]):
+                    console.print("[green]Thread archived.[/green]")
+                else:
+                    console.print("[red]Failed to archive.[/red]")
+            return
+
+        elif action == "t":
+            _inbox_track_flow(thread, actions, console)
+
+        elif action == "v":
+            actions.view(thread["thread_id"], console)
+
+        else:
+            console.print("[red]Invalid action. Enter r, b, s, a, t, v, or q.[/red]")
+
+
+def _inbox_reply_flow(thread, actions, console):
+    """Reply flow: choose mode, generate draft, review."""
+    from rich.panel import Panel
+
+    console.print(
+        "  Mode: [bold][i][/bold]nterested  [bold][d][/bold]ecline  "
+        "[bold][m][/bold]ore info"
+    )
+    mode_choice = console.input("  Mode: ").strip().lower()
+    mode_map = {"i": "interested", "d": "not_interested", "m": "more_info"}
+    mode = mode_map.get(mode_choice)
+    if not mode:
+        console.print("[red]Invalid mode.[/red]")
+        return
+
+    console.print("[dim]Generating reply...[/dim]")
+    draft_text = actions.reply(thread["thread_id"], mode=mode)
+
+    if not draft_text:
+        console.print("[red]Failed to generate reply. Check logs.[/red]")
+        return
+
+    while True:
+        console.print(Panel(draft_text, title=f"Draft Reply ({mode})", border_style="cyan"))
+
+        choice = console.input(
+            "  [bold][a][/bold]pprove (save draft)  "
+            "[bold][e][/bold]dit (re-generate)  "
+            "[bold][c][/bold]ancel: "
+        ).strip().lower()
+
+        if choice == "a":
+            draft_id = actions.save_reply_draft(thread["thread_id"], draft_text)
+            if draft_id:
+                console.print(f"[green]Draft saved to Gmail (draft_id={draft_id}). NOT sent.[/green]")
+            else:
+                console.print("[red]Failed to save draft. Check logs.[/red]")
+            return
+
+        elif choice == "e":
+            console.print("[dim]Re-generating...[/dim]")
+            draft_text = actions.reply(thread["thread_id"], mode=mode)
+            if not draft_text:
+                console.print("[red]Failed to re-generate. Check logs.[/red]")
+                return
+
+        elif choice == "c":
+            console.print("[yellow]Cancelled.[/yellow]")
+            return
+
+        else:
+            console.print("[red]Invalid choice. Enter a, e, or c.[/red]")
+
+
+def _inbox_book_flow(thread, actions, console):
+    """Booking flow: show availability, generate scheduling reply."""
+    from rich.panel import Panel
+
+    console.print("[dim]Generating scheduling response...[/dim]")
+    draft_text, slots = actions.book(thread["thread_id"])
+
+    if not draft_text:
+        console.print("[red]Failed to generate booking reply. Check logs.[/red]")
+        return
+
+    console.print(Panel(draft_text, title="Scheduling Reply", border_style="cyan"))
+
+    choice = console.input(
+        "  [bold][a][/bold]pprove (save draft)  [bold][c][/bold]ancel: "
+    ).strip().lower()
+
+    if choice == "a":
+        draft_id = actions.save_reply_draft(thread["thread_id"], draft_text)
+        if draft_id:
+            console.print(f"[green]Draft saved (draft_id={draft_id}). NOT sent.[/green]")
+        else:
+            console.print("[red]Failed to save draft.[/red]")
+
+        # Offer calendar holds
+        if slots and actions._cal_scheduler:
+            hold = console.input("Create calendar holds for suggested times? [y/n]: ").strip().lower()
+            if hold == "y":
+                company = ""
+                for p in thread.get("participants", []):
+                    if "@" in p:
+                        company = p.split("@")[-1].split(".")[0].title()
+                        break
+                title = f"Interview \u2014 {company}" if company else "Interview Hold"
+                for slot in slots[:3]:
+                    event_id = actions._cal_scheduler.create_hold(title, slot)
+                    if event_id:
+                        console.print(
+                            f"  [green]Hold: {slot.strftime('%A %B %#d at %#I:%M %p %Z')}[/green]"
+                        )
+    elif choice == "c":
+        console.print("[yellow]Cancelled.[/yellow]")
+
+
+def _inbox_track_flow(thread, actions, console):
+    """Link a thread to an application in the tracker."""
+    try:
+        from src.jobs.tracker import ApplicationTracker
+        t = ApplicationTracker()
+        pipeline = t.get_pipeline()
+    except Exception:
+        console.print("[red]Could not access application tracker.[/red]")
+        return
+
+    # Collect all jobs
+    all_jobs = []
+    for status, jobs in pipeline.items():
+        all_jobs.extend(jobs)
+
+    if not all_jobs:
+        console.print("[yellow]No applications in tracker to link.[/yellow]")
+        t.close()
+        return
+
+    table = Table(title="Applications")
+    table.add_column("#", style="dim", width=4)
+    table.add_column("Title", style="bold")
+    table.add_column("Company")
+    table.add_column("Status")
+
+    for i, j in enumerate(all_jobs, 1):
+        table.add_row(
+            str(i),
+            str(j.get("title", ""))[:35],
+            str(j.get("company", ""))[:25],
+            j.get("status", ""),
+        )
+
+    console.print(table)
+
+    choice = console.input("Link to application #: ").strip()
+    try:
+        idx = int(choice) - 1
+        if 0 <= idx < len(all_jobs):
+            job_id = all_jobs[idx]["id"]
+            if actions.track(thread["thread_id"], job_id):
+                console.print(f"[green]Linked to: {all_jobs[idx].get('title', '?')}[/green]")
+            else:
+                console.print("[red]Failed to link.[/red]")
+        else:
+            console.print("[red]Invalid number.[/red]")
+    except ValueError:
+        console.print("[red]Invalid input.[/red]")
+
+    t.close()
 
 
 if __name__ == "__main__":
