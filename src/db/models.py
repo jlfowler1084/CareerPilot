@@ -56,6 +56,11 @@ CREATE TABLE IF NOT EXISTS interview_analyses (
     company TEXT DEFAULT '',
     role TEXT DEFAULT ''
 );
+
+CREATE TABLE IF NOT EXISTS kv_store (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
 """
 
 
@@ -152,3 +157,22 @@ def get_skill_log(conn, skill_name=None):
             "ORDER BY sl.changed_at DESC",
         ).fetchall()
     return [dict(r) for r in rows]
+
+
+# --- Key-Value Store ---
+
+
+def get_kv(conn, key):
+    """Get a value from the kv_store. Returns string or None."""
+    row = conn.execute("SELECT value FROM kv_store WHERE key = ?", (key,)).fetchone()
+    return row["value"] if row else None
+
+
+def set_kv(conn, key, value):
+    """Set a value in the kv_store (upsert)."""
+    conn.execute(
+        "INSERT INTO kv_store (key, value) VALUES (?, ?) "
+        "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        (key, str(value)),
+    )
+    conn.commit()

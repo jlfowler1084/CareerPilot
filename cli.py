@@ -28,15 +28,18 @@ CATEGORY_COLORS = {
 }
 
 
-@click.group()
+@click.group(invoke_without_command=True)
 @click.option("--debug", is_flag=True, help="Enable debug logging.")
-def cli(debug):
+@click.pass_context
+def cli(ctx, debug):
     """CareerPilot — Personal career management platform."""
     level = logging.DEBUG if debug else logging.INFO
     logging.basicConfig(
         level=level,
         format="%(asctime)s %(name)s %(levelname)s %(message)s",
     )
+    if ctx.invoked_subcommand is None:
+        ctx.invoke(dashboard)
 
 
 @cli.command()
@@ -1373,5 +1376,448 @@ def interview_compare():
         ))
 
 
+# --- Phase 6: Dashboard, Morning Scan, Daily Summary, Quick Entry, Status ---
+
+
+DASHBOARD_MENU = """\
+[bold][1][/bold] Morning Scan \u2014 Gmail + Job Search
+[bold][2][/bold] Journal \u2014 New entry, recent, insights
+[bold][3][/bold] Skills \u2014 Inventory, update, roadmap
+[bold][4][/bold] Applications \u2014 Pipeline, update, stats
+[bold][5][/bold] Interviews \u2014 Analyze, history, mock
+[bold][6][/bold] Calendar \u2014 View availability
+[bold][7][/bold] Daily Summary \u2014 AI end-of-day recap
+[bold][q][/bold] Quit"""
+
+
+@cli.command()
+@click.pass_context
+def dashboard(ctx):
+    """Interactive dashboard \u2014 main menu for all CareerPilot features."""
+    from datetime import datetime
+
+    from src.db import models
+
+    # Startup banner
+    conn = models.get_connection()
+    last_scan = models.get_kv(conn, "last_morning_scan") or "never"
+    conn.close()
+
+    console.print()
+    console.print(Panel(
+        f"[bold cyan]CareerPilot v1.0[/bold cyan]\n"
+        f"Today: {datetime.now().strftime('%A, %B %d, %Y')}\n"
+        f"Last morning scan: {last_scan}",
+        border_style="cyan",
+    ))
+
+    while True:
+        console.print()
+        console.print(Panel(DASHBOARD_MENU, title="CareerPilot Dashboard", border_style="cyan"))
+
+        choice = console.input("\nSelect: ").strip().lower()
+
+        try:
+            if choice == "1":
+                ctx.invoke(morning)
+            elif choice == "2":
+                _journal_submenu(ctx)
+            elif choice == "3":
+                _skills_submenu(ctx)
+            elif choice == "4":
+                _tracker_submenu(ctx)
+            elif choice == "5":
+                _interviews_submenu(ctx)
+            elif choice == "6":
+                ctx.invoke(calendar, days=5)
+            elif choice == "7":
+                ctx.invoke(daily)
+            elif choice == "q":
+                console.print("[dim]Goodbye.[/dim]")
+                return
+            else:
+                console.print("[red]Invalid choice.[/red]")
+        except SystemExit:
+            pass  # Click commands may call sys.exit on completion
+
+
+def _journal_submenu(ctx):
+    """Journal submenu."""
+    console.print("\n[bold]Journal:[/bold]  [1] New  [2] List  [3] Insights  [4] Search  [b] Back")
+    c = console.input("Select: ").strip().lower()
+    if c == "1":
+        ctx.invoke(journal_new, entry_type="daily", mood=None, time_spent=None)
+    elif c == "2":
+        ctx.invoke(journal_list, days=30, entry_type=None)
+    elif c == "3":
+        ctx.invoke(journal_insights)
+    elif c == "4":
+        kw = console.input("Search keyword: ").strip()
+        if kw:
+            ctx.invoke(journal_search, keyword=kw)
+
+
+def _skills_submenu(ctx):
+    """Skills submenu."""
+    console.print("\n[bold]Skills:[/bold]  [1] Inventory  [2] Update  [3] Roadmap  [b] Back")
+    c = console.input("Select: ").strip().lower()
+    if c == "1":
+        ctx.invoke(skills)
+    elif c == "2":
+        name = console.input("Skill name: ").strip()
+        level = console.input("New level (1-5): ").strip()
+        if name and level.isdigit():
+            ctx.invoke(skills_update, name=name, level=int(level))
+    elif c == "3":
+        ctx.invoke(roadmap, hours=15)
+
+
+def _tracker_submenu(ctx):
+    """Application tracker submenu."""
+    console.print("\n[bold]Applications:[/bold]  [1] Pipeline  [2] Update  [3] Stats  [b] Back")
+    c = console.input("Select: ").strip().lower()
+    if c == "1":
+        ctx.invoke(tracker_show)
+    elif c == "2":
+        jid = console.input("Job ID: ").strip()
+        if jid.isdigit():
+            ctx.invoke(tracker_update, job_id=int(jid))
+    elif c == "3":
+        ctx.invoke(tracker_stats)
+
+
+def _interviews_submenu(ctx):
+    """Interviews submenu."""
+    console.print("\n[bold]Interviews:[/bold]  [1] Analyze  [2] History  [3] Compare  [4] Mock  [b] Back")
+    c = console.input("Select: ").strip().lower()
+    if c == "1":
+        fp = console.input("Transcript file path: ").strip()
+        if fp:
+            ctx.invoke(interview_analyze, filepath=fp, job_title=None, company=None)
+    elif c == "2":
+        ctx.invoke(interview_history)
+    elif c == "3":
+        ctx.invoke(interview_compare)
+    elif c == "4":
+        ctx.invoke(interview_mock, num_questions=5)
+
+
+@cli.command()
+def morning():
+    """Morning scan \u2014 Gmail (24h) + quick job search + pending apps."""
+    from datetime import datetime
+
+    from src.db import models
+
+    console.rule("[bold cyan]Morning Scan[/bold cyan]")
+    console.print()
+
+    # --- Gmail scan (last 24 hours) ---
+    email_count = 0
+    try:
+        from src.gmail.scanner import GmailScanner
+
+        scanner = GmailScanner()
+        scanner.authenticate()
+        results = scanner.scan_inbox(days_back=1)
+        email_count = len(results) if results else 0
+
+        if results:
+            table = Table(title=f"Recruiter Emails ({email_count})")
+            table.add_column("#", style="dim")
+            table.add_column("Category", style="bold")
+            table.add_column("From")
+            table.add_column("Subject")
+            table.add_column("Company")
+
+            for i, r in enumerate(results, 1):
+                color = CATEGORY_COLORS.get(r["category"], "white")
+                table.add_row(
+                    str(i),
+                    f"[{color}]{r['category']}[/{color}]",
+                    r["sender"][:30],
+                    r["subject"][:40],
+                    r["company"],
+                )
+            console.print(table)
+        else:
+            console.print("[dim]No new recruiter emails in the last 24 hours.[/dim]")
+    except Exception:
+        console.print("[yellow]Gmail scan skipped (auth failed or unavailable).[/yellow]")
+
+    console.print()
+
+    # --- Quick job search (3 default profiles) ---
+    job_count = 0
+    try:
+        from src.jobs.searcher import JobSearcher
+
+        searcher = JobSearcher()
+        default_profiles = ["sysadmin_local", "syseng_local", "contract_infra"]
+        console.print("[dim]Searching default profiles...[/dim]")
+        jobs = searcher.run_profiles(default_profiles)
+        job_count = len(jobs)
+
+        if jobs:
+            table = Table(title=f"New Job Listings ({job_count})")
+            table.add_column("#", style="dim", width=4)
+            table.add_column("Title", style="bold")
+            table.add_column("Company")
+            table.add_column("Location")
+            table.add_column("Source", width=8)
+
+            for i, j in enumerate(jobs[:15], 1):
+                table.add_row(
+                    str(i),
+                    str(j.get("title", ""))[:40],
+                    str(j.get("company", ""))[:25],
+                    str(j.get("location", ""))[:20],
+                    j.get("source", ""),
+                )
+            console.print(table)
+            if job_count > 15:
+                console.print(f"[dim]... and {job_count - 15} more. Run 'search' for full results.[/dim]")
+        else:
+            console.print("[dim]No new job listings found.[/dim]")
+    except Exception:
+        console.print("[yellow]Job search skipped (MCP unavailable).[/yellow]")
+
+    console.print()
+
+    # --- Pending applications ---
+    try:
+        from src.jobs.tracker import ApplicationTracker
+
+        t = ApplicationTracker()
+        stats = t.get_stats()
+        t.close()
+
+        applied = stats["by_status"].get("applied", 0)
+        interviewing = stats["by_status"].get("interview", 0) + stats["by_status"].get("phone_screen", 0)
+        console.print(
+            f"[bold]Pipeline:[/bold] {applied} awaiting response, "
+            f"{interviewing} interviewing, {stats['total']} total tracked"
+        )
+    except Exception:
+        pass
+
+    # Record scan timestamp
+    try:
+        conn = models.get_connection()
+        models.set_kv(conn, "last_morning_scan", datetime.now().strftime("%Y-%m-%d %H:%M"))
+        conn.close()
+    except Exception:
+        pass
+
+    console.print()
+    console.print(
+        f"[bold]Summary:[/bold] {email_count} emails, {job_count} jobs found."
+    )
+
+
+@cli.command()
+def daily():
+    """End-of-day AI summary of today's career activity."""
+    from datetime import datetime
+
+    import anthropic
+
+    from config import settings
+    from src.db import models
+    from src.journal.entries import JournalManager
+
+    today = datetime.now().strftime("%Y-%m-%d")
+
+    # Gather today's activity
+    activity_parts = []
+
+    # Journal entries today
+    manager = JournalManager()
+    entries = manager.list_entries(days_back=1)
+    today_entries = [e for e in entries if e["date"] == today]
+    if today_entries:
+        activity_parts.append(
+            f"Journal entries today: {len(today_entries)} "
+            f"({', '.join(e['type'] for e in today_entries)})"
+        )
+
+    # Application changes today
+    try:
+        from src.jobs.tracker import ApplicationTracker
+
+        t = ApplicationTracker()
+        all_jobs = t.get_all_jobs()
+        today_jobs = [
+            j for j in all_jobs
+            if (j.get("date_found", "") or "").startswith(today)
+            or (j.get("date_applied", "") or "").startswith(today)
+            or (j.get("date_response", "") or "").startswith(today)
+        ]
+        t.close()
+        if today_jobs:
+            activity_parts.append(f"Application activity: {len(today_jobs)} job(s) updated")
+    except Exception:
+        pass
+
+    # Skill updates today
+    try:
+        conn = models.get_connection()
+        logs = models.get_skill_log(conn)
+        conn.close()
+        today_logs = [l for l in logs if (l.get("changed_at", "") or "").startswith(today)]
+        if today_logs:
+            activity_parts.append(
+                f"Skills updated: {', '.join(l['skill_name'] for l in today_logs)}"
+            )
+    except Exception:
+        pass
+
+    # Interview analyses today
+    try:
+        from src.interviews.coach import InterviewCoach
+
+        coach = InterviewCoach()
+        analyses = coach.get_all_analyses()
+        coach.close()
+        today_analyses = [
+            a for a in analyses
+            if (a.get("analyzed_at", "") or "").startswith(today)
+        ]
+        if today_analyses:
+            activity_parts.append(f"Interview analyses: {len(today_analyses)}")
+    except Exception:
+        pass
+
+    if not activity_parts:
+        activity_text = "No career-related activity recorded today."
+    else:
+        activity_text = "\n".join(f"- {p}" for p in activity_parts)
+
+    # Send to Claude
+    prompt = (
+        f"Today's date: {today}\n\n"
+        f"Today's career activity:\n{activity_text}\n\n"
+        "Based on today's career-related activity, give me a brief end-of-day summary "
+        "(3-5 sentences) and suggest 3 specific priorities for tomorrow. "
+        "Be direct and practical \u2014 no motivational fluff. "
+        "If there was no activity today, say so honestly and suggest what to focus on."
+    )
+
+    try:
+        client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
+        response = client.messages.create(
+            model="claude-sonnet-4-6",
+            max_tokens=512,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        summary = response.content[0].text.strip()
+    except Exception:
+        summary = (
+            "Could not generate AI summary (API unavailable).\n\n"
+            f"Raw activity:\n{activity_text}"
+        )
+
+    console.print()
+    console.print(Panel(summary, title="Daily Summary", border_style="cyan"))
+
+
+@cli.command()
+@click.option("--type", "entry_type",
+              type=click.Choice(["daily", "interview", "study", "project", "reflection"]),
+              default="daily", help="Entry type (default: daily).")
+def quick(entry_type):
+    """Rapid journal entry \u2014 type and save, no menus."""
+    from src.journal.entries import JournalManager
+
+    console.print(f"[dim]Quick {entry_type} entry (press Enter twice to finish):[/dim]")
+    lines = []
+    while True:
+        line = console.input("")
+        if line == "" and lines and lines[-1] == "":
+            lines.pop()
+            break
+        lines.append(line)
+
+    content = "\n".join(lines).strip()
+    if not content:
+        console.print("[yellow]Empty entry, cancelled.[/yellow]")
+        return
+
+    manager = JournalManager()
+    filename = manager.create_entry(entry_type, content)
+    console.print(f"[green]Saved: {filename}[/green]")
+
+
+@cli.command()
+def status():
+    """One-shot overview \u2014 today's activity at a glance."""
+    from datetime import datetime
+
+    from src.db import models
+
+    today = datetime.now().strftime("%Y-%m-%d")
+    parts = []
+
+    # Journal entries today
+    try:
+        from src.journal.entries import JournalManager
+
+        manager = JournalManager()
+        entries = manager.list_entries(days_back=1)
+        today_count = sum(1 for e in entries if e["date"] == today)
+        parts.append(f"Journal entries today: [bold]{today_count}[/bold]")
+    except Exception:
+        parts.append("Journal: [dim]unavailable[/dim]")
+
+    # Application pipeline
+    try:
+        from src.jobs.tracker import ApplicationTracker
+
+        t = ApplicationTracker()
+        stats = t.get_stats()
+        t.close()
+
+        applied = stats["by_status"].get("applied", 0)
+        interviewing = stats["by_status"].get("interview", 0) + stats["by_status"].get("phone_screen", 0)
+        offers = stats["by_status"].get("offer", 0)
+        parts.append(
+            f"Applications: [yellow]{applied}[/yellow] applied, "
+            f"[green]{interviewing}[/green] interviewing, "
+            f"[bright_green]{offers}[/bright_green] offers"
+        )
+    except Exception:
+        parts.append("Applications: [dim]unavailable[/dim]")
+
+    # Skill gaps
+    try:
+        conn = models.get_connection()
+        gaps = models.get_gaps(conn)
+        conn.close()
+        parts.append(f"Skill gaps remaining: [bold]{len(gaps)}[/bold]")
+    except Exception:
+        parts.append("Skills: [dim]unavailable[/dim]")
+
+    # Next calendar event
+    try:
+        from src.calendar.scheduler import CalendarScheduler
+
+        sched = CalendarScheduler()
+        sched.authenticate()
+        events = sched.get_events(days_ahead=3)
+        if events:
+            next_evt = events[0]
+            parts.append(f"Next event: [cyan]{next_evt['title']}[/cyan] at {next_evt['start']}")
+        else:
+            parts.append("Next event: [dim]none in next 3 days[/dim]")
+    except Exception:
+        parts.append("Calendar: [dim]not connected[/dim]")
+
+    console.print()
+    console.print(Panel("\n".join(parts), title="CareerPilot Status", border_style="cyan"))
+
+
 if __name__ == "__main__":
-    cli()
+    try:
+        cli()
+    except KeyboardInterrupt:
+        console.print("\n[dim]Goodbye.[/dim]")
