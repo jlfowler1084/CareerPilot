@@ -3509,6 +3509,60 @@ def _inbox_track_flow(thread, actions, console):
     t.close()
 
 
+# ─── ATS Form Auto-Fill Commands ──────────────────────────────────
+
+
+@cli.group()
+def fill():
+    """ATS form auto-fill — generate prompts, cheatsheets, and detect ATS type."""
+
+
+@fill.command("url")
+@click.argument("job_url")
+@click.option("--ats", "ats_type", default=None, help="Force ATS type (workday, greenhouse, lever, icims).")
+@click.option("--execute", is_flag=True, help="Launch Claude Code + Chrome to fill the form.")
+@click.option("--clipboard", is_flag=True, help="Copy cheatsheet to clipboard instead of prompt.")
+@click.option("--resume", "resume_path", default=None, help="Path to resume file.")
+@click.option("--cover-letter", "cover_letter_path", default=None, help="Path to cover letter file.")
+def fill_url(job_url, ats_type, execute, clipboard, resume_path, cover_letter_path):
+    """Auto-detect ATS and generate a fill prompt for JOB_URL."""
+    from src.browser.fill_cli import cmd_fill
+
+    cmd_fill(
+        job_url=job_url,
+        ats_type=ats_type,
+        execute=execute,
+        clipboard=clipboard,
+        resume_path=resume_path,
+        cover_letter_path=cover_letter_path,
+    )
+
+
+@fill.command("detect")
+@click.argument("url")
+def fill_detect(url):
+    """Identify which ATS system a URL belongs to."""
+    from src.browser.fill_cli import cmd_detect
+
+    cmd_detect(url)
+
+
+@fill.command("list-ats")
+def fill_list_ats():
+    """Show all supported ATS systems."""
+    from src.browser.fill_cli import cmd_list_ats
+
+    cmd_list_ats()
+
+
+@fill.command("cheatsheet")
+def fill_cheatsheet():
+    """Print quick-fill values from your profile."""
+    from src.browser.fill_cli import cmd_cheatsheet
+
+    cmd_cheatsheet()
+
+
 if __name__ == "__main__":
     try:
         cli()
