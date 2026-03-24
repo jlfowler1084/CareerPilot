@@ -42,6 +42,17 @@ env/
 # pytest
 .pytest_cache/
 
-# Local Claude settings (user-specific permissions)
-.claude/settings.local.json
-.claude/hooks/billing-events.log
+# Local Claude settings and plugin configs
+.claude/
+.playwright-mcp/
+.superpowers/
+
+# Scanner runtime data
+scanner/__pycache__/
+scanner/data/
+
+# Personal documents (resumes, cover letters)
+resumes/*.pdf
+resumes/*.docx
+data/resumes/
+data/cover_letters/
