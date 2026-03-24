@@ -2790,6 +2790,47 @@ def _docs_post_action(path, generator, job_data):
             console.print("[dim]Invalid choice.[/dim]")
 
 
+# ─── LinkedIn Commands ─────────────────────────────────────────────
+
+
+@cli.group()
+def linkedin():
+    """LinkedIn job search integration — scan emails, search, manage alerts."""
+
+
+@linkedin.command("scan")
+@click.option("--days", default=14, help="Number of days to look back (default 14).")
+def linkedin_scan(days):
+    """Scan Gmail for LinkedIn job alert emails, parse job listings."""
+    from src.jobs.linkedin_cli import cmd_scan
+
+    cmd_scan(days=days)
+
+
+@linkedin.command("search")
+def linkedin_search():
+    """Open LinkedIn job search URLs in browser."""
+    from src.jobs.linkedin_cli import cmd_search
+
+    cmd_search()
+
+
+@linkedin.command("alerts")
+def linkedin_alerts():
+    """Show setup guide for LinkedIn job alerts."""
+    from src.jobs.linkedin_cli import cmd_alerts
+
+    cmd_alerts()
+
+
+@linkedin.command("profiles")
+def linkedin_profiles():
+    """List configured LinkedIn search profiles."""
+    from src.jobs.linkedin_cli import cmd_profiles
+
+    cmd_profiles()
+
+
 # ─── Gmail Filter Commands ─────────────────────────────────────────
 
 
