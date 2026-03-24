@@ -26,6 +26,7 @@
 [CmdletBinding()]
 param(
     [switch]$Quick,
+    [switch]$Gov,
     [switch]$DirectOnly,
     [switch]$Export,
     [switch]$ListJobs,
@@ -294,6 +295,12 @@ elseif ($DirectOnly) {
         & $PythonExe $ScraperScript scan
     }
 }
+elseif ($Gov) {
+    # Government sources only (USAJobs + WorkOne)
+    Write-Host "  Mode: Government job boards only (USAJobs + WorkOne)" -ForegroundColor Cyan
+    $reportFile = Join-Path $ReportsDir "gov_$(Get-Date -Format 'yyyy-MM-dd_HHmm')"
+    & $PythonExe $MorningScan --gov --output $reportFile
+}
 elseif ($Quick) {
     # Morning scan, direct only (skip boards)
     Write-Host "  Mode: Quick scan (direct employers only)" -ForegroundColor Cyan
@@ -302,7 +309,7 @@ elseif ($Quick) {
 }
 else {
     # Full morning scan -- all sources
-    Write-Host "  Mode: Full scan (Direct + Indeed + Dice)" -ForegroundColor Cyan
+    Write-Host "  Mode: Full scan (Direct + Indeed + Dice + Gov)" -ForegroundColor Cyan
     $reportFile = Join-Path $ReportsDir "morning_$(Get-Date -Format 'yyyy-MM-dd_HHmm')"
     if ($Company) {
         & $PythonExe $MorningScan --company $Company --output $reportFile

@@ -433,6 +433,11 @@ def _is_relevant(title: str) -> bool:
     return matches >= 2  # Need at least 2 broad terms
 
 
+def _slugify(name: str) -> str:
+    """Slugify a name for use as company_id."""
+    return name.lower().strip().replace(" ", "-")
+
+
 # ═══════════════════════════════════════════════════════════════
 # CLI Commands
 # ═══════════════════════════════════════════════════════════════

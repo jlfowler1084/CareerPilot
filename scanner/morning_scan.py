@@ -317,9 +317,12 @@ def generate_report(
     direct_jobs: list[dict],
     board_jobs: list[dict],
     scan_time: datetime,
+    gov_jobs: list = None,
 ) -> str:
     """Generate the morning briefing report."""
-    all_jobs = deduplicate(filter_irrelevant(direct_jobs + board_jobs))
+    if gov_jobs is None:
+        gov_jobs = []
+    all_jobs = deduplicate(filter_irrelevant(direct_jobs + board_jobs + gov_jobs))
 
     lines = []
     lines.append("═" * 64)
@@ -331,8 +334,15 @@ def generate_report(
     direct_count = len([j for j in all_jobs if j.get("source") == "Direct"])
     indeed_count = len([j for j in all_jobs if j.get("source") == "Indeed"])
     dice_count = len([j for j in all_jobs if j.get("source") == "Dice"])
+    usajobs_count = len([j for j in all_jobs if j.get("source") == "USAJobs"])
+    workone_count = len([j for j in all_jobs if j.get("source") == "WorkOne"])
     lines.append(f"  Total: {len(all_jobs)} unique jobs")
-    lines.append(f"  Sources: {direct_count} Direct | {indeed_count} Indeed | {dice_count} Dice")
+    parts = [f"{direct_count} Direct", f"{indeed_count} Indeed", f"{dice_count} Dice"]
+    if usajobs_count:
+        parts.append(f"{usajobs_count} USAJobs")
+    if workone_count:
+        parts.append(f"{workone_count} WorkOne")
+    lines.append(f"  Sources: {' | '.join(parts)}")
     lines.append("")
 
     # Direct employer results (highlight these — they're the early catches)
@@ -368,6 +378,23 @@ def generate_report(
                     lines.append(f"    🔗 {job['url']}")
                 lines.append("")
 
+    # Government board results
+    for source in ["USAJobs", "WorkOne"]:
+        source_jobs = [j for j in all_jobs if j.get("source") == source]
+        if source_jobs:
+            lines.append("─" * 64)
+            lines.append(f"  🏛️ {source.upper()} ({len(source_jobs)} results)")
+            lines.append("─" * 64)
+            for job in source_jobs:
+                salary_note = ""
+                if job.get("salary") and job["salary"] != "Not listed":
+                    salary_note = f" | {job['salary']}"
+                lines.append(f"  ▸ {job['title']}")
+                lines.append(f"    {job.get('company', '')} · {job.get('location', '')}{salary_note}")
+                if job.get("url"):
+                    lines.append(f"    🔗 {job['url']}")
+                lines.append("")
+
     if not all_jobs:
         lines.append("  No relevant jobs found in this scan.")
         lines.append("  Consider broadening search keywords or adding more companies.")
@@ -387,7 +414,9 @@ def generate_report(
 def main():
     parser = argparse.ArgumentParser(description="CareerPilot Morning Scan")
     parser.add_argument("--quick", action="store_true",
-                        help="Direct employers only (skip Indeed/Dice)")
+                        help="Direct employers only (skip Indeed/Dice/Gov)")
+    parser.add_argument("--gov", action="store_true",
+                        help="Government sources only (USAJobs + WorkOne)")
     parser.add_argument("--output", "-o", help="Save report to file")
     parser.add_argument("--json", action="store_true",
                         help="Output JSON instead of text report")
@@ -401,62 +430,50 @@ def main():
         print("  export ANTHROPIC_API_KEY='your-key-here'")
         sys.exit(1)
 
-    # Phase 1: Direct employer career pages
-    print("\n  🏢 Scanning direct employer career pages...")
     conn = init_db()
     scan_id = scan_time.strftime("%Y%m%d_%H%M%S")
     conn.execute("INSERT INTO scans (id, started_at) VALUES (?, ?)",
                  (scan_id, scan_time.isoformat()))
     conn.commit()
 
-    companies = COMPANIES
-    if args.company:
-        companies = [c for c in COMPANIES if c["id"] == args.company]
-
+    # Phase 1: Direct employer career pages (skip if --gov)
     direct_jobs = []
-    for company in companies:
-        print(f"     {company['name']}...", end=" ", flush=True)
-        jobs = search_company(company)
-        new_count = 0
-        for job in jobs:
-            is_new = upsert_job(conn, job, scan_id)
-            if is_new:
-                new_count += 1
+    if not args.gov:
+        print("\n  🏢 Scanning direct employer career pages...")
 
-        # Convert to common format
-        for job in jobs:
-            direct_jobs.append({
-                "title": job["title"],
-                "company": job["company_name"],
-                "location": job.get("location", ""),
-                "salary": job.get("salary", "Not listed"),
-                "url": job.get("url", ""),
-                "posted": job.get("posted_date", ""),
-                "type": job.get("job_type", ""),
-                "source": "Direct",
-            })
+        companies = COMPANIES
+        if args.company:
+            companies = [c for c in COMPANIES if c["id"] == args.company]
 
-        print(f"{len(jobs)} found ({new_count} new)")
-        conn.commit()
-        time.sleep(1)
+        for company in companies:
+            print(f"     {company['name']}...", end=" ", flush=True)
+            jobs = search_company(company)
+            new_count = 0
+            for job in jobs:
+                is_new = upsert_job(conn, job, scan_id)
+                if is_new:
+                    new_count += 1
 
-    # Update scan record
-    conn.execute("""
-        UPDATE scans SET completed_at = ?, companies_scanned = ?,
-            jobs_found = ?, new_jobs = ?
-        WHERE id = ?
-    """, (
-        datetime.now(timezone.utc).isoformat(),
-        len(companies), len(direct_jobs),
-        len([j for j in direct_jobs]),  # simplified
-        scan_id,
-    ))
-    conn.commit()
-    conn.close()
+            # Convert to common format
+            for job in jobs:
+                direct_jobs.append({
+                    "title": job["title"],
+                    "company": job["company_name"],
+                    "location": job.get("location", ""),
+                    "salary": job.get("salary", "Not listed"),
+                    "url": job.get("url", ""),
+                    "posted": job.get("posted_date", ""),
+                    "type": job.get("job_type", ""),
+                    "source": "Direct",
+                })
 
-    # Phase 2: Indeed + Dice (skip if --quick)
+            print(f"{len(jobs)} found ({new_count} new)")
+            conn.commit()
+            time.sleep(1)
+
+    # Phase 2: Indeed + Dice (skip if --quick or --gov)
     board_jobs = []
-    if not args.quick:
+    if not args.quick and not args.gov:
         print("\n  🔍 Scanning job boards (Indeed + Dice)...")
         for search in BOARD_SEARCHES:
             print(f"     {search['label']}...", end=" ", flush=True)
@@ -474,12 +491,70 @@ def main():
             print(f"{len(search_jobs)} results")
             time.sleep(1)
 
+    # Phase 3: Government job boards (USAJobs + WorkOne)
+    gov_jobs = []
+    if args.gov or (not args.quick and not getattr(args, "company", None)):
+        from usajobs_scraper import search_usajobs
+        from workone_scraper import search_workone
+
+        print("\n  🏛️ Scanning government job boards...")
+
+        print("     USAJobs...", end=" ", flush=True)
+        usajobs_results = search_usajobs()
+        print(f"{len(usajobs_results)} results")
+
+        print("     WorkOne / Indiana Career Connect...", end=" ", flush=True)
+        workone_results = search_workone()
+        print(f"{len(workone_results)} results")
+
+        # Upsert to DB
+        for job in usajobs_results + workone_results:
+            upsert_job(conn, job, scan_id)
+        conn.commit()
+
+        # Convert DB-format dicts to report-format dicts
+        for job in usajobs_results:
+            gov_jobs.append({
+                "title": job["title"],
+                "company": job["company_name"],
+                "location": job.get("location", ""),
+                "salary": job.get("salary", "Not listed"),
+                "url": job.get("url", ""),
+                "posted": job.get("posted_date", ""),
+                "type": job.get("job_type", ""),
+                "source": "USAJobs",
+            })
+        for job in workone_results:
+            gov_jobs.append({
+                "title": job["title"],
+                "company": job["company_name"],
+                "location": job.get("location", ""),
+                "salary": job.get("salary", "Not listed"),
+                "url": job.get("url", ""),
+                "posted": job.get("posted_date", ""),
+                "type": job.get("job_type", ""),
+                "source": "WorkOne",
+            })
+
+    # Update scan record and close DB
+    conn.execute("""
+        UPDATE scans SET completed_at = ?, companies_scanned = ?,
+            jobs_found = ?, new_jobs = ?
+        WHERE id = ?
+    """, (
+        datetime.now(timezone.utc).isoformat(),
+        0, len(direct_jobs) + len(gov_jobs),
+        0, scan_id,
+    ))
+    conn.commit()
+    conn.close()
+
     # Generate output
     if args.json:
-        all_jobs = deduplicate(filter_irrelevant(direct_jobs + board_jobs))
+        all_jobs = deduplicate(filter_irrelevant(direct_jobs + board_jobs + gov_jobs))
         output = json.dumps(all_jobs, indent=2)
     else:
-        output = generate_report(direct_jobs, board_jobs, scan_time)
+        output = generate_report(direct_jobs, board_jobs, scan_time, gov_jobs)
 
     if args.output:
         ext = ".json" if args.json else ".txt"
