@@ -9,12 +9,8 @@
       "type": "url",
       "url": "https://mcp.atlassian.com/v1/mcp"
     },
-    "indeed": {
-      "type": "url",
-      "url": "https://mcp.indeed.com/claude/mcp"
-    },
     "dice": {
-      "type": "url",
+      "type": "http",
       "url": "https://mcp.dice.com/mcp"
     }
   }

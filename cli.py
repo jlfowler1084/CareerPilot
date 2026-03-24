@@ -1,9 +1,11 @@
 """CareerPilot — Main CLI entry point."""
 
+import logging
 import sys
 
 import click
 from rich.console import Console
+from rich.table import Table
 
 if sys.platform == "win32":
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -13,15 +15,70 @@ console = Console()
 
 
 @click.group()
-def cli():
+@click.option("--debug", is_flag=True, help="Enable debug logging.")
+def cli(debug):
     """CareerPilot — Personal career management platform."""
-    pass
+    level = logging.DEBUG if debug else logging.INFO
+    logging.basicConfig(
+        level=level,
+        format="%(asctime)s %(name)s %(levelname)s %(message)s",
+    )
 
 
 @cli.command()
-def scan():
-    """Scan Gmail for recruiter emails and draft responses."""
-    console.print("[yellow]Coming soon — Phase 1[/yellow]")
+@click.option("--days", default=7, help="Number of days to look back (default 7).")
+def scan(days):
+    """Scan Gmail for recruiter emails and classify them."""
+    from src.gmail.scanner import GmailScanner
+
+    scanner = GmailScanner()
+    try:
+        scanner.authenticate()
+    except FileNotFoundError as e:
+        console.print(f"[red]{e}[/red]")
+        return
+    except Exception:
+        console.print("[red]Gmail authentication failed. Check logs for details.[/red]")
+        return
+
+    results = scanner.scan_inbox(days_back=days)
+
+    if not results:
+        console.print("[yellow]No recruiter emails found.[/yellow]")
+        return
+
+    # Category colors
+    colors = {
+        "recruiter_outreach": "green",
+        "interview_request": "bright_green",
+        "offer": "bright_cyan",
+        "job_alert": "blue",
+        "rejection": "red",
+        "irrelevant": "dim",
+    }
+
+    table = Table(title=f"Gmail Scan Results ({len(results)} emails)")
+    table.add_column("Category", style="bold")
+    table.add_column("From")
+    table.add_column("Subject")
+    table.add_column("Company")
+    table.add_column("Role")
+    table.add_column("Urgency")
+    table.add_column("Summary")
+
+    for r in results:
+        color = colors.get(r["category"], "white")
+        table.add_row(
+            f"[{color}]{r['category']}[/{color}]",
+            r["sender"][:30],
+            r["subject"][:40],
+            r["company"],
+            r["role"],
+            r["urgency"],
+            r["summary"][:50],
+        )
+
+    console.print(table)
 
 
 @cli.command()

@@ -12,7 +12,7 @@ CareerPilot is a Python CLI application for personal career management:
 
 **Owner:** Joe
 **Location:** `F:\Projects\CareerPilot\`
-**Platform:** Windows 10, Python 3.11+
+**Platform:** Windows 10, Python 3.8+ (Microsoft Store Python 3.8.10)
 
 ---
 
@@ -20,7 +20,8 @@ CareerPilot is a Python CLI application for personal career management:
 
 - **OS:** Windows 10/11
 - **Shell:** PowerShell 5.1+ / bash (via Git Bash or WSL) — Claude Code uses bash syntax
-- **Python:** 3.11+ (use `python -m pip install` not bare `pip`)
+- **Python:** 3.8+ (Microsoft Store Python 3.8.10 — use `python -m pip install` not bare `pip`)
+- **Python compat:** Use `from __future__ import annotations` in all modules with type hints — `list[str]` syntax requires 3.9+
 - **Node.js:** v24.14.0 (installed at `C:\Program Files\nodejs\`)
 - **MCP config:** `.mcp.json` in project root (NOT settings.json)
 
