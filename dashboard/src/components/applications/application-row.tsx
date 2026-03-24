@@ -3,7 +3,8 @@
 import { useState } from "react"
 import { StatusBadge } from "@/components/shared/status-badge"
 import { STATUSES } from "@/lib/constants"
-import { ExternalLink, Trash2, Save } from "lucide-react"
+import { ExternalLink, Trash2, Save, Sparkles, FileCheck } from "lucide-react"
+import { TailorModal } from "@/components/applications/tailor-modal"
 import type { Application, ApplicationStatus } from "@/types"
 
 interface ApplicationRowProps {
@@ -20,6 +21,7 @@ export function ApplicationRow({
   const [editingNotes, setEditingNotes] = useState(false)
   const [notes, setNotes] = useState(application.notes || "")
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [tailorOpen, setTailorOpen] = useState(false)
 
   async function handleStatusChange(e: React.ChangeEvent<HTMLSelectElement>) {
     await onUpdate(application.id, {
@@ -103,6 +105,22 @@ export function ApplicationRow({
             ))}
           </select>
 
+          {/* Tailor Resume */}
+          {application.url && (
+            <button
+              onClick={() => setTailorOpen(true)}
+              className={`text-[10px] font-semibold px-2 py-1 rounded-md transition-colors flex items-center gap-1 ${
+                application.tailored_resume
+                  ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                  : "text-zinc-400 hover:text-amber-600"
+              }`}
+              title={application.tailored_resume ? "Resume tailored — click to re-tailor" : "Tailor resume for this job"}
+            >
+              {application.tailored_resume ? <FileCheck size={10} /> : <Sparkles size={10} />}
+              {application.tailored_resume ? "Tailored" : "Tailor"}
+            </button>
+          )}
+
           {/* Delete */}
           <button
             onClick={handleDelete}
@@ -117,6 +135,15 @@ export function ApplicationRow({
           </button>
         </div>
       </div>
+
+      <TailorModal
+        application={application}
+        open={tailorOpen}
+        onOpenChange={setTailorOpen}
+        onSave={async (tailoredResume) => {
+          await onUpdate(application.id, { tailored_resume: tailoredResume })
+        }}
+      />
 
       {/* Notes section */}
       <div className="mt-3 pt-3 border-t border-zinc-100">
