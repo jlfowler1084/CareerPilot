@@ -42,6 +42,7 @@ TIMEZONE = os.getenv("TIMEZONE", "America/Indiana/Indianapolis")
 
 # --- OAuth Token Paths ---
 GMAIL_TOKEN_PATH = PROJECT_ROOT / "data" / "gmail_token.json"
+GMAIL_FILTER_TOKEN_PATH = PROJECT_ROOT / "data" / "gmail_filter_token.json"
 CALENDAR_TOKEN_PATH = PROJECT_ROOT / "data" / "calendar_token.json"
 
 # --- Data Directories ---

@@ -2531,6 +2531,223 @@ def profile_seed():
     console.print("[green]Profile seeded with Joseph Fowler's data.[/green]")
 
 
+# ─── Gmail Filter Commands ─────────────────────────────────────────
+
+
+@cli.group()
+def filters():
+    """Manage Gmail smart filters for job search emails."""
+
+
+@filters.command("setup")
+def filters_setup():
+    """Create labels + filter rules + retroactively tag existing mail."""
+    import copy
+
+    from src.gmail.filter_config import FILTER_RULES, LABELS, USER_RECRUITER_DOMAINS_FILE, build_gmail_query
+    from src.gmail.filters import GmailFilterManager
+
+    console.print(Panel("Gmail Filter Setup", style="bold cyan"))
+
+    # Load user-added recruiter domains
+    user_domains = []
+    if USER_RECRUITER_DOMAINS_FILE.exists():
+        user_domains = [
+            line.strip()
+            for line in USER_RECRUITER_DOMAINS_FILE.read_text().splitlines()
+            if line.strip()
+        ]
+
+    rules = copy.deepcopy(FILTER_RULES)
+    if user_domains and "recruiters" in rules:
+        existing = rules["recruiters"].get("from_domains", [])
+        rules["recruiters"]["from_domains"] = list(set(existing + user_domains))
+
+    mgr = GmailFilterManager()
+
+    # Step 1: Create labels
+    console.print("\n[bold]Creating label hierarchy...[/bold]")
+    label_map = mgr.ensure_label_hierarchy(LABELS)
+    for name, lid in label_map.items():
+        console.print(f"  [green]OK[/green]  {name}")
+
+    # Step 2: Remove old CareerPilot filters (idempotent re-run)
+    console.print("\n[bold]Clearing old CareerPilot filters...[/bold]")
+    old_filters = mgr.get_careerpilot_filters()
+    for f in old_filters:
+        mgr.delete_filter(f["id"])
+    console.print(f"  Removed {len(old_filters)} old filter(s)")
+
+    # Step 3: Create new filters
+    console.print("\n[bold]Creating filter rules...[/bold]")
+    for rule_name, rule in rules.items():
+        query = build_gmail_query(rule)
+        if not query:
+            console.print(f"  [yellow]SKIP[/yellow]  {rule_name} (empty query)")
+            continue
+        label_name = rule["label"]
+        label_id = label_map.get(label_name) or mgr.get_label_id(label_name)
+        if not label_id:
+            console.print(f"  [red]ERR[/red]   Label '{label_name}' not found")
+            continue
+        mgr.create_filter(query, label_id, archive=rule.get("archive", False))
+        console.print(f"  [green]OK[/green]  {rule_name} -> {label_name}")
+
+    # Step 4: Retroactively label existing messages
+    console.print("\n[bold]Retroactively tagging existing messages...[/bold]")
+    total_tagged = 0
+    for rule_name, rule in rules.items():
+        query = build_gmail_query(rule)
+        if not query:
+            continue
+        label_name = rule["label"]
+        label_id = label_map.get(label_name) or mgr.get_label_id(label_name)
+        if not label_id:
+            continue
+        count = mgr.apply_label_to_matching(query, label_id)
+        if count > 0:
+            console.print(f"  {rule_name}: tagged {count} message(s)")
+            total_tagged += count
+    console.print(f"\n  Total: {total_tagged} messages retroactively tagged")
+    console.print("\n[green]Setup complete! Check your Gmail sidebar for CareerPilot labels.[/green]")
+
+
+@filters.command("list")
+def filters_list():
+    """Show current CareerPilot filter rules."""
+    import copy
+
+    from src.gmail.filter_config import FILTER_RULES, USER_RECRUITER_DOMAINS_FILE, build_gmail_query
+    from src.gmail.filters import GmailFilterManager
+
+    # Merge user domains
+    user_domains = []
+    if USER_RECRUITER_DOMAINS_FILE.exists():
+        user_domains = [
+            line.strip()
+            for line in USER_RECRUITER_DOMAINS_FILE.read_text().splitlines()
+            if line.strip()
+        ]
+    rules = copy.deepcopy(FILTER_RULES)
+    if user_domains and "recruiters" in rules:
+        existing = rules["recruiters"].get("from_domains", [])
+        rules["recruiters"]["from_domains"] = list(set(existing + user_domains))
+
+    table = Table(title="CareerPilot Filter Rules")
+    table.add_column("Rule", style="cyan")
+    table.add_column("Label", style="green")
+    table.add_column("Query (truncated)")
+    for rule_name, rule in rules.items():
+        query = build_gmail_query(rule)
+        table.add_row(rule_name, rule["label"], query[:80] + ("..." if len(query) > 80 else ""))
+    console.print(table)
+
+    if user_domains:
+        console.print(f"\n[bold]User-added recruiter domains:[/bold] {', '.join(user_domains)}")
+
+    try:
+        mgr = GmailFilterManager()
+        live = mgr.get_careerpilot_filters()
+        console.print(f"\nLive Gmail filters targeting CareerPilot labels: {len(live)}")
+    except Exception:
+        console.print("\n[yellow]Could not connect to Gmail to check live filters[/yellow]")
+
+
+@filters.command("add")
+@click.argument("domain")
+def filters_add(domain):
+    """Add a recruiter domain to the filter list."""
+    from src.gmail.filter_config import USER_RECRUITER_DOMAINS_FILE
+
+    domain = domain.strip().lower().lstrip("@")
+
+    domains = []
+    if USER_RECRUITER_DOMAINS_FILE.exists():
+        domains = [
+            line.strip()
+            for line in USER_RECRUITER_DOMAINS_FILE.read_text().splitlines()
+            if line.strip()
+        ]
+
+    if domain in domains:
+        console.print(f"[yellow]'{domain}' is already in the recruiter domain list.[/yellow]")
+        return
+
+    domains.append(domain)
+    USER_RECRUITER_DOMAINS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    USER_RECRUITER_DOMAINS_FILE.write_text("\n".join(sorted(set(domains))) + "\n")
+    console.print(f"[green]Added '{domain}' to recruiter filter domains.[/green]")
+    console.print("Run [bold]python cli.py filters setup[/bold] to apply changes to Gmail.")
+
+
+@filters.command("remove")
+@click.argument("domain")
+def filters_remove(domain):
+    """Remove a recruiter domain from the user list."""
+    from src.gmail.filter_config import USER_RECRUITER_DOMAINS_FILE
+
+    domain = domain.strip().lower().lstrip("@")
+
+    domains = []
+    if USER_RECRUITER_DOMAINS_FILE.exists():
+        domains = [
+            line.strip()
+            for line in USER_RECRUITER_DOMAINS_FILE.read_text().splitlines()
+            if line.strip()
+        ]
+
+    if domain not in domains:
+        console.print(f"[yellow]'{domain}' is not in the user-added domain list.[/yellow]")
+        return
+
+    domains.remove(domain)
+    USER_RECRUITER_DOMAINS_FILE.write_text("\n".join(sorted(set(domains))) + "\n")
+    console.print(f"[green]Removed '{domain}' from recruiter filter domains.[/green]")
+    console.print("Run [bold]python cli.py filters setup[/bold] to apply changes to Gmail.")
+
+
+@filters.command("test")
+def filters_test():
+    """Dry-run: show what queries would be created (no API calls)."""
+    import copy
+
+    from src.gmail.filter_config import FILTER_RULES, USER_RECRUITER_DOMAINS_FILE, build_gmail_query
+
+    user_domains = []
+    if USER_RECRUITER_DOMAINS_FILE.exists():
+        user_domains = [
+            line.strip()
+            for line in USER_RECRUITER_DOMAINS_FILE.read_text().splitlines()
+            if line.strip()
+        ]
+    rules = copy.deepcopy(FILTER_RULES)
+    if user_domains and "recruiters" in rules:
+        existing = rules["recruiters"].get("from_domains", [])
+        rules["recruiters"]["from_domains"] = list(set(existing + user_domains))
+
+    console.print(Panel("Dry Run -- Filter Queries (no API calls)", style="bold yellow"))
+    for rule_name, rule in rules.items():
+        query = build_gmail_query(rule)
+        console.print(f"\n[cyan]{rule_name}[/cyan] -> {rule['label']}")
+        console.print(f"  {query}")
+
+
+@filters.command("nuke")
+def filters_nuke():
+    """Remove all CareerPilot filters from Gmail (labels preserved)."""
+    from src.gmail.filters import GmailFilterManager
+
+    if not click.confirm("This will remove all CareerPilot Gmail filters. Continue?"):
+        console.print("[dim]Cancelled.[/dim]")
+        return
+
+    mgr = GmailFilterManager()
+    cp_filters = mgr.get_careerpilot_filters()
+    for f in cp_filters:
+        mgr.delete_filter(f["id"])
+    console.print(f"[green]Removed {len(cp_filters)} filter(s). Labels are preserved.[/green]")
+
+
 if __name__ == "__main__":
     try:
         cli()
