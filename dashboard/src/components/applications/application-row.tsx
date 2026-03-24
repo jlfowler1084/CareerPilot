@@ -3,9 +3,12 @@
 import { useState } from "react"
 import { StatusBadge } from "@/components/shared/status-badge"
 import { STATUSES } from "@/lib/constants"
-import { ExternalLink, Trash2, Save, Sparkles, FileCheck } from "lucide-react"
+import { ExternalLink, Trash2, Save, Sparkles, FileCheck, CalendarDays, CalendarCheck } from "lucide-react"
 import { TailorModal } from "@/components/applications/tailor-modal"
+import { ScheduleModal } from "@/components/applications/schedule-modal"
 import type { Application, ApplicationStatus } from "@/types"
+
+const SCHEDULABLE_STATUSES: ApplicationStatus[] = ["applied", "phone_screen", "interview", "offer"]
 
 interface ApplicationRowProps {
   application: Application
@@ -22,6 +25,7 @@ export function ApplicationRow({
   const [notes, setNotes] = useState(application.notes || "")
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [tailorOpen, setTailorOpen] = useState(false)
+  const [scheduleOpen, setScheduleOpen] = useState(false)
 
   async function handleStatusChange(e: React.ChangeEvent<HTMLSelectElement>) {
     await onUpdate(application.id, {
@@ -121,6 +125,22 @@ export function ApplicationRow({
             </button>
           )}
 
+          {/* Schedule */}
+          {SCHEDULABLE_STATUSES.includes(application.status) && (
+            <button
+              onClick={() => setScheduleOpen(true)}
+              className={`text-[10px] font-semibold px-2 py-1 rounded-md transition-colors flex items-center gap-1 ${
+                application.calendar_event_id
+                  ? "bg-blue-50 text-blue-700 border border-blue-200"
+                  : "text-zinc-400 hover:text-blue-600"
+              }`}
+              title={application.calendar_event_id ? "Calendar events exist — click to add more" : "Schedule calendar events"}
+            >
+              {application.calendar_event_id ? <CalendarCheck size={10} /> : <CalendarDays size={10} />}
+              {application.calendar_event_id ? "Scheduled" : "Schedule"}
+            </button>
+          )}
+
           {/* Delete */}
           <button
             onClick={handleDelete}
@@ -142,6 +162,15 @@ export function ApplicationRow({
         onOpenChange={setTailorOpen}
         onSave={async (tailoredResume) => {
           await onUpdate(application.id, { tailored_resume: tailoredResume })
+        }}
+      />
+
+      <ScheduleModal
+        application={application}
+        open={scheduleOpen}
+        onOpenChange={setScheduleOpen}
+        onSave={async (updates) => {
+          await onUpdate(application.id, updates)
         }}
       />
 
