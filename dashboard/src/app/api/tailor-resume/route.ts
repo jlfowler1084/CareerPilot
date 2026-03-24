@@ -10,11 +10,7 @@ Rules:
 - Naturally weave in keywords from the job description into existing bullet points where they genuinely apply.
 - Keep the same section structure and formatting as the original resume.
 
-Return your response as JSON with exactly two keys:
-- "tailoredResume": the full tailored resume as plain text (same format as input)
-- "fitSummary": 2-3 sentences explaining how the resume was tailored and how strong the fit is
-
-Return ONLY valid JSON, no markdown fences, no commentary.`
+You must respond with ONLY a JSON object, no markdown backticks, no preamble. The JSON must have exactly two keys: fitSummary (a 2-3 sentence analysis of how well the candidate fits this role) and tailoredResume (the complete tailored resume text with all sections).`
 
 export async function POST(req: NextRequest) {
   try {
@@ -86,7 +82,7 @@ async function tailorWithDescription(
     )
   }
 
-  return parseResponse(await resp.json())
+  return parseResponse(await resp.json(), title, company)
 }
 
 async function tailorWithWebSearch(
@@ -131,40 +127,61 @@ async function tailorWithWebSearch(
     )
   }
 
-  return parseResponse(await resp.json())
+  return parseResponse(await resp.json(), title, company)
 }
 
-function parseResponse(data: {
-  content: Array<{ type: string; text?: string }>
-}) {
+function parseResponse(
+  data: { content: Array<{ type: string; text?: string }> },
+  title?: string,
+  company?: string
+) {
   const textBlock = data.content?.find(
     (b: { type: string }) => b.type === "text"
   )
-  const text = textBlock?.text || ""
+  const raw = textBlock?.text || ""
 
+  // 1. Try JSON.parse() directly
+  const direct = tryParseJson(raw)
+  if (direct) return NextResponse.json(direct)
+
+  // 2. Strip markdown backticks (```json ... ```) and retry
+  const stripped = raw.replace(/^```(?:json)?\s*\n?/i, "").replace(/\n?```\s*$/, "")
+  if (stripped !== raw) {
+    const fromStripped = tryParseJson(stripped)
+    if (fromStripped) return NextResponse.json(fromStripped)
+  }
+
+  // 3. Heuristic: split on first "PROFESSIONAL SUMMARY" or "JOSEPH FOWLER"
+  const splitPattern = /(PROFESSIONAL SUMMARY|JOSEPH FOWLER)/i
+  const splitMatch = raw.match(splitPattern)
+  if (splitMatch?.index != null && splitMatch.index > 0) {
+    const fitSummary = raw.slice(0, splitMatch.index).trim()
+    const tailoredResume = raw.slice(splitMatch.index).trim()
+    if (fitSummary && tailoredResume) {
+      return NextResponse.json({ tailoredResume, fitSummary })
+    }
+  }
+
+  // 4. Last resort: entire response as tailoredResume
+  return NextResponse.json({
+    tailoredResume: raw,
+    fitSummary: `Resume tailored for ${title || "this role"} at ${company || "this company"}`,
+  })
+}
+
+function tryParseJson(
+  text: string
+): { tailoredResume: string; fitSummary: string } | null {
   try {
     const parsed = JSON.parse(text)
-    return NextResponse.json({
-      tailoredResume: parsed.tailoredResume || "",
-      fitSummary: parsed.fitSummary || "",
-    })
-  } catch {
-    // If Claude didn't return valid JSON, try to extract it
-    const jsonMatch = text.match(/\{[\s\S]*\}/)
-    if (jsonMatch) {
-      try {
-        const parsed = JSON.parse(jsonMatch[0])
-        return NextResponse.json({
-          tailoredResume: parsed.tailoredResume || "",
-          fitSummary: parsed.fitSummary || "",
-        })
-      } catch {
-        // Fall through
+    if (parsed.tailoredResume || parsed.fitSummary) {
+      return {
+        tailoredResume: parsed.tailoredResume || "",
+        fitSummary: parsed.fitSummary || "",
       }
     }
-    return NextResponse.json({
-      tailoredResume: text,
-      fitSummary: "Resume was tailored but structured parsing failed.",
-    })
+    return null
+  } catch {
+    return null
   }
 }
