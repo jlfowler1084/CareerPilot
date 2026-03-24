@@ -1,6 +1,20 @@
 import { NextRequest, NextResponse } from "next/server"
+import { google } from "googleapis"
 
 type CalendarAction = "follow_up" | "phone_screen" | "interview" | "offer_deadline"
+
+const TZ = "America/Indiana/Indianapolis"
+
+function getCalendar() {
+  const oauth2Client = new google.auth.OAuth2(
+    process.env.GOOGLE_CLIENT_ID,
+    process.env.GOOGLE_CLIENT_SECRET
+  )
+  oauth2Client.setCredentials({
+    refresh_token: process.env.GOOGLE_REFRESH_TOKEN,
+  })
+  return google.calendar({ version: "v3", auth: oauth2Client })
+}
 
 function addBusinessDays(from: Date, days: number): Date {
   const result = new Date(from)
@@ -13,103 +27,150 @@ function addBusinessDays(from: Date, days: number): Date {
   return result
 }
 
-function buildPrompt(
-  action: CalendarAction,
+function toDateTime(date: Date): string {
+  return date.toISOString()
+}
+
+function addMinutes(date: Date, minutes: number): Date {
+  return new Date(date.getTime() + minutes * 60_000)
+}
+
+async function createEvent(
+  calendar: ReturnType<typeof google.calendar>,
+  summary: string,
+  start: Date,
+  durationMinutes: number,
+  description: string,
+  reminders?: { useDefault: boolean; overrides?: Array<{ method: string; minutes: number }> }
+) {
+  const res = await calendar.events.insert({
+    calendarId: "primary",
+    requestBody: {
+      summary,
+      description,
+      start: { dateTime: toDateTime(start), timeZone: TZ },
+      end: { dateTime: toDateTime(addMinutes(start, durationMinutes)), timeZone: TZ },
+      ...(reminders ? { reminders } : {}),
+    },
+  })
+  return res.data.id
+}
+
+async function handleFollowUp(
+  calendar: ReturnType<typeof google.calendar>,
   title: string,
   company: string,
-  dateTime?: string,
   notes?: string
-): string {
-  const tz = "America/Indiana/Indianapolis"
+) {
+  const followUpDate = addBusinessDays(new Date(), 5)
+  followUpDate.setHours(9, 0, 0, 0)
 
-  switch (action) {
-    case "follow_up": {
-      const followUpDate = addBusinessDays(new Date(), 5)
-      const dateStr = followUpDate.toISOString().split("T")[0]
-      return `Create a Google Calendar event:
-- Title: "Follow up with ${company} about ${title}"
-- Date: ${dateStr}
-- Time: 9:00 AM
-- Timezone: ${tz}
-- Duration: 30 minutes
-- Description: "Follow up on ${title} application at ${company}.${notes ? " Notes: " + notes : ""}"
-Create the event and return the event ID.`
-    }
+  const eventId = await createEvent(
+    calendar,
+    `Follow up with ${company} about ${title}`,
+    followUpDate,
+    30,
+    `Follow up on ${title} application at ${company}.${notes ? " Notes: " + notes : ""}`
+  )
+  return { success: true, eventId }
+}
 
-    case "phone_screen": {
-      if (!dateTime) return "Error: dateTime is required for phone_screen"
-      return `Create 3 Google Calendar events for a phone screen:
+async function handlePhoneScreen(
+  calendar: ReturnType<typeof google.calendar>,
+  title: string,
+  company: string,
+  dateTime: string,
+  notes?: string
+) {
+  const screenStart = new Date(dateTime)
+  const prepStart = addMinutes(screenStart, -60)
+  const debriefStart = addMinutes(screenStart, 30)
 
-1. Prep block:
-   - Title: "PREP: ${title} Phone Screen — ${company}"
-   - Start: 1 hour before ${dateTime}
-   - Duration: 1 hour
-   - Timezone: ${tz}
-   - Description: "Prepare for phone screen. Review job description, company background, and talking points."
+  const [prepId, screenId, debriefId] = await Promise.all([
+    createEvent(
+      calendar,
+      `PREP: ${title} Phone Screen — ${company}`,
+      prepStart,
+      60,
+      "Prepare for phone screen. Review job description, company background, and talking points."
+    ),
+    createEvent(
+      calendar,
+      `Phone Screen: ${title} — ${company}`,
+      screenStart,
+      30,
+      notes || "Phone screen interview"
+    ),
+    createEvent(
+      calendar,
+      `DEBRIEF: ${title} Phone Screen — ${company}`,
+      debriefStart,
+      30,
+      "Write down impressions, questions asked, and next steps."
+    ),
+  ])
 
-2. Phone screen:
-   - Title: "Phone Screen: ${title} — ${company}"
-   - Start: ${dateTime}
-   - Duration: 30 minutes
-   - Timezone: ${tz}
-   - Description: "${notes || "Phone screen interview"}"
+  return { success: true, eventId: screenId, allEventIds: [prepId, screenId, debriefId] }
+}
 
-3. Debrief:
-   - Title: "DEBRIEF: ${title} Phone Screen — ${company}"
-   - Start: 30 minutes after ${dateTime}
-   - Duration: 30 minutes
-   - Timezone: ${tz}
-   - Description: "Write down impressions, questions asked, and next steps."
+async function handleInterview(
+  calendar: ReturnType<typeof google.calendar>,
+  title: string,
+  company: string,
+  dateTime: string,
+  notes?: string
+) {
+  const interviewStart = new Date(dateTime)
+  const prepDate = new Date(interviewStart)
+  prepDate.setDate(prepDate.getDate() - 1)
+  prepDate.setHours(14, 0, 0, 0)
+  const debriefStart = addMinutes(interviewStart, 60)
 
-Create all 3 events and return the event IDs.`
-    }
+  const [prepId, interviewId, debriefId] = await Promise.all([
+    createEvent(
+      calendar,
+      `PREP: ${title} Interview — ${company}`,
+      prepDate,
+      120,
+      `Deep prep for interview. Review job description, prepare STAR stories, research ${company}.`
+    ),
+    createEvent(
+      calendar,
+      `Interview: ${title} — ${company}`,
+      interviewStart,
+      60,
+      notes || "Interview"
+    ),
+    createEvent(
+      calendar,
+      `DEBRIEF: ${title} Interview — ${company}`,
+      debriefStart,
+      30,
+      "Write down impressions, technical questions, behavioral questions, and next steps."
+    ),
+  ])
 
-    case "interview": {
-      if (!dateTime) return "Error: dateTime is required for interview"
-      const interviewDate = new Date(dateTime)
-      const prepDate = new Date(interviewDate)
-      prepDate.setDate(prepDate.getDate() - 1)
-      const prepDateStr = prepDate.toISOString().split("T")[0]
+  return { success: true, eventId: interviewId, allEventIds: [prepId, interviewId, debriefId] }
+}
 
-      return `Create 3 Google Calendar events for an interview:
+async function handleOfferDeadline(
+  calendar: ReturnType<typeof google.calendar>,
+  title: string,
+  company: string,
+  dateTime: string,
+  notes?: string
+) {
+  const deadlineStart = new Date(dateTime)
 
-1. Prep block (day before):
-   - Title: "PREP: ${title} Interview — ${company}"
-   - Date: ${prepDateStr}
-   - Time: 2:00 PM
-   - Duration: 2 hours
-   - Timezone: ${tz}
-   - Description: "Deep prep for interview. Review job description, prepare STAR stories, research ${company}."
-
-2. Interview:
-   - Title: "Interview: ${title} — ${company}"
-   - Start: ${dateTime}
-   - Duration: 1 hour
-   - Timezone: ${tz}
-   - Description: "${notes || "Interview"}"
-
-3. Debrief:
-   - Title: "DEBRIEF: ${title} Interview — ${company}"
-   - Start: 1 hour after ${dateTime}
-   - Duration: 30 minutes
-   - Timezone: ${tz}
-   - Description: "Write down impressions, technical questions, behavioral questions, and next steps."
-
-Create all 3 events and return the event IDs.`
-    }
-
-    case "offer_deadline": {
-      if (!dateTime) return "Error: dateTime is required for offer_deadline"
-      return `Create a Google Calendar event:
-- Title: "DEADLINE: ${title} Offer — ${company}"
-- Start: ${dateTime}
-- Duration: 1 hour
-- Timezone: ${tz}
-- Description: "Offer decision deadline for ${title} at ${company}.${notes ? " Notes: " + notes : ""}"
-- Add a reminder: 1 day before
-Create the event and return the event ID.`
-    }
-  }
+  const eventId = await createEvent(
+    calendar,
+    `DEADLINE: ${title} Offer — ${company}`,
+    deadlineStart,
+    60,
+    `Offer decision deadline for ${title} at ${company}.${notes ? " Notes: " + notes : ""}`,
+    { useDefault: false, overrides: [{ method: "popup", minutes: 1440 }] }
+  )
+  return { success: true, eventId }
 }
 
 export async function POST(req: NextRequest) {
@@ -136,79 +197,39 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    const prompt = buildPrompt(action, title, company, dateTime, notes)
-    if (prompt.startsWith("Error:")) {
-      return NextResponse.json({ error: prompt }, { status: 400 })
-    }
-
-    const resp = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": process.env.ANTHROPIC_API_KEY!,
-        "anthropic-version": "2023-06-01",
-        "anthropic-beta": "mcp-client-2025-04-04",
-      },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
-        max_tokens: 4000,
-        system:
-          "You are a calendar scheduling assistant. Use the Google Calendar MCP tools to create events. After creating events, return a brief confirmation with the event details. Always include event IDs in your response.",
-        messages: [
-          {
-            role: "user",
-            content: prompt,
-          },
-        ],
-        mcp_servers: [
-          {
-            type: "url",
-            url: "https://gcal.mcp.claude.com/mcp",
-            name: "google_calendar",
-          },
-        ],
-      }),
-    })
-
-    if (!resp.ok) {
-      const err = await resp.text()
-      console.error("Calendar sync API error:", err)
+    if (action !== "follow_up" && !dateTime) {
       return NextResponse.json(
-        { success: false, error: "Calendar service unavailable" },
-        { status: 502 }
+        { error: "dateTime is required for this action" },
+        { status: 400 }
       )
     }
 
-    const data = await resp.json()
-    const allText =
-      data.content
-        ?.map(
-          (b: {
-            type: string
-            text?: string
-            content?: { text?: string }[]
-          }) => {
-            if (b.type === "text") return b.text || ""
-            if (b.type === "mcp_tool_result")
-              return (
-                b.content?.map((c) => c.text || "").join("\n") || ""
-              )
-            return ""
-          }
-        )
-        .join("\n") || ""
+    if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET || !process.env.GOOGLE_REFRESH_TOKEN) {
+      return NextResponse.json(
+        { error: "Google Calendar credentials not configured" },
+        { status: 500 }
+      )
+    }
 
-    // Try to extract event IDs from the response
-    const eventIdMatches = allText.match(
-      /[a-z0-9]{20,}(?=@google\.com)|[a-z0-9_]{20,}/g
-    )
-    const eventId = eventIdMatches?.[0] || null
+    const calendar = getCalendar()
 
-    return NextResponse.json({
-      success: true,
-      eventId,
-      details: allText,
-    })
+    let result
+    switch (action as CalendarAction) {
+      case "follow_up":
+        result = await handleFollowUp(calendar, title, company, notes)
+        break
+      case "phone_screen":
+        result = await handlePhoneScreen(calendar, title, company, dateTime, notes)
+        break
+      case "interview":
+        result = await handleInterview(calendar, title, company, dateTime, notes)
+        break
+      case "offer_deadline":
+        result = await handleOfferDeadline(calendar, title, company, dateTime, notes)
+        break
+    }
+
+    return NextResponse.json(result)
   } catch (error) {
     console.error("Calendar sync error:", error)
     return NextResponse.json(
