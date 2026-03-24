@@ -1,0 +1,183 @@
+"""Job application tracking with SQLite persistence."""
+
+from __future__ import annotations
+
+import logging
+from datetime import datetime
+from pathlib import Path
+from typing import Dict, List, Optional
+
+from src.db import models
+
+logger = logging.getLogger(__name__)
+
+VALID_STATUSES = {
+    "found", "interested", "applied", "phone_screen",
+    "interview", "offer", "rejected", "withdrawn", "ghosted",
+}
+
+# Statuses that count as "responded" for response rate calculation
+RESPONSE_STATUSES = {"phone_screen", "interview", "offer", "rejected"}
+
+
+class ApplicationTracker:
+    """Manages job applications with SQLite persistence."""
+
+    def __init__(self, db_path: Path = None):
+        self._conn = models.get_connection(db_path)
+
+    def save_job(self, job_data: Dict) -> int:
+        """Save a job from search results to the tracker.
+
+        Args:
+            job_data: Dict with title, company, location, url, source,
+                      salary_range, profile_id (all optional except title/company).
+
+        Returns:
+            The row id of the inserted application.
+        """
+        now = datetime.now().isoformat()
+        cursor = self._conn.execute(
+            "INSERT INTO applications "
+            "(title, company, location, url, source, salary_range, status, date_found, notes, profile_id) "
+            "VALUES (?, ?, ?, ?, ?, ?, 'found', ?, '', ?)",
+            (
+                job_data.get("title", ""),
+                job_data.get("company", ""),
+                job_data.get("location", ""),
+                job_data.get("url", ""),
+                job_data.get("source", ""),
+                job_data.get("salary", job_data.get("salary_range", "")),
+                now,
+                job_data.get("profile_id", ""),
+            ),
+        )
+        self._conn.commit()
+        logger.info("Saved job: %s at %s (id=%d)", job_data.get("title"), job_data.get("company"), cursor.lastrowid)
+        return cursor.lastrowid
+
+    def update_status(self, job_id: int, new_status: str, notes: str = None) -> bool:
+        """Update a job's status.
+
+        Args:
+            job_id: Application row id.
+            new_status: New status string (must be in VALID_STATUSES).
+            notes: Optional notes to append.
+
+        Returns:
+            True if updated, False if job not found or invalid status.
+        """
+        if new_status not in VALID_STATUSES:
+            logger.error("Invalid status '%s'. Must be one of: %s", new_status, VALID_STATUSES)
+            return False
+
+        row = self._conn.execute("SELECT * FROM applications WHERE id = ?", (job_id,)).fetchone()
+        if not row:
+            logger.warning("Application id=%d not found", job_id)
+            return False
+
+        now = datetime.now().isoformat()
+        updates = ["status = ?"]
+        params = [new_status]
+
+        # Track date transitions
+        if new_status == "applied" and not row["date_applied"]:
+            updates.append("date_applied = ?")
+            params.append(now)
+        if new_status in RESPONSE_STATUSES and not row["date_response"]:
+            updates.append("date_response = ?")
+            params.append(now)
+
+        if notes:
+            existing_notes = row["notes"] or ""
+            separator = "\n" if existing_notes else ""
+            updates.append("notes = ?")
+            params.append(f"{existing_notes}{separator}[{now[:10]}] {notes}")
+
+        params.append(job_id)
+        self._conn.execute(
+            f"UPDATE applications SET {', '.join(updates)} WHERE id = ?",
+            params,
+        )
+        self._conn.commit()
+        logger.info("Updated application id=%d to status '%s'", job_id, new_status)
+        return True
+
+    def get_job(self, job_id: int) -> Optional[Dict]:
+        """Get a single application by id."""
+        row = self._conn.execute("SELECT * FROM applications WHERE id = ?", (job_id,)).fetchone()
+        return dict(row) if row else None
+
+    def get_all_jobs(self) -> List[Dict]:
+        """Get all applications, newest first."""
+        rows = self._conn.execute(
+            "SELECT * FROM applications ORDER BY date_found DESC"
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def get_pipeline(self) -> Dict[str, List[Dict]]:
+        """Get jobs grouped by status for kanban display.
+
+        Returns:
+            Dict mapping status -> list of job dicts.
+        """
+        jobs = self.get_all_jobs()
+        pipeline = {}
+        for status in VALID_STATUSES:
+            pipeline[status] = []
+        for job in jobs:
+            status = job.get("status", "found")
+            if status not in pipeline:
+                pipeline[status] = []
+            pipeline[status].append(job)
+        return pipeline
+
+    def get_stats(self) -> Dict:
+        """Calculate application statistics.
+
+        Returns:
+            Dict with total, by_status counts, response_rate, avg_days_to_response.
+        """
+        jobs = self.get_all_jobs()
+        total = len(jobs)
+
+        by_status = {}
+        for status in VALID_STATUSES:
+            by_status[status] = 0
+        for job in jobs:
+            s = job.get("status", "found")
+            by_status[s] = by_status.get(s, 0) + 1
+
+        # Response rate: of applied jobs, how many got a response?
+        applied_count = sum(
+            1 for j in jobs if j.get("date_applied")
+        )
+        responded_count = sum(
+            1 for j in jobs if j.get("date_applied") and j.get("date_response")
+        )
+        response_rate = (responded_count / applied_count * 100) if applied_count > 0 else 0.0
+
+        # Average days to response
+        days_list = []
+        for j in jobs:
+            if j.get("date_applied") and j.get("date_response"):
+                try:
+                    applied_dt = datetime.fromisoformat(j["date_applied"])
+                    response_dt = datetime.fromisoformat(j["date_response"])
+                    days_list.append((response_dt - applied_dt).days)
+                except (ValueError, TypeError):
+                    pass
+        avg_days_to_response = sum(days_list) / len(days_list) if days_list else 0.0
+
+        return {
+            "total": total,
+            "by_status": by_status,
+            "applied_count": applied_count,
+            "responded_count": responded_count,
+            "response_rate": response_rate,
+            "avg_days_to_response": avg_days_to_response,
+        }
+
+    def close(self):
+        """Close the database connection."""
+        self._conn.close()

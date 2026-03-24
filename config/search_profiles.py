@@ -1,45 +1,62 @@
 """Job search keyword/location profiles for Indeed and Dice searches."""
 
+# sources: "both" = Indeed + Dice, "indeed" = Indeed only, "dice" = Dice only
 SEARCH_PROFILES = {
     "sysadmin_local": {
-        "keyword": "Systems Administrator",
+        "label": "Systems Administrator (Indianapolis)",
+        "keyword": "systems administrator",
         "location": "Indianapolis, IN",
         "remote": False,
+        "sources": "both",
     },
     "syseng_local": {
-        "keyword": "Systems Engineer",
+        "label": "Systems Engineer Windows (Indianapolis)",
+        "keyword": "systems engineer Windows",
         "location": "Indianapolis, IN",
         "remote": False,
+        "sources": "both",
     },
     "devops_local": {
-        "keyword": "DevOps Engineer",
+        "label": "DevOps / Cloud Engineer Azure (Indianapolis)",
+        "keyword": "DevOps cloud engineer Azure",
         "location": "Indianapolis, IN",
         "remote": False,
+        "sources": "both",
     },
     "powershell_remote": {
-        "keyword": "PowerShell Engineer",
-        "location": "",
+        "label": "PowerShell Automation Engineer (Remote)",
+        "keyword": "PowerShell automation engineer",
+        "location": "remote",
         "remote": True,
+        "sources": "both",
     },
     "infra_remote": {
-        "keyword": "Infrastructure Engineer",
-        "location": "",
+        "label": "Windows Server VMware Infrastructure (Remote)",
+        "keyword": "Windows server VMware infrastructure",
+        "location": "remote",
         "remote": True,
+        "sources": "dice",
     },
     "msp_local": {
-        "keyword": "MSP Engineer",
+        "label": "Managed Services IT Engineer (Indianapolis)",
+        "keyword": "managed services IT engineer",
         "location": "Indianapolis, IN",
         "remote": False,
+        "sources": "indeed",
     },
     "contract_infra": {
-        "keyword": "Infrastructure Engineer Contract",
+        "label": "Windows Server VMware Infrastructure Contract (Indianapolis)",
+        "keyword": "Windows server VMware infrastructure",
         "location": "Indianapolis, IN",
         "remote": False,
+        "sources": "dice",
         "contract_only": True,
     },
     "ad_identity": {
-        "keyword": "Active Directory Identity Engineer",
-        "location": "",
+        "label": "Active Directory / Identity Engineer (Remote)",
+        "keyword": "Active Directory engineer identity",
+        "location": "remote",
         "remote": True,
+        "sources": "dice",
     },
 }

@@ -567,34 +567,389 @@ def roadmap(hours):
 
 
 @cli.command()
-def search():
+@click.option("--profile", "profile_ids", multiple=True, help="Profile ID(s) to run. Omit for interactive selection.")
+def search(profile_ids):
     """Run job search profiles across Indeed and Dice."""
-    console.print("[yellow]Coming soon — Phase 5[/yellow]")
+    import webbrowser
+
+    from config.search_profiles import SEARCH_PROFILES
+    from src.jobs.analyzer import JobAnalyzer
+    from src.jobs.searcher import JobSearcher
+    from src.jobs.tracker import ApplicationTracker
+
+    profiles = SEARCH_PROFILES
+
+    # Interactive profile selection if none specified
+    if not profile_ids:
+        console.print("[bold]Available Search Profiles:[/bold]\n")
+        profile_list = list(profiles.items())
+        for i, (pid, p) in enumerate(profile_list, 1):
+            console.print(f"  [bold]{i}.[/bold] {p.get('label', pid)} [{p.get('sources', 'both')}]")
+
+        console.print(f"\n  [bold]a.[/bold] Run all profiles")
+        choice = console.input("\nSelect profiles (comma-separated numbers, or 'a' for all): ").strip().lower()
+
+        if choice == "a" or choice == "":
+            profile_ids = [pid for pid, _ in profile_list]
+        else:
+            try:
+                indices = [int(x.strip()) for x in choice.split(",")]
+                profile_ids = [profile_list[i - 1][0] for i in indices if 1 <= i <= len(profile_list)]
+            except (ValueError, IndexError):
+                console.print("[red]Invalid selection.[/red]")
+                return
+
+        if not profile_ids:
+            console.print("[yellow]No profiles selected.[/yellow]")
+            return
+
+    console.print(f"\n[dim]Running {len(profile_ids)} profile(s)...[/dim]")
+
+    searcher = JobSearcher()
+    results = []
+
+    for pid in profile_ids:
+        p = profiles.get(pid)
+        if not p:
+            console.print(f"[red]Unknown profile: {pid}[/red]")
+            continue
+        console.print(f"  [dim]Searching: {p.get('label', pid)}...[/dim]")
+        profile_results = searcher.run_profiles([pid])
+        results.extend(profile_results)
+        console.print(f"    [dim]{len(profile_results)} results[/dim]")
+
+    # Deduplicate across profiles
+    results = searcher._deduplicate(results)
+
+    if not results:
+        console.print("[yellow]No results found.[/yellow]")
+        return
+
+    # Display results table
+    table = Table(title=f"Job Search Results ({len(results)} jobs)")
+    table.add_column("#", style="dim", width=4)
+    table.add_column("Title", style="bold")
+    table.add_column("Company")
+    table.add_column("Location")
+    table.add_column("Salary")
+    table.add_column("Source", width=8)
+
+    for i, r in enumerate(results, 1):
+        table.add_row(
+            str(i),
+            str(r.get("title", ""))[:45],
+            str(r.get("company", ""))[:25],
+            str(r.get("location", ""))[:20],
+            str(r.get("salary", ""))[:15] or "-",
+            r.get("source", ""),
+        )
+
+    console.print(table)
+
+    # Interactive per-job actions
+    tracker = ApplicationTracker()
+    analyzer = JobAnalyzer()
+
+    console.print("\n[dim]Per-job actions: [s]ave to tracker, [a]nalyze fit, [o]pen in browser, [n]ext, [q]uit[/dim]\n")
+
+    for i, r in enumerate(results, 1):
+        console.rule(f"[bold]{i}. {r.get('title', '?')} at {r.get('company', '?')}[/bold]")
+        console.print(f"  Location: {r.get('location', '?')}  |  Salary: {r.get('salary', '') or 'N/A'}")
+        console.print(f"  Source: {r.get('source', '?')}  |  Posted: {r.get('posted_date', '') or 'N/A'}")
+        if r.get("url"):
+            console.print(f"  URL: {r['url'][:80]}")
+
+        while True:
+            action = console.input(
+                "  [bold][s][/bold]ave  [bold][a][/bold]nalyze  [bold][o][/bold]pen  [bold][n][/bold]ext  [bold][q][/bold]uit: "
+            ).strip().lower()
+
+            if action == "s":
+                job_id = tracker.save_job(r)
+                console.print(f"  [green]Saved to tracker (id={job_id})[/green]")
+            elif action == "a":
+                console.print("  [dim]Analyzing fit...[/dim]")
+                job_desc = (
+                    f"Title: {r.get('title', '')}\n"
+                    f"Company: {r.get('company', '')}\n"
+                    f"Location: {r.get('location', '')}\n"
+                    f"Salary: {r.get('salary', '')}\n"
+                    f"Type: {r.get('job_type', '')}\n"
+                )
+                analysis = analyzer.analyze_fit(job_desc)
+                if analysis:
+                    _display_fit_analysis(analysis)
+                else:
+                    console.print("  [red]Analysis failed.[/red]")
+            elif action == "o":
+                url = r.get("url", "")
+                if url:
+                    webbrowser.open(url)
+                    console.print("  [cyan]Opened in browser.[/cyan]")
+                else:
+                    console.print("  [yellow]No URL available.[/yellow]")
+            elif action == "n":
+                break
+            elif action == "q":
+                tracker.close()
+                return
+            else:
+                console.print("  [red]Invalid choice. Enter s, a, o, n, or q.[/red]")
+
+    tracker.close()
+    console.print("\n[dim]Search complete.[/dim]")
 
 
-@cli.group()
-def tracker():
+def _display_fit_analysis(analysis):
+    """Display job fit analysis with Rich formatting."""
+    score = analysis.get("match_score", 0)
+    if score >= 7:
+        score_color = "green"
+    elif score >= 5:
+        score_color = "yellow"
+    else:
+        score_color = "red"
+
+    console.print(f"  [bold]Match Score:[/bold] [{score_color}]{score}/10[/{score_color}]")
+
+    matching = analysis.get("matching_skills", [])
+    if matching:
+        console.print(f"  [green]Matching:[/green] {', '.join(matching)}")
+
+    gaps = analysis.get("gap_skills", [])
+    if gaps:
+        console.print(f"  [yellow]Gaps:[/yellow] {', '.join(gaps)}")
+
+    tweaks = analysis.get("resume_tweaks", [])
+    if tweaks:
+        console.print("  [cyan]Resume tweaks:[/cyan]")
+        for t in tweaks:
+            console.print(f"    - {t}")
+
+    flags = analysis.get("red_flags", [])
+    if flags:
+        console.print("  [red]Red flags:[/red]")
+        for f in flags:
+            console.print(f"    - {f}")
+
+
+@cli.group(invoke_without_command=True)
+@click.pass_context
+def tracker(ctx):
     """Manage job application pipeline."""
-    pass
+    if ctx.invoked_subcommand is not None:
+        return
+    # Default: show pipeline
+    ctx.invoke(tracker_show)
 
 
 @tracker.command("show")
 def tracker_show():
     """Show application pipeline (kanban view)."""
-    console.print("[yellow]Coming soon — Phase 5[/yellow]")
+    from src.jobs.tracker import ApplicationTracker
+
+    t = ApplicationTracker()
+    pipeline = t.get_pipeline()
+    t.close()
+
+    total = sum(len(jobs) for jobs in pipeline.values())
+    if total == 0:
+        console.print("[yellow]No applications tracked. Run 'search' to find and save jobs.[/yellow]")
+        return
+
+    # Display order and colors
+    status_display = [
+        ("found", "dim"),
+        ("interested", "blue"),
+        ("applied", "yellow"),
+        ("phone_screen", "bright_yellow"),
+        ("interview", "green"),
+        ("offer", "bright_green"),
+        ("rejected", "red"),
+        ("withdrawn", "magenta"),
+        ("ghosted", "dim red"),
+    ]
+
+    console.print(Panel(f"[bold]Application Pipeline[/bold] ({total} jobs)", border_style="cyan"))
+
+    for status, color in status_display:
+        jobs = pipeline.get(status, [])
+        if not jobs:
+            continue
+
+        table = Table(title=f"{status.replace('_', ' ').title()} ({len(jobs)})", border_style=color)
+        table.add_column("ID", style="dim", width=5)
+        table.add_column("Title", style="bold")
+        table.add_column("Company")
+        table.add_column("Location")
+        table.add_column("Days", justify="center", width=6)
+
+        for j in jobs:
+            days = ""
+            ref_date = j.get("date_applied") or j.get("date_found") or ""
+            if ref_date:
+                try:
+                    from datetime import datetime
+                    dt = datetime.fromisoformat(ref_date)
+                    days = str((datetime.now() - dt).days)
+                except (ValueError, TypeError):
+                    pass
+
+            table.add_row(
+                str(j["id"]),
+                str(j.get("title", ""))[:40],
+                str(j.get("company", ""))[:25],
+                str(j.get("location", ""))[:20],
+                days,
+            )
+
+        console.print(table)
+        console.print()
 
 
 @tracker.command("stats")
 def tracker_stats():
     """Show search and application analytics."""
-    console.print("[yellow]Coming soon — Phase 5[/yellow]")
+    from src.jobs.tracker import ApplicationTracker
+
+    t = ApplicationTracker()
+    stats = t.get_stats()
+    t.close()
+
+    if stats["total"] == 0:
+        console.print("[yellow]No applications tracked yet.[/yellow]")
+        return
+
+    # Summary panel
+    summary = (
+        f"Total jobs tracked: [bold]{stats['total']}[/bold]\n"
+        f"Applications sent: [bold]{stats['applied_count']}[/bold]\n"
+        f"Responses received: [bold]{stats['responded_count']}[/bold]\n"
+        f"Response rate: [bold]{stats['response_rate']:.0f}%[/bold]\n"
+        f"Avg days to response: [bold]{stats['avg_days_to_response']:.1f}[/bold]"
+    )
+    console.print(Panel(summary, title="Application Stats", border_style="cyan"))
+
+    # Status breakdown
+    table = Table(title="Status Breakdown")
+    table.add_column("Status", style="bold")
+    table.add_column("Count", justify="center")
+    table.add_column("Bar")
+
+    max_count = max(stats["by_status"].values()) if stats["by_status"] else 1
+    status_colors = {
+        "found": "dim", "interested": "blue", "applied": "yellow",
+        "phone_screen": "bright_yellow", "interview": "green",
+        "offer": "bright_green", "rejected": "red",
+        "withdrawn": "magenta", "ghosted": "dim red",
+    }
+
+    for status in ["found", "interested", "applied", "phone_screen",
+                    "interview", "offer", "rejected", "withdrawn", "ghosted"]:
+        count = stats["by_status"].get(status, 0)
+        if count == 0:
+            continue
+        bar_len = int(count / max_count * 20) if max_count > 0 else 0
+        color = status_colors.get(status, "white")
+        bar = f"[{color}]{'█' * bar_len}[/{color}]"
+        table.add_row(status.replace("_", " ").title(), str(count), bar)
+
+    console.print(table)
 
 
 @tracker.command("update")
-@click.argument("job_id")
+@click.argument("job_id", type=int)
 def tracker_update(job_id):
     """Update application status for a job."""
-    console.print(f"[yellow]Coming soon — Phase 5 (job {job_id})[/yellow]")
+    from src.jobs.tracker import ApplicationTracker, VALID_STATUSES
+
+    t = ApplicationTracker()
+    job = t.get_job(job_id)
+
+    if not job:
+        console.print(f"[red]Job id={job_id} not found.[/red]")
+        t.close()
+        return
+
+    # Show current details
+    console.print(f"\n[bold]{job['title']}[/bold] at {job['company']}")
+    console.print(f"  Status: [bold]{job['status']}[/bold]  |  Location: {job.get('location', '')}")
+    if job.get("notes"):
+        console.print(f"  Notes: {job['notes'][:80]}")
+
+    # Show status options
+    statuses = sorted(VALID_STATUSES)
+    console.print("\n[bold]Available statuses:[/bold]")
+    for i, s in enumerate(statuses, 1):
+        marker = " [green]<-- current[/green]" if s == job["status"] else ""
+        console.print(f"  {i}. {s.replace('_', ' ').title()}{marker}")
+
+    choice = console.input("\nSelect new status (number): ").strip()
+    try:
+        idx = int(choice) - 1
+        new_status = statuses[idx]
+    except (ValueError, IndexError):
+        console.print("[red]Invalid selection.[/red]")
+        t.close()
+        return
+
+    notes = console.input("Notes (optional, press Enter to skip): ").strip() or None
+
+    if t.update_status(job_id, new_status, notes=notes):
+        console.print(f"[green]Updated to '{new_status}'.[/green]")
+    else:
+        console.print("[red]Update failed.[/red]")
+
+    t.close()
+
+
+@cli.command()
+@click.argument("job_id", type=int)
+@click.option("--resume", default=None, help="Path to resume text file.")
+def analyze(job_id, resume):
+    """Analyze job fit for a tracked application."""
+    from src.jobs.analyzer import JobAnalyzer
+    from src.jobs.tracker import ApplicationTracker
+
+    t = ApplicationTracker()
+    job = t.get_job(job_id)
+    t.close()
+
+    if not job:
+        console.print(f"[red]Job id={job_id} not found in tracker.[/red]")
+        return
+
+    console.print(f"\n[bold]Analyzing fit:[/bold] {job['title']} at {job['company']}")
+
+    job_desc = (
+        f"Title: {job.get('title', '')}\n"
+        f"Company: {job.get('company', '')}\n"
+        f"Location: {job.get('location', '')}\n"
+        f"Salary: {job.get('salary_range', '')}\n"
+        f"Source: {job.get('source', '')}\n"
+    )
+    if job.get("notes"):
+        job_desc += f"\nAdditional info: {job['notes']}\n"
+
+    resume_text = None
+    if resume:
+        from pathlib import Path
+        rp = Path(resume)
+        if rp.exists():
+            resume_text = rp.read_text(encoding="utf-8", errors="replace")
+        else:
+            console.print(f"[red]Resume file not found: {resume}[/red]")
+            return
+
+    analyzer = JobAnalyzer()
+    console.print("[dim]Analyzing...[/dim]")
+    analysis = analyzer.analyze_fit(job_desc, resume_text=resume_text)
+
+    if not analysis:
+        console.print("[red]Analysis failed. Check logs.[/red]")
+        return
+
+    _display_fit_analysis(analysis)
 
 
 @cli.group()
