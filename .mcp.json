@@ -12,6 +12,10 @@
     "dice": {
       "type": "http",
       "url": "https://mcp.dice.com/mcp"
+    },
+    "supabase": {
+      "type": "url",
+      "url": "https://mcp.supabase.com/mcp"
     }
   }
 }
