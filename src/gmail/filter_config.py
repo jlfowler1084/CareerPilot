@@ -9,6 +9,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from config import settings
+from src.agencies.agency_config import get_all_email_domains
 
 # ── Label Hierarchy ──────────────────────────────────────────────────
 # Gmail nested labels use "/" separator. Parent label is created first.
@@ -89,21 +90,15 @@ FILTER_RULES = {
     "recruiters": {
         "label": "CareerPilot/Recruiters",
         "description": "Direct recruiter and staffing agency emails",
-        "from_domains": [
-            "teksystems.com",
-            "roberthalf.com",
-            "kforce.com",
-            "insightglobal.com",
-            "randstad.com",
-            "apexsystems.com",
-            "hays.com",
-            "manpower.com",
-            "modis.com",
-            "adecco.com",
-            "cybercoders.com",
-            "motionrecruitment.com",
-            "rht.com",
-        ],
+        "from_domains": sorted(set(
+            get_all_email_domains() + [
+                # Additional staffing domains not in agency_config
+                "hays.com",
+                "manpower.com",
+                "modis.com",
+                "adecco.com",
+            ]
+        )),
         "from_addresses": [],
         "subject_patterns": [
             "opportunity",

@@ -3563,6 +3563,179 @@ def fill_cheatsheet():
     cmd_cheatsheet()
 
 
+# ─── IT Staffing Agency Commands ─────────────────────────────────
+
+
+@cli.group()
+def agencies():
+    """IT staffing agency integration — manage recruiters, roles, and outreach."""
+
+
+@agencies.command("list")
+def agencies_list():
+    """List all configured staffing agencies."""
+    from src.agencies.agencies_cli import cmd_list_agencies
+
+    cmd_list_agencies()
+
+
+@agencies.command("search")
+@click.argument("keyword", required=False)
+@click.option("--all", "open_all", is_flag=True, help="Open all agencies with default keywords.")
+def agencies_search(keyword, open_all):
+    """Open agency job boards in browser for KEYWORD."""
+    from src.agencies.agencies_cli import cmd_search
+
+    cmd_search(keyword=keyword, open_all=open_all)
+
+
+@agencies.group("recruiter")
+def agencies_recruiter():
+    """Manage recruiter contacts."""
+
+
+@agencies_recruiter.command("add")
+def agencies_recruiter_add():
+    """Add a recruiter contact (interactive)."""
+    from src.agencies.agencies_cli import cmd_recruiter_add
+
+    cmd_recruiter_add()
+
+
+@agencies_recruiter.command("list")
+def agencies_recruiter_list():
+    """List all recruiter contacts."""
+    from src.agencies.agencies_cli import cmd_recruiter_list
+
+    cmd_recruiter_list()
+
+
+@agencies_recruiter.command("show")
+@click.argument("recruiter_id", type=int)
+def agencies_recruiter_show(recruiter_id):
+    """Show recruiter details and history."""
+    from src.agencies.agencies_cli import cmd_recruiter_show
+
+    cmd_recruiter_show(recruiter_id)
+
+
+@agencies.group("interaction")
+def agencies_interaction():
+    """Manage recruiter interactions."""
+
+
+@agencies_interaction.command("log")
+@click.argument("recruiter_id", type=int)
+def agencies_interaction_log(recruiter_id):
+    """Log an interaction with a recruiter."""
+    from src.agencies.agencies_cli import cmd_interaction_log
+
+    cmd_interaction_log(recruiter_id)
+
+
+@agencies.group("role")
+def agencies_role():
+    """Manage submitted roles."""
+
+
+@agencies_role.command("add")
+@click.argument("recruiter_id", type=int)
+def agencies_role_add(recruiter_id):
+    """Add a submitted role for a recruiter."""
+    from src.agencies.agencies_cli import cmd_role_add
+
+    cmd_role_add(recruiter_id)
+
+
+@agencies_role.command("list")
+def agencies_role_list():
+    """List all submitted roles."""
+    from src.agencies.agencies_cli import cmd_role_list
+
+    cmd_role_list()
+
+
+@agencies_role.command("update")
+@click.argument("role_id", type=int)
+@click.argument("status")
+def agencies_role_update(role_id, status):
+    """Update a submitted role's status."""
+    from src.agencies.agencies_cli import cmd_role_update
+
+    cmd_role_update(role_id, status)
+
+
+@agencies.command("outreach")
+@click.argument("template", required=False)
+@click.argument("agency", required=False)
+@click.option("--list", "list_templates", is_flag=True, help="List available templates.")
+def agencies_outreach(template, agency, list_templates):
+    """Generate an outreach email from a template."""
+    from src.agencies.agencies_cli import cmd_outreach
+
+    if list_templates:
+        cmd_outreach(template_key="--list")
+    else:
+        cmd_outreach(template_key=template, agency_key=agency)
+
+
+@agencies.command("summary")
+def agencies_summary():
+    """Show recruiter relationship dashboard."""
+    from src.agencies.agencies_cli import cmd_summary
+
+    cmd_summary()
+
+
+@agencies.command("seed")
+def agencies_seed():
+    """Seed tracker with David Perez / TEKsystems data (idempotent)."""
+    from src.agencies.recruiter_tracker import RecruiterTracker
+
+    tracker = RecruiterTracker()
+
+    existing = tracker.find_recruiter_by_email("dperez@teksystems.com")
+    if existing:
+        console.print(f"[yellow]Recruiter already exists (#{existing['id']}). Skipping seed.[/yellow]")
+        tracker.close()
+        return
+
+    rid = tracker.add_recruiter(
+        name="David Perez",
+        agency="TEKsystems",
+        email="dperez@teksystems.com",
+        phone="317-810-7562",
+        title="Sr. Information Technology Recruiter (Risk & Security)",
+        notes="Active relationship. Indy office: 9265 Counselors Row.",
+    )
+    console.print(f"[green]Added recruiter #{rid}: David Perez at TEKsystems[/green]")
+
+    r1 = tracker.add_submitted_role(
+        rid, "MISO Energy", "Systems Administrator",
+        status="submitted", location="Indianapolis, IN", role_type="contract",
+    )
+    r2 = tracker.add_submitted_role(
+        rid, "Corteva", "Domain Migration Support Specialist",
+        status="submitted", location="Indianapolis, IN", role_type="contract",
+    )
+    r3 = tracker.add_submitted_role(
+        rid, "Delta", "Desktop Support Technician",
+        status="submitted", location="Indianapolis, IN", role_type="contract",
+    )
+    console.print(f"[green]Added 3 submitted roles (#{r1}, #{r2}, #{r3})[/green]")
+
+    iid = tracker.log_interaction(
+        rid, "email", "inbound",
+        subject="Miso - Systems Admin",
+        summary="Presented to MISO Energy for sys admin role. Asked for consent to represent.",
+        roles_discussed="MISO - Systems Admin, Corteva - Domain Migration, Delta - Desktop Support",
+    )
+    console.print(f"[green]Logged interaction #{iid}[/green]")
+
+    tracker.close()
+    console.print("[bold green]Seed complete.[/bold green]")
+
+
 if __name__ == "__main__":
     try:
         cli()
