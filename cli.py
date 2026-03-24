@@ -5,6 +5,7 @@ import sys
 
 import click
 from rich.console import Console
+from rich.panel import Panel
 from rich.table import Table
 
 if sys.platform == "win32":
@@ -12,6 +13,19 @@ if sys.platform == "win32":
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 console = Console()
+
+# Categories that support interactive response
+ACTIONABLE_CATEGORIES = {"recruiter_outreach", "interview_request", "offer"}
+
+# Category display colors
+CATEGORY_COLORS = {
+    "recruiter_outreach": "green",
+    "interview_request": "bright_green",
+    "offer": "bright_cyan",
+    "job_alert": "blue",
+    "rejection": "red",
+    "irrelevant": "dim",
+}
 
 
 @click.group()
@@ -28,7 +42,8 @@ def cli(debug):
 @cli.command()
 @click.option("--days", default=7, help="Number of days to look back (default 7).")
 def scan(days):
-    """Scan Gmail for recruiter emails and classify them."""
+    """Scan Gmail for recruiter emails, classify, and draft responses."""
+    from src.gmail.responder import RecruiterResponder
     from src.gmail.scanner import GmailScanner
 
     scanner = GmailScanner()
@@ -47,17 +62,9 @@ def scan(days):
         console.print("[yellow]No recruiter emails found.[/yellow]")
         return
 
-    # Category colors
-    colors = {
-        "recruiter_outreach": "green",
-        "interview_request": "bright_green",
-        "offer": "bright_cyan",
-        "job_alert": "blue",
-        "rejection": "red",
-        "irrelevant": "dim",
-    }
-
+    # Display results table
     table = Table(title=f"Gmail Scan Results ({len(results)} emails)")
+    table.add_column("#", style="dim")
     table.add_column("Category", style="bold")
     table.add_column("From")
     table.add_column("Subject")
@@ -66,9 +73,10 @@ def scan(days):
     table.add_column("Urgency")
     table.add_column("Summary")
 
-    for r in results:
-        color = colors.get(r["category"], "white")
+    for i, r in enumerate(results, 1):
+        color = CATEGORY_COLORS.get(r["category"], "white")
         table.add_row(
+            str(i),
             f"[{color}]{r['category']}[/{color}]",
             r["sender"][:30],
             r["subject"][:40],
@@ -79,6 +87,116 @@ def scan(days):
         )
 
     console.print(table)
+    console.print()
+
+    # Interactive response flow for actionable emails
+    actionable = [r for r in results if r["category"] in ACTIONABLE_CATEGORIES]
+    if not actionable:
+        console.print("[dim]No actionable emails (recruiter_outreach/interview_request/offer) found.[/dim]")
+        return
+
+    # Create responder using scanner's authenticated service
+    responder = RecruiterResponder(scanner._service)
+
+    console.print(
+        f"[bold]{len(actionable)} actionable email(s) found.[/bold] "
+        "Drafts are saved to Gmail — [bold]nothing is sent[/bold] without your approval.\n"
+    )
+
+    for r in actionable:
+        console.rule(f"[bold]{r['subject'][:60]}[/bold]")
+        console.print(f"  From: {r['sender']}")
+        console.print(f"  Company: {r['company']}  |  Role: {r['role']}  |  Urgency: {r['urgency']}")
+        console.print(f"  {r['summary']}")
+        console.print()
+
+        action = _prompt_action()
+        if action == "q":
+            console.print("[yellow]Quitting scan.[/yellow]")
+            return
+        if action == "s":
+            continue
+
+        mode_map = {"r": "interested", "d": "not_interested", "m": "more_info"}
+        mode = mode_map[action]
+
+        # Fetch full email for drafting
+        email_data = scanner.get_email_details(r["message_id"])
+        if not email_data:
+            console.print("[red]Failed to fetch email details, skipping.[/red]")
+            continue
+
+        _handle_draft_flow(responder, email_data, mode, r["message_id"])
+        console.print()
+
+
+def _prompt_action():
+    """Prompt user for action on an email. Returns r/d/m/s/q."""
+    while True:
+        choice = console.input(
+            "[bold][r][/bold]espond interested  "
+            "[bold][d][/bold]ecline  "
+            "[bold][m][/bold]ore info  "
+            "[bold][s][/bold]kip  "
+            "[bold][q][/bold]uit: "
+        ).strip().lower()
+        if choice in ("r", "d", "m", "s", "q"):
+            return choice
+        console.print("[red]Invalid choice. Enter r, d, m, s, or q.[/red]")
+
+
+def _handle_draft_flow(responder, email_data, mode, message_id):
+    """Generate a draft, show it, and let user approve/edit/cancel."""
+    draft_text = responder.draft_response(email_data, mode=mode)
+
+    if not draft_text:
+        console.print("[red]Failed to generate draft. Check logs.[/red]")
+        return
+
+    while True:
+        console.print()
+        console.print(Panel(
+            draft_text,
+            title=f"Draft Reply ({mode})",
+            border_style="cyan",
+        ))
+
+        choice = console.input(
+            "[bold][a][/bold]pprove (save as draft)  "
+            "[bold][e][/bold]dit (re-generate with feedback)  "
+            "[bold][c][/bold]ancel: "
+        ).strip().lower()
+
+        if choice == "a":
+            draft_id = responder.save_draft(message_id, draft_text)
+            if draft_id:
+                console.print(f"[green]Draft saved to Gmail (draft_id={draft_id}). NOT sent.[/green]")
+            else:
+                console.print("[red]Failed to save draft. Check logs.[/red]")
+            return
+
+        elif choice == "e":
+            feedback = console.input("What should be different? ")
+            # Re-generate with feedback appended
+            augmented = dict(email_data)
+            augmented["body"] = (
+                email_data.get("body", "") +
+                f"\n\n--- USER FEEDBACK ON PREVIOUS DRAFT ---\n"
+                f"Previous draft:\n{draft_text}\n\n"
+                f"Requested changes: {feedback}"
+            )
+            draft_text = responder.draft_response(augmented, mode=mode)
+            if not draft_text:
+                console.print("[red]Failed to re-generate draft. Check logs.[/red]")
+                return
+            # Loop back to show the new draft
+
+        elif choice == "c":
+            console.print("[yellow]Draft cancelled.[/yellow]")
+            return
+
+        else:
+            console.print("[red]Invalid choice. Enter a, e, or c.[/red]")
 
 
 @cli.command()
