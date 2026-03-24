@@ -1,0 +1,92 @@
+Fill out this job application form using my profile below. For any field that's already filled correctly from a resume upload, leave it alone. Only fill empty or incorrect fields.
+
+RESUME UPLOAD:
+- I will upload my resume manually before running this prompt. Do NOT click the Upload Resume button.
+- If resume fields are pre-populated from parsing, leave them as-is unless incorrect.
+- Resume file location (for my reference): F:\Projects\CareerPilot\resumes\Joseph_Fowler_Resume_Updated.docx
+
+PERSONAL INFO:
+- First Name: Joseph
+- Last Name: Fowler
+- Email: jlfowler1084@gmail.com
+- Phone: 443-787-6528 (Mobile)
+- Address Line 1: 3340 Godby Street
+- City: Sheridan
+- State: Indiana
+- Zip/Postal Code: 46069
+- Country: United States of America
+- LinkedIn: linkedin.com/in/system-administration
+- GitHub: (leave blank)
+- Website: (leave blank)
+
+WORK AUTHORIZATION:
+- Authorized to work in the US: Yes
+- Require sponsorship: No
+- US Citizen: Yes
+- Willing to relocate: Yes
+- Remote preference: Flexible (remote, hybrid, or onsite)
+- Available start date: Immediately / 2 weeks notice
+
+CURRENT EMPLOYMENT STATUS:
+- Currently employed: No
+- Reason for leaving last role: Position eliminated / organizational restructuring
+
+PREVIOUS EMPLOYER QUESTIONS:
+- "Have you worked at [this company] before?": No (unless it's Venable LLP)
+- "Have you been employed or on assignment as a Contract Worker at [company]?": No
+
+WORK HISTORY (most recent first):
+1. Systems Engineer — Venable LLP, Baltimore, MD (Jan 2021 – Oct 2025)
+   Led server commissioning, Windows OS refresh/migration, M365 administration, Azure AD/Entra ID, SolarWinds alerting redesign, 30+ Splunk dashboards, PowerShell automation framework, VMware PowerCLI across 700+ VM environment, Nimble SAN storage management.
+
+2. Operations Analyst — Venable LLP, Baltimore, MD (2018 – 2021)
+   Managed 700+ server VMware vSphere environment, PowerShell automation for user provisioning and patch management, Active Directory/Group Policy enforcement, SCCM deployment, SolarWinds monitoring.
+
+3. Analyst, Technology Networks & Systems — Venable LLP, Baltimore, MD (2014 – 2017)
+   Proactive monitoring and alerting (SolarWinds, Splunk), certificate lifecycle management, Cisco network infrastructure, DNS/DHCP/VLAN management.
+
+4. Specialist, Technology Hardware Services — Venable LLP, Baltimore, MD (2005 – 2013)
+   Tier-3 desktop/laptop/mobile support, Windows 7 firm-wide rollout, new-hire setups, hardware deployment documentation.
+
+EDUCATION:
+- School: Tesst College of Technology
+- Degree/Certificate: Network Information Systems Certificate
+- Graduation: (leave blank if no date field, or enter N/A)
+
+CERTIFICATIONS:
+- CompTIA Security+
+- ITIL V4 Foundations
+- Microsoft Azure Fundamentals AZ-900 (in progress)
+
+SKILLS (use when asked to list or rate skills):
+PowerShell, Windows Server, Active Directory, VMware vSphere, Microsoft 365, Azure AD/Entra ID, Splunk, SolarWinds, SCCM, Group Policy, DNS, DHCP, VLAN, VPN, Nimble SAN, GitHub, Python (foundational)
+
+SALARY EXPECTATIONS (only fill if required):
+- Desired salary: Prefer not to disclose / Negotiable
+- If forced to enter a number: $90,000 - $120,000
+
+EEO / VOLUNTARY DISCLOSURES (select these if asked):
+- Gender: Male
+- Veteran status: I am not a veteran
+- Disability: I don't wish to answer / Prefer not to disclose
+- Race/Ethnicity: White
+
+STANDARD QUESTION ANSWERS:
+- "How did you hear about this position?": Company website / Online job board
+- "Are you at least 18 years old?": Yes
+- "Do you have a valid driver's license?": Yes
+- "Have you been convicted of a felony?": No
+- "Can you perform the essential functions of this job?": Yes
+- Privacy notice / terms acknowledgment checkboxes: Check yes / agree
+- Email consent checkbox: Check yes
+- Text/SMS consent checkbox: Skip / leave unchecked
+
+INSTRUCTIONS FOR CLAUDE:
+- Do NOT click the Upload Resume button — I handle that manually.
+- Fill every matching field you can find on this page.
+- For dropdowns, select the closest matching option.
+- For radio buttons, select the appropriate Yes/No based on my info above.
+- If a field isn't covered above, leave it blank and tell me about it.
+- Do NOT click Submit, Next, or any navigation buttons.
+- After filling, tell me what you filled and flag anything you left blank or weren't sure about.
+- On multi-page applications, I will click Next myself and then ask you to fill the next page.
