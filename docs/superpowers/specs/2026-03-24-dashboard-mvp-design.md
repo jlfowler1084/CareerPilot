@@ -312,9 +312,13 @@ Flow:
 **Anthropic API call:**
 ```
 POST https://api.anthropic.com/v1/messages
-Headers: x-api-key (from env ANTHROPIC_API_KEY), anthropic-version: 2023-06-01
+Headers:
+  x-api-key (from env ANTHROPIC_API_KEY)
+  anthropic-version: 2023-06-01
+  anthropic-beta: mcp-client-2025-04-04    ← REQUIRED for MCP support
 Body: model: claude-sonnet-4-6, max_tokens: 4000, mcp_servers: [{ type: "url", url: "..." }]
 ```
+Note: The `anthropic-beta` header is required to enable `mcp_servers` in the request body. Without it, the API rejects the parameter. See Python CLI's `src/jobs/searcher.py` for the existing pattern.
 
 **Error handling (per-profile, not all-or-nothing):**
 - Anthropic API down → return 502 `{ error: "Search service unavailable" }`
@@ -586,7 +590,7 @@ AnalyticsPage mounts → use-stats hook
 ### Vercel Free Tier Limits
 
 - Unlimited deployments
-- 10-second serverless function timeout (sufficient for MCP search calls)
+- 10-second serverless function timeout on free tier — **MCP search calls often take 15-30s**, so this may require Vercel Pro ($20/mo, 60s timeout) or streaming responses. The Phase 9 cache-based rate limiting (Section 6.6) mitigates repeat calls, but first-time searches for a profile will likely exceed 10s. Plan to test during SCRUM-114 deployment and upgrade if needed.
 - HTTPS + CDN included
 - No Vercel password protection on free tier (Supabase Auth handles access control)
 
