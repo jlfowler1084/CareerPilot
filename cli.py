@@ -605,21 +605,417 @@ def interview():
 
 @interview.command("analyze")
 @click.argument("filepath")
-def interview_analyze(filepath):
+@click.option("--job-title", default=None, help="Job title for context.")
+@click.option("--company", default=None, help="Company name for context.")
+def interview_analyze(filepath, job_title, company):
     """Analyze an interview transcript."""
-    console.print(f"[yellow]Coming soon — Phase 4 ({filepath})[/yellow]")
+    from src.interviews.coach import InterviewCoach
+    from src.interviews.transcripts import TranscriptLoader
+
+    loader = TranscriptLoader()
+    turns = loader.load_transcript(filepath)
+
+    if not turns:
+        console.print("[red]Failed to load transcript. Check file path and format.[/red]")
+        return
+
+    console.print(f"[dim]Loaded {len(turns)} speaker turns. Analyzing...[/dim]")
+
+    coach = InterviewCoach()
+    analysis = coach.analyze_interview(turns, job_title=job_title, company=company)
+
+    if not analysis:
+        console.print("[red]Analysis failed. Check logs.[/red]")
+        coach.close()
+        return
+
+    # Display results
+    _display_analysis(analysis)
+
+    # Offer to save
+    save = console.input("\nSave analysis and create journal entry? [bold][y][/bold]/[bold][n][/bold]: ").strip().lower()
+    if save == "y":
+        analysis_id = coach.save_analysis(filepath, analysis, company=company or "", role=job_title or "")
+
+        # Auto-create journal entry
+        from src.journal.entries import JournalManager
+        manager = JournalManager()
+        content = (
+            f"## Interview Analysis\n\n"
+            f"**File:** {filepath}\n"
+            f"**Company:** {company or 'N/A'}\n"
+            f"**Role:** {job_title or 'N/A'}\n"
+            f"**Overall Score:** {analysis.get('overall_score', '?')}/10\n\n"
+            f"### Technical Gaps\n"
+            + "\n".join(f"- {g}" for g in analysis.get("technical_gaps", [])) + "\n\n"
+            f"### Top Improvements\n"
+            + "\n".join(f"- {imp}" for imp in analysis.get("top_improvements", []))
+        )
+        journal_file = manager.create_entry("interview", content, tags=["interview", "analysis"])
+        console.print(f"[green]Analysis saved (id={analysis_id}). Journal entry: {journal_file}[/green]")
+
+        # Cross-reference gaps with skill tracker
+        _check_skill_gaps(analysis.get("technical_gaps", []))
+    else:
+        console.print("[dim]Analysis not saved.[/dim]")
+
+    coach.close()
+
+
+def _display_analysis(analysis):
+    """Display interview analysis with Rich formatting."""
+    from rich.markdown import Markdown
+
+    # Questions & Responses
+    if analysis.get("response_quality"):
+        table = Table(title="Questions & Response Quality")
+        table.add_column("#", style="dim", width=3)
+        table.add_column("Question")
+        table.add_column("Rating", justify="center", width=8)
+        table.add_column("Summary")
+
+        for i, rq in enumerate(analysis["response_quality"], 1):
+            rating = rq.get("rating", 0)
+            if rating >= 4:
+                rating_str = f"[green]{rating}/5[/green]"
+            elif rating == 3:
+                rating_str = f"[yellow]{rating}/5[/yellow]"
+            else:
+                rating_str = f"[red]{rating}/5[/red]"
+
+            table.add_row(
+                str(i),
+                str(rq.get("question", ""))[:60],
+                rating_str,
+                str(rq.get("summary", ""))[:50],
+            )
+
+        console.print(table)
+        console.print()
+
+        # Detailed strengths/weaknesses for each
+        for i, rq in enumerate(analysis["response_quality"], 1):
+            rating = rq.get("rating", 0)
+            if rating >= 4:
+                border = "green"
+            elif rating == 3:
+                border = "yellow"
+            else:
+                border = "red"
+            detail = (
+                f"**Strengths:** {rq.get('strengths', 'N/A')}\n\n"
+                f"**Weaknesses:** {rq.get('weaknesses', 'N/A')}"
+            )
+            console.print(Panel(
+                Markdown(detail),
+                title=f"Q{i}: {str(rq.get('question', ''))[:50]}",
+                border_style=border,
+            ))
+
+    # Overall score
+    score = analysis.get("overall_score", 0)
+    if score >= 7:
+        score_color = "green"
+    elif score >= 5:
+        score_color = "yellow"
+    else:
+        score_color = "red"
+    console.print(f"\n[bold]Overall Score:[/bold] [{score_color}]{score}/10[/{score_color}]")
+    console.print(f"  {analysis.get('overall_justification', '')}")
+
+    # Behavioral assessment
+    behavioral = analysis.get("behavioral_assessment", {})
+    if behavioral:
+        console.print()
+        console.print(Panel(
+            "\n".join(f"**{k.replace('_', ' ').title()}:** {v}" for k, v in behavioral.items()),
+            title="Behavioral Assessment",
+            border_style="blue",
+        ))
+
+    # Technical gaps
+    gaps = analysis.get("technical_gaps", [])
+    if gaps:
+        console.print()
+        console.print(Panel(
+            "\n".join(f"- {g}" for g in gaps),
+            title="Technical Gaps",
+            border_style="red",
+        ))
+
+    # Top improvements
+    improvements = analysis.get("top_improvements", [])
+    if improvements:
+        console.print()
+        console.print(Panel(
+            "\n".join(f"{i+1}. {imp}" for i, imp in enumerate(improvements)),
+            title="Top Improvements",
+            border_style="yellow",
+        ))
+
+    # Practice questions
+    questions = analysis.get("practice_questions", [])
+    if questions:
+        console.print()
+        console.print(Panel(
+            "\n".join(f"{i+1}. {q}" for i, q in enumerate(questions)),
+            title="Practice Questions",
+            border_style="cyan",
+        ))
+
+
+def _check_skill_gaps(technical_gaps):
+    """Cross-reference technical gaps with skill tracker."""
+    if not technical_gaps:
+        return
+
+    from src.skills.tracker import SkillTracker
+
+    tracker = SkillTracker()
+    tracker.seed_defaults()
+    all_skills = tracker.get_all_skills()
+    tracker.close()
+
+    skill_names = {s["name"].lower(): s for s in all_skills}
+    flagged = []
+    for gap in technical_gaps:
+        gap_lower = gap.lower()
+        for name, skill in skill_names.items():
+            if name in gap_lower or gap_lower in name:
+                flagged.append((gap, skill))
+                break
+
+    if flagged:
+        console.print()
+        console.print("[bold]Skill Tracker Matches:[/bold]")
+        for gap_text, skill in flagged:
+            console.print(
+                f"  [yellow]>[/yellow] '{gap_text}' matches tracked skill "
+                f"'{skill['name']}' (level {skill['current_level']}/{skill['target_level']})"
+            )
 
 
 @interview.command("mock")
-def interview_mock():
+@click.option("--questions", "num_questions", default=5, help="Number of questions (default 5).")
+def interview_mock(num_questions):
     """Start an interactive mock interview session."""
-    console.print("[yellow]Coming soon — Phase 4[/yellow]")
+    from rich.markdown import Markdown
+
+    from src.interviews.coach import InterviewCoach
+
+    console.print(Panel(
+        "Describe the target role for your mock interview.\n"
+        "Include: job title, technologies, responsibilities.",
+        title="Mock Interview Setup",
+        border_style="cyan",
+    ))
+
+    role_desc = console.input("\nRole description: ").strip()
+    if not role_desc:
+        console.print("[yellow]No role description provided, cancelled.[/yellow]")
+        return
+
+    console.print(f"\n[bold]Starting mock interview ({num_questions} questions)...[/bold]")
+    console.print("[dim]Answer each question as you would in a real interview.[/dim]\n")
+
+    coach = InterviewCoach()
+
+    def rich_output(text):
+        console.print(text)
+
+    def rich_input(prompt):
+        return console.input(f"[bold]{prompt}[/bold]")
+
+    assessment = coach.mock_interview(
+        role_description=role_desc,
+        num_questions=num_questions,
+        input_fn=rich_input,
+        output_fn=rich_output,
+    )
+    coach.close()
+
+    if not assessment:
+        console.print("[red]Mock interview failed. Check logs.[/red]")
+        return
+
+    # Display final assessment
+    console.print("\n")
+    console.rule("[bold]Final Assessment[/bold]")
+
+    score = assessment.get("overall_score", 0)
+    if score >= 7:
+        score_color = "green"
+    elif score >= 5:
+        score_color = "yellow"
+    else:
+        score_color = "red"
+
+    console.print(f"\n[bold]Overall Score:[/bold] [{score_color}]{score}/10[/{score_color}]")
+    console.print(f"  {assessment.get('overall_justification', '')}")
+
+    gaps = assessment.get("technical_gaps", [])
+    if gaps:
+        console.print(Panel(
+            "\n".join(f"- {g}" for g in gaps),
+            title="Technical Gaps",
+            border_style="red",
+        ))
+
+    improvements = assessment.get("top_improvements", [])
+    if improvements:
+        console.print(Panel(
+            "\n".join(f"{i+1}. {imp}" for i, imp in enumerate(improvements)),
+            title="Top Improvements",
+            border_style="yellow",
+        ))
+
+    practice = assessment.get("practice_questions", [])
+    if practice:
+        console.print(Panel(
+            "\n".join(f"{i+1}. {q}" for i, q in enumerate(practice)),
+            title="Follow-up Practice Questions",
+            border_style="cyan",
+        ))
+
+    # Offer to save
+    save = console.input("\nSave mock interview as journal entry? [bold][y][/bold]/[bold][n][/bold]: ").strip().lower()
+    if save == "y":
+        from src.journal.entries import JournalManager
+
+        qa_text = "\n\n".join(
+            f"**Q{i+1}:** {qa['question']}\n"
+            f"**A:** {qa['answer']}\n"
+            f"**Rating:** {qa['evaluation'].get('rating', '?')}/5"
+            for i, qa in enumerate(assessment.get("qa_pairs", []))
+        )
+        content = (
+            f"## Mock Interview\n\n"
+            f"**Role:** {role_desc}\n"
+            f"**Score:** {score}/10\n\n"
+            f"### Q&A\n\n{qa_text}\n\n"
+            f"### Technical Gaps\n"
+            + "\n".join(f"- {g}" for g in gaps) + "\n\n"
+            f"### Improvements\n"
+            + "\n".join(f"- {imp}" for imp in improvements)
+        )
+        manager = JournalManager()
+        filename = manager.create_entry("interview", content, tags=["mock-interview"])
+        console.print(f"[green]Saved journal entry: {filename}[/green]")
+
+        _check_skill_gaps(gaps)
+    else:
+        console.print("[dim]Not saved.[/dim]")
 
 
 @interview.command("history")
 def interview_history():
-    """Show past interview analyses with trend summary."""
-    console.print("[yellow]Coming soon — Phase 4[/yellow]")
+    """Show past interview analyses with scores and gaps."""
+    from src.interviews.coach import InterviewCoach
+
+    coach = InterviewCoach()
+    analyses = coach.get_all_analyses()
+    coach.close()
+
+    if not analyses:
+        console.print("[yellow]No interview analyses found. Run 'interview analyze' first.[/yellow]")
+        return
+
+    table = Table(title=f"Interview History ({len(analyses)} analyses)")
+    table.add_column("ID", style="dim", width=4)
+    table.add_column("Date", width=12)
+    table.add_column("Company")
+    table.add_column("Role")
+    table.add_column("Score", justify="center", width=7)
+    table.add_column("Top Gaps")
+
+    for a in analyses:
+        analysis = a.get("analysis", {})
+        score = analysis.get("overall_score", 0)
+        if score >= 7:
+            score_str = f"[green]{score}/10[/green]"
+        elif score >= 5:
+            score_str = f"[yellow]{score}/10[/yellow]"
+        else:
+            score_str = f"[red]{score}/10[/red]"
+
+        gaps = ", ".join(analysis.get("technical_gaps", [])[:3])
+
+        table.add_row(
+            str(a.get("id", "")),
+            str(a.get("analyzed_at", ""))[:10],
+            a.get("company", "") or "-",
+            a.get("role", "") or "-",
+            score_str,
+            gaps[:50] if gaps else "-",
+        )
+
+    console.print(table)
+
+
+@interview.command("compare")
+def interview_compare():
+    """Compare all stored analyses to identify trends."""
+    from src.interviews.coach import InterviewCoach
+
+    coach = InterviewCoach()
+    analyses = coach.get_all_analyses()
+
+    if len(analyses) < 2:
+        console.print(f"[yellow]Need at least 2 analyses to compare (found {len(analyses)}). "
+                       "Run more 'interview analyze' sessions first.[/yellow]")
+        coach.close()
+        return
+
+    console.print(f"[dim]Comparing {len(analyses)} analyses...[/dim]")
+    comparison = coach.compare_interviews(analyses)
+    coach.close()
+
+    if not comparison:
+        console.print("[red]Comparison failed. Check logs.[/red]")
+        return
+
+    # Trajectory
+    trajectory = comparison.get("trajectory", "unknown")
+    traj_colors = {"improving": "green", "plateauing": "yellow", "declining": "red"}
+    traj_color = traj_colors.get(trajectory, "white")
+    console.print(f"\n[bold]Trajectory:[/bold] [{traj_color}]{trajectory.upper()}[/{traj_color}]")
+    console.print(f"  {comparison.get('trajectory_explanation', '')}")
+
+    # Recurring weak topics
+    weak = comparison.get("recurring_weak_topics", [])
+    if weak:
+        console.print(Panel(
+            "\n".join(f"- {w}" for w in weak),
+            title="Recurring Weak Topics",
+            border_style="red",
+        ))
+
+    # Improved skills
+    improved = comparison.get("improved_skills", [])
+    if improved:
+        console.print(Panel(
+            "\n".join(f"- {s}" for s in improved),
+            title="Improved Skills",
+            border_style="green",
+        ))
+
+    # Persistent gaps
+    persistent = comparison.get("persistent_gaps", [])
+    if persistent:
+        console.print(Panel(
+            "\n".join(f"- {g}" for g in persistent),
+            title="Persistent Gaps (Need Focused Study)",
+            border_style="yellow",
+        ))
+
+    # Recommendations
+    recs = comparison.get("recommendations", [])
+    if recs:
+        console.print(Panel(
+            "\n".join(f"{i+1}. {r}" for i, r in enumerate(recs)),
+            title="Recommendations",
+            border_style="cyan",
+        ))
 
 
 if __name__ == "__main__":
