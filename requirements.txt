@@ -8,4 +8,5 @@ pytz
 rich
 click
 pyperclip
+python-docx
 pytest

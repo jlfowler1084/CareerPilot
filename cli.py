@@ -736,6 +736,18 @@ def _apply_job_flow(job_data, applicant, con):
         con.print("  [dim]Skipped.[/dim]")
         return
 
+    # Offer document generation
+    gen_docs = con.input("  Generate tailored resume and cover letter? [y/n]: ").strip().lower()
+    if gen_docs == "y":
+        with con.status("[cyan]Generating documents with Claude...[/cyan]"):
+            doc_result = applicant.generate_application_docs(job_data)
+        if doc_result.get("resume_path"):
+            con.print(f"  [green]Resume:[/green] {doc_result['resume_path']}")
+        if doc_result.get("cover_letter_path"):
+            con.print(f"  [green]Cover letter:[/green] {doc_result['cover_letter_path']}")
+        if not doc_result.get("resume_path") and not doc_result.get("cover_letter_path"):
+            con.print("  [yellow]Document generation failed — continuing with apply.[/yellow]")
+
     # Execute apply flow
     if easy_apply:
         result = applicant.apply_dice_easy(job_data)
@@ -856,6 +868,21 @@ def apply():
         console.print("[yellow]No valid jobs selected.[/yellow]")
         applicant.close()
         return
+
+    # Offer batch doc generation
+    batch_docs = console.input(
+        "Auto-generate tailored docs for all selected jobs? [y/n]: "
+    ).strip().lower()
+    if batch_docs == "y":
+        console.print("[cyan]Generating documents for selected jobs...[/cyan]")
+        for j in selected:
+            with console.status(f"[cyan]Generating docs for {j.get('title', '?')}...[/cyan]"):
+                doc_result = applicant.generate_application_docs(j)
+            if doc_result.get("resume_path"):
+                console.print(f"  [green]Resume:[/green] {doc_result['resume_path']}")
+            if doc_result.get("cover_letter_path"):
+                console.print(f"  [green]Cover letter:[/green] {doc_result['cover_letter_path']}")
+        console.print()
 
     console.print(f"\n[bold]Applying to {len(selected)} job(s)...[/bold]\n")
 
@@ -2529,6 +2556,238 @@ def profile_seed():
     mgr.seed_joseph_data()
     mgr.close()
     console.print("[green]Profile seeded with Joseph Fowler's data.[/green]")
+
+
+# ─── Document Generation Commands ──────────────────────────────────
+
+
+@cli.group()
+def docs():
+    """Generate tailored resumes and cover letters."""
+
+
+@docs.command("resume")
+@click.argument("job_id", type=int)
+def docs_resume(job_id):
+    """Generate a tailored resume for a tracked job."""
+    from src.documents.resume_generator import ResumeGenerator
+    from src.jobs.tracker import ApplicationTracker
+
+    tracker = ApplicationTracker()
+    job = tracker.get_job(job_id)
+    tracker.close()
+
+    if not job:
+        console.print(f"[red]Job id={job_id} not found in tracker.[/red]")
+        return
+
+    console.print(Panel(
+        f"[bold]{job.get('title', '?')}[/bold] at {job.get('company', '?')}\n"
+        f"Location: {job.get('location', '?')}",
+        title="Generating Resume", border_style="cyan",
+    ))
+
+    gen = ResumeGenerator()
+    job_data = {
+        "description": job.get("notes", "") or job.get("title", ""),
+        "company": job.get("company", "Unknown"),
+        "title": job.get("title", "Unknown"),
+    }
+
+    with console.status("[cyan]Tailoring resume with Claude...[/cyan]"):
+        path = gen.generate_for_application(job_data)
+
+    if not path:
+        console.print("[red]Failed to generate resume. Check logs.[/red]")
+        return
+
+    console.print(f"[green]Resume saved:[/green] {path}")
+
+    # Show preview
+    try:
+        from docx import Document as DocxDocument
+        doc = DocxDocument(path)
+        preview_text = "\n".join(p.text for p in doc.paragraphs[:20] if p.text.strip())
+        console.print(Panel(preview_text, title="Resume Preview", border_style="green"))
+    except Exception:
+        pass
+
+    _docs_post_action(path, gen, job_data)
+
+
+@docs.command("cover-letter")
+@click.argument("job_id", type=int)
+def docs_cover_letter(job_id):
+    """Generate a tailored cover letter for a tracked job."""
+    from src.documents.cover_letter_generator import CoverLetterGenerator
+    from src.jobs.tracker import ApplicationTracker
+    from src.profile.manager import ProfileManager
+
+    tracker = ApplicationTracker()
+    job = tracker.get_job(job_id)
+    tracker.close()
+
+    if not job:
+        console.print(f"[red]Job id={job_id} not found in tracker.[/red]")
+        return
+
+    console.print(Panel(
+        f"[bold]{job.get('title', '?')}[/bold] at {job.get('company', '?')}\n"
+        f"Location: {job.get('location', '?')}",
+        title="Generating Cover Letter", border_style="cyan",
+    ))
+
+    mgr = ProfileManager()
+    profile = mgr.get_profile()
+    mgr.close()
+
+    gen = CoverLetterGenerator(profile=profile)
+    job_data = {
+        "description": job.get("notes", "") or job.get("title", ""),
+        "company": job.get("company", "Unknown"),
+        "title": job.get("title", "Unknown"),
+    }
+
+    with console.status("[cyan]Generating cover letter with Claude...[/cyan]"):
+        path = gen.generate_for_application(job_data)
+
+    if not path:
+        console.print("[red]Failed to generate cover letter. Check logs.[/red]")
+        return
+
+    console.print(f"[green]Cover letter saved:[/green] {path}")
+
+    try:
+        from docx import Document as DocxDocument
+        doc = DocxDocument(path)
+        preview_text = "\n".join(p.text for p in doc.paragraphs if p.text.strip())
+        console.print(Panel(preview_text, title="Cover Letter Preview", border_style="green"))
+    except Exception:
+        pass
+
+    _docs_post_action(path, gen, job_data)
+
+
+@docs.command("both")
+@click.argument("job_id", type=int)
+def docs_both(job_id):
+    """Generate both tailored resume and cover letter for a tracked job."""
+    from src.jobs.applicant import JobApplicant
+    from src.jobs.tracker import ApplicationTracker
+
+    tracker = ApplicationTracker()
+    job = tracker.get_job(job_id)
+    tracker.close()
+
+    if not job:
+        console.print(f"[red]Job id={job_id} not found in tracker.[/red]")
+        return
+
+    console.print(Panel(
+        f"[bold]{job.get('title', '?')}[/bold] at {job.get('company', '?')}\n"
+        f"Location: {job.get('location', '?')}",
+        title="Generating Application Documents", border_style="cyan",
+    ))
+
+    job_data = {
+        "description": job.get("notes", "") or job.get("title", ""),
+        "company": job.get("company", "Unknown"),
+        "title": job.get("title", "Unknown"),
+    }
+
+    applicant = JobApplicant()
+    with console.status("[cyan]Generating documents with Claude...[/cyan]"):
+        result = applicant.generate_application_docs(job_data)
+    applicant.close()
+
+    if result.get("resume_path"):
+        console.print(f"[green]Resume saved:[/green] {result['resume_path']}")
+        try:
+            from docx import Document as DocxDocument
+            doc = DocxDocument(result["resume_path"])
+            preview = "\n".join(p.text for p in doc.paragraphs[:15] if p.text.strip())
+            console.print(Panel(preview, title="Resume Preview", border_style="green"))
+        except Exception:
+            pass
+    else:
+        console.print("[red]Resume generation failed.[/red]")
+
+    if result.get("cover_letter_path"):
+        console.print(f"[green]Cover letter saved:[/green] {result['cover_letter_path']}")
+        try:
+            from docx import Document as DocxDocument
+            doc = DocxDocument(result["cover_letter_path"])
+            preview = "\n".join(p.text for p in doc.paragraphs if p.text.strip())
+            console.print(Panel(preview, title="Cover Letter Preview", border_style="green"))
+        except Exception:
+            pass
+    else:
+        console.print("[red]Cover letter generation failed.[/red]")
+
+
+@docs.command("list")
+def docs_list():
+    """Show all generated documents with associated job info."""
+    from pathlib import Path as P
+
+    from config import settings as s
+
+    resume_dir = s.DATA_DIR / "resumes"
+    cl_dir = s.DATA_DIR / "cover_letters"
+
+    table = Table(title="Generated Documents")
+    table.add_column("Type", style="cyan", width=12)
+    table.add_column("Filename", style="bold")
+    table.add_column("Size", justify="right")
+    table.add_column("Created")
+
+    found = False
+    for doc_dir, doc_type in [(resume_dir, "Resume"), (cl_dir, "Cover Letter")]:
+        if doc_dir.exists():
+            for f in sorted(doc_dir.glob("*.docx"), key=lambda p: p.stat().st_mtime, reverse=True):
+                found = True
+                size = f.stat().st_size
+                size_str = f"{size / 1024:.1f} KB" if size >= 1024 else f"{size} B"
+                from datetime import datetime as dt
+                created = dt.fromtimestamp(f.stat().st_mtime).strftime("%Y-%m-%d %H:%M")
+                table.add_row(doc_type, f.name, size_str, created)
+
+    if not found:
+        console.print("[yellow]No generated documents found.[/yellow]")
+        console.print("Generate with: [bold]python cli.py docs resume <job_id>[/bold]")
+        return
+
+    console.print(table)
+
+
+def _docs_post_action(path, generator, job_data):
+    """Post-generation actions: open, regenerate, or accept."""
+    while True:
+        choice = console.input("\n[o]pen file, [r]egenerate, [a]ccept: ").strip().lower()
+        if choice == "o":
+            import webbrowser as wb
+            wb.open(path)
+        elif choice == "r":
+            console.print("[cyan]Regenerating...[/cyan]")
+            with console.status("[cyan]Regenerating with Claude...[/cyan]"):
+                new_path = generator.generate_for_application(job_data)
+            if new_path:
+                path = new_path
+                console.print(f"[green]New document saved:[/green] {path}")
+                try:
+                    from docx import Document as DocxDocument
+                    doc = DocxDocument(path)
+                    preview = "\n".join(p.text for p in doc.paragraphs[:15] if p.text.strip())
+                    console.print(Panel(preview, title="Preview", border_style="green"))
+                except Exception:
+                    pass
+            else:
+                console.print("[red]Regeneration failed.[/red]")
+        elif choice == "a" or not choice:
+            console.print("[green]Accepted.[/green]")
+            break
+        else:
+            console.print("[dim]Invalid choice.[/dim]")
 
 
 # ─── Gmail Filter Commands ─────────────────────────────────────────

@@ -202,3 +202,30 @@ class JobApplicant:
             if j.get("status") == "applied"
             and j.get("date_applied", "").startswith(today)
         ]
+
+    # --- Document generation ---
+
+    def generate_application_docs(self, job_data: Dict) -> Dict:
+        """Generate tailored resume and cover letter for a job.
+
+        Args:
+            job_data: Dict with 'description' (or 'snippet'), 'company', 'title'.
+
+        Returns:
+            Dict with 'resume_path' and 'cover_letter_path' (each may be None on failure).
+        """
+        from src.documents.resume_generator import ResumeGenerator
+        from src.documents.cover_letter_generator import CoverLetterGenerator
+
+        result = {"resume_path": None, "cover_letter_path": None}
+
+        resume_gen = ResumeGenerator()
+        resume_path = resume_gen.generate_for_application(job_data)
+        result["resume_path"] = resume_path
+
+        profile = self._profile_mgr.get_profile()
+        cl_gen = CoverLetterGenerator(profile=profile)
+        cl_path = cl_gen.generate_for_application(job_data)
+        result["cover_letter_path"] = cl_path
+
+        return result
