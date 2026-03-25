@@ -3,12 +3,13 @@
 import { useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { LayoutDashboard, Search, Briefcase, BarChart3, ChevronRight } from "lucide-react"
+import { LayoutDashboard, Search, Briefcase, BarChart3, MessageSquare, ChevronRight } from "lucide-react"
 
 const NAV_ITEMS = [
   { id: "overview", href: "/", label: "Overview", icon: LayoutDashboard },
   { id: "search", href: "/search", label: "Job Search", icon: Search },
   { id: "applications", href: "/applications", label: "Applications", icon: Briefcase },
+  { id: "conversations", href: "/conversations", label: "Conversations", icon: MessageSquare },
   { id: "analytics", href: "/analytics", label: "Analytics", icon: BarChart3 },
 ]
 

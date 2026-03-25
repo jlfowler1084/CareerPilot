@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { StatusBadge } from "@/components/shared/status-badge"
+import { ConversationSection } from "@/components/conversations/conversation-section"
 import { STATUSES } from "@/lib/constants"
 import { ExternalLink, Trash2, Save } from "lucide-react"
 import type { Application, ApplicationStatus } from "@/types"
@@ -147,6 +148,9 @@ export function ApplicationRow({
           </button>
         )}
       </div>
+
+      {/* Conversations */}
+      <ConversationSection application={application} />
     </div>
   )
 }

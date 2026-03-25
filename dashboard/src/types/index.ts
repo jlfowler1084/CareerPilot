@@ -67,3 +67,66 @@ export interface SearchRun {
   newResults: number
   aborted: boolean
 }
+
+// Conversation types
+export type ConversationType =
+  | "phone"
+  | "video"
+  | "email"
+  | "in_person"
+  | "chat"
+  | "note"
+
+export interface ConversationPerson {
+  name: string
+  role?: string
+  email?: string
+  phone?: string
+}
+
+export interface QuestionAsked {
+  question: string
+  your_answer: string
+  quality_rating?: number
+}
+
+export interface QuestionYouAsked {
+  question: string
+  their_response: string
+}
+
+export interface ActionItem {
+  task: string
+  due_date?: string
+  completed: boolean
+}
+
+export interface Conversation {
+  id: string
+  application_id: string
+  user_id: string
+  conversation_type: ConversationType
+  title: string | null
+  people: ConversationPerson[]
+  date: string
+  duration_minutes: number | null
+  notes: string | null
+  questions_asked: QuestionAsked[]
+  questions_you_asked: QuestionYouAsked[]
+  action_items: ActionItem[]
+  topics: string[]
+  sentiment: number | null
+  transcript_url: string | null
+  ai_analysis: Record<string, unknown> | null
+  created_at: string
+  updated_at: string
+  // Joined fields (from queries)
+  application?: Pick<Application, "id" | "title" | "company">
+}
+
+export interface ConversationPattern {
+  recurring_questions: Array<{ question: string; companies: string[]; count: number }>
+  strongest_topics: Array<{ topic: string; avg_sentiment: number; count: number }>
+  weak_areas: Array<{ area: string; suggestion: string }>
+  this_week: string
+}

@@ -30,6 +30,15 @@ export const SEARCH_PROFILES = [
   { id: "ad_identity", label: "AD / Identity — Remote", keyword: "Active Directory engineer identity", location: "remote", source: "dice" as const },
 ] as const
 
+export const CONVERSATION_TYPES = [
+  { id: "phone" as const, label: "Phone Call", icon: "\u{1F4DE}" },
+  { id: "video" as const, label: "Video Call", icon: "\u{1F4F9}" },
+  { id: "email" as const, label: "Email", icon: "\u{1F4E7}" },
+  { id: "in_person" as const, label: "In Person", icon: "\u{1F3E2}" },
+  { id: "chat" as const, label: "Chat", icon: "\u{1F4AC}" },
+  { id: "note" as const, label: "Note", icon: "\u{1F4DD}" },
+] as const
+
 export const IRRELEVANT_KEYWORDS = [
   "pest control",
   "hvac",
