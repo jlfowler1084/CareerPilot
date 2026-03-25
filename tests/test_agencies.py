@@ -4,6 +4,8 @@ import os
 import sys
 import tempfile
 
+import pytest
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from src.agencies.agency_config import (
@@ -14,8 +16,17 @@ from src.agencies.agency_config import (
     get_agency_by_email_domain,
     AGENCY_SEARCH_KEYWORDS,
 )
-from src.agencies.recruiter_tracker import RecruiterTracker
+from src.db import models
 from src.agencies.outreach_templates import OUTREACH_TEMPLATES, render_template
+
+
+@pytest.fixture
+def conn(tmp_path):
+    """Create a test database connection with schema."""
+    db_path = tmp_path / "test.db"
+    c = models.get_connection(db_path)
+    yield c
+    c.close()
 
 
 # ── Agency Config Tests ──────────────────────────────────────────────
@@ -74,129 +85,88 @@ def test_all_agencies_have_indy_presence():
         assert agency.get("indy_presence") is True, f"{key} missing indy_presence"
 
 
-# ── Recruiter Tracker Tests ──────────────────────────────────────────
+# ── Contacts Integration Tests (via unified contacts system) ─────────
 
-def _get_temp_tracker():
-    fd, path = tempfile.mkstemp(suffix=".db")
-    os.close(fd)
-    return RecruiterTracker(db_path=path), path
+def test_add_and_get_contact(conn):
+    cid = models.add_contact(
+        conn, "David Perez", "recruiter",
+        company="TEKsystems",
+        email="dperez@teksystems.com",
+        phone="317-810-7562",
+        title="Sr. IT Recruiter (Risk & Security)",
+    )
+    assert cid > 0
+    r = models.get_contact(conn, cid)
+    assert r["name"] == "David Perez"
+    assert r["company"] == "TEKsystems"
+    assert r["email"] == "dperez@teksystems.com"
 
-def test_add_and_get_recruiter():
-    tracker, path = _get_temp_tracker()
-    try:
-        rid = tracker.add_recruiter(
-            name="David Perez",
-            agency="TEKsystems",
-            email="dperez@teksystems.com",
-            phone="317-810-7562",
-            title="Sr. IT Recruiter (Risk & Security)",
-        )
-        assert rid > 0
-        r = tracker.get_recruiter(rid)
-        assert r["name"] == "David Perez"
-        assert r["agency"] == "TEKsystems"
-        assert r["email"] == "dperez@teksystems.com"
-    finally:
-        tracker.close()
-        os.unlink(path)
+def test_find_contact_by_email(conn):
+    models.add_contact(conn, "Test Person", "recruiter", company="TestCo", email="test@example.com")
+    r = models.find_contact_by_email(conn, "test@example.com")
+    assert r is not None
+    assert r["name"] == "Test Person"
 
-def test_find_recruiter_by_email():
-    tracker, path = _get_temp_tracker()
-    try:
-        tracker.add_recruiter("Test Person", "TestCo", email="test@example.com")
-        r = tracker.find_recruiter_by_email("test@example.com")
-        assert r is not None
-        assert r["name"] == "Test Person"
-    finally:
-        tracker.close()
-        os.unlink(path)
+def test_list_contacts_by_type(conn):
+    models.add_contact(conn, "Alice", "recruiter", company="AgencyA")
+    models.add_contact(conn, "Bob", "hiring_manager", company="AgencyB")
+    models.add_contact(conn, "Carol", "recruiter", company="AgencyA")
 
-def test_list_recruiters_by_agency():
-    tracker, path = _get_temp_tracker()
-    try:
-        tracker.add_recruiter("Alice", "AgencyA")
-        tracker.add_recruiter("Bob", "AgencyB")
-        tracker.add_recruiter("Carol", "AgencyA")
+    recruiters = models.list_contacts(conn, contact_type="recruiter")
+    assert len(recruiters) == 2
+    all_contacts = models.list_contacts(conn)
+    assert len(all_contacts) == 3
 
-        a_recruiters = tracker.list_recruiters(agency="AgencyA")
-        assert len(a_recruiters) == 2
-        all_recruiters = tracker.list_recruiters()
-        assert len(all_recruiters) == 3
-    finally:
-        tracker.close()
-        os.unlink(path)
+def test_log_interaction(conn):
+    cid = models.add_contact(conn, "Test", "recruiter", company="TestCo")
+    iid = models.add_contact_interaction(
+        conn, cid, "email", "inbound",
+        subject="MISO Systems Admin",
+        summary="Presented to MISO Energy for sys admin role",
+        roles_discussed="MISO - Systems Admin",
+    )
+    assert iid > 0
+    interactions = models.get_contact_interactions(conn, cid)
+    assert len(interactions) == 1
+    assert interactions[0]["subject"] == "MISO Systems Admin"
 
-def test_log_interaction():
-    tracker, path = _get_temp_tracker()
-    try:
-        rid = tracker.add_recruiter("Test", "TestCo")
-        iid = tracker.log_interaction(
-            rid, "email", "inbound",
-            subject="MISO Systems Admin",
-            summary="Presented to MISO Energy for sys admin role",
-            roles_discussed="MISO - Systems Admin",
-        )
-        assert iid > 0
-        interactions = tracker.get_interactions(rid)
-        assert len(interactions) == 1
-        assert interactions[0]["subject"] == "MISO Systems Admin"
-    finally:
-        tracker.close()
-        os.unlink(path)
+def test_submitted_roles(conn):
+    cid = models.add_contact(conn, "Test Recruiter", "recruiter", company="TestCo")
+    role_id = models.add_submitted_role(
+        conn, cid, "MISO Energy", "Systems Administrator",
+        pay_rate="$45/hr", location="Indianapolis, IN",
+        role_type="contract",
+    )
+    assert role_id > 0
 
-def test_submitted_roles():
-    tracker, path = _get_temp_tracker()
-    try:
-        rid = tracker.add_recruiter("Test Recruiter", "TestCo")
-        role_id = tracker.add_submitted_role(
-            rid, "MISO Energy", "Systems Administrator",
-            pay_rate="$45/hr", location="Indianapolis, IN",
-            role_type="contract",
-        )
-        assert role_id > 0
+    roles = models.get_submitted_roles(conn, contact_id=cid)
+    assert len(roles) == 1
+    assert roles[0]["company"] == "MISO Energy"
+    assert roles[0]["status"] == "submitted"
 
-        roles = tracker.get_submitted_roles(recruiter_id=rid)
-        assert len(roles) == 1
-        assert roles[0]["company"] == "MISO Energy"
-        assert roles[0]["status"] == "submitted"
+    models.update_role_status(conn, role_id, "interviewing", "Phone screen scheduled")
+    roles = models.get_submitted_roles(conn, status="interviewing")
+    assert len(roles) == 1
+    assert roles[0]["status"] == "interviewing"
 
-        tracker.update_role_status(role_id, "interviewing", "Phone screen scheduled")
-        roles = tracker.get_submitted_roles(status="interviewing")
-        assert len(roles) == 1
-        assert roles[0]["status"] == "interviewing"
-    finally:
-        tracker.close()
-        os.unlink(path)
+def test_summary(conn):
+    cid = models.add_contact(conn, "Test", "recruiter", company="AgencyA")
+    models.add_submitted_role(conn, cid, "CompA", "Role1")
+    models.add_submitted_role(conn, cid, "CompB", "Role2")
+    models.add_contact_interaction(conn, cid, "call", "outbound")
 
-def test_summary():
-    tracker, path = _get_temp_tracker()
-    try:
-        rid = tracker.add_recruiter("Test", "AgencyA")
-        tracker.add_submitted_role(rid, "CompA", "Role1")
-        tracker.add_submitted_role(rid, "CompB", "Role2")
-        tracker.log_interaction(rid, "call", "outbound")
+    summary = models.get_contacts_summary(conn)
+    assert summary["active_contacts"] >= 1
+    assert summary["total_roles_submitted"] == 2
+    assert summary["active_roles"] == 2
+    assert summary["total_interactions"] == 1
 
-        summary = tracker.get_summary()
-        assert summary["active_recruiters"] == 1
-        assert summary["total_roles_submitted"] == 2
-        assert summary["active_roles"] == 2
-        assert summary["total_interactions"] == 1
-        assert summary["agencies"] == 1
-    finally:
-        tracker.close()
-        os.unlink(path)
-
-def test_update_recruiter():
-    tracker, path = _get_temp_tracker()
-    try:
-        rid = tracker.add_recruiter("Test", "Old Agency")
-        tracker.update_recruiter(rid, agency="New Agency", notes="Updated")
-        r = tracker.get_recruiter(rid)
-        assert r["agency"] == "New Agency"
-        assert r["notes"] == "Updated"
-    finally:
-        tracker.close()
-        os.unlink(path)
+def test_update_contact(conn):
+    cid = models.add_contact(conn, "Test", "recruiter", company="Old Agency")
+    models.update_contact(conn, cid, company="New Agency", notes="Updated")
+    r = models.get_contact(conn, cid)
+    assert r["company"] == "New Agency"
+    assert r["notes"] == "Updated"
 
 
 # ── Outreach Template Tests ──────────────────────────────────────────

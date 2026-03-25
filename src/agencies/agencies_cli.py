@@ -10,8 +10,8 @@ Usage:
     python cli.py agencies recruiter list              List all recruiter contacts
     python cli.py agencies recruiter show <id>         Show recruiter details + history
 
-    python cli.py agencies interaction log <id>        Log an interaction with a recruiter
-    python cli.py agencies role add <recruiter_id>     Add a submitted role
+    python cli.py agencies interaction log <id>        Log an interaction with a contact
+    python cli.py agencies role add <contact_id>       Add a submitted role
     python cli.py agencies role list                   List all submitted roles
     python cli.py agencies role update <id> <status>   Update role status
 
@@ -31,26 +31,26 @@ from src.agencies.agency_config import (
     build_agency_search_url,
     get_all_email_domains,
 )
-from src.agencies.recruiter_tracker import RecruiterTracker
 from src.agencies.outreach_templates import OUTREACH_TEMPLATES, render_template
+from src.db import models
 
 
 def cmd_list_agencies():
     """List all configured staffing agencies."""
-    print("\n📋 Configured IT Staffing Agencies\n")
+    print("\n Configured IT Staffing Agencies\n")
     for key, agency in AGENCIES.items():
-        indy = "📍 Indy" if agency.get("indy_presence") else ""
-        models = ", ".join(agency.get("hiring_models", []))
+        indy = " Indy" if agency.get("indy_presence") else ""
+        hiring_models = ", ".join(agency.get("hiring_models", []))
         print(f"  [{key}] {agency['name']} {indy}")
-        print(f"    Models: {models}")
+        print(f"    Models: {hiring_models}")
         print(f"    Board:  {agency['job_board']}")
         if agency.get("notes"):
             print(f"    Notes:  {agency['notes'][:80]}")
         print()
 
-    print(f"  📧 Email domains for Gmail filters:")
+    print(f"  Email domains for Gmail filters:")
     for domain in get_all_email_domains():
-        print(f"    • {domain}")
+        print(f"    - {domain}")
     print()
 
 
@@ -58,34 +58,32 @@ def cmd_search(keyword: str | None = None, open_all: bool = False):
     """Open agency job board search URLs in the browser."""
     keywords_to_search = AGENCY_SEARCH_KEYWORDS if open_all else [keyword or "systems engineer"]
 
-    print(f"\n🔍 Opening agency job boards...\n")
+    print(f"\n Opening agency job boards...\n")
     count = 0
     for agency_key, agency in AGENCIES.items():
         for kw in keywords_to_search:
             url = build_agency_search_url(agency_key, kw)
             if url:
                 if not open_all:
-                    print(f"  🌐 {agency['name']}: \"{kw}\"")
+                    print(f"  {agency['name']}: \"{kw}\"")
                     webbrowser.open(url)
                     count += 1
                 else:
                     count += 1
 
     if open_all:
-        # Only open first keyword per agency to avoid tab overload
         for agency_key, agency in AGENCIES.items():
             url = build_agency_search_url(agency_key, keywords_to_search[0])
             if url:
-                print(f"  🌐 {agency['name']}: \"{keywords_to_search[0]}\"")
+                print(f"  {agency['name']}: \"{keywords_to_search[0]}\"")
                 webbrowser.open(url)
 
     print(f"\n  Opened {min(count, len(AGENCIES))} agency search tabs.\n")
 
 
 def cmd_recruiter_add():
-    """Interactive recruiter contact entry."""
-    tracker = RecruiterTracker()
-    print("\n👤 Add Recruiter Contact\n")
+    """Interactive recruiter contact entry via unified contacts system."""
+    print("\n Add Recruiter Contact\n")
 
     name = input("  Name: ").strip()
     agency = input("  Agency: ").strip()
@@ -95,92 +93,95 @@ def cmd_recruiter_add():
     specialties = input("  Specialties (optional): ").strip() or None
     notes = input("  Notes (optional): ").strip() or None
 
-    rid = tracker.add_recruiter(name, agency, email, phone, title, specialties, notes)
-    print(f"\n  ✅ Added recruiter #{rid}: {name} at {agency}\n")
-    tracker.close()
+    conn = models.get_connection()
+    rid = models.add_contact(
+        conn, name, "recruiter",
+        company=agency, email=email, phone=phone, title=title,
+        specialization=specialties, notes=notes, source="staffing_agency",
+    )
+    conn.close()
+    print(f"\n  Added recruiter #{rid}: {name} at {agency}\n")
 
 
 def cmd_recruiter_list():
     """List all recruiter contacts."""
-    tracker = RecruiterTracker()
-    recruiters = tracker.list_recruiters()
+    conn = models.get_connection()
+    recruiters = models.list_contacts(conn, contact_type="recruiter")
 
     if not recruiters:
-        print("\n  No recruiters tracked yet. Use 'agencies recruiter add' to add one.\n")
-        tracker.close()
+        print("\n  No recruiters tracked yet. Use 'contacts add' to add one.\n")
+        conn.close()
         return
 
-    print(f"\n👥 Recruiter Contacts ({len(recruiters)})\n")
+    print(f"\n Recruiter Contacts ({len(recruiters)})\n")
     for r in recruiters:
-        roles = tracker.get_submitted_roles(recruiter_id=r["id"])
+        roles = models.get_submitted_roles(conn, contact_id=r["id"])
         active = [x for x in roles if x["status"] in ("submitted", "interviewing")]
-        print(f"  #{r['id']} {r['name']} — {r['agency']}")
+        print(f"  #{r['id']} {r['name']} -- {r.get('company', 'N/A')}")
         if r.get("email"):
-            print(f"     📧 {r['email']}")
+            print(f"     {r['email']}")
         if r.get("phone"):
-            print(f"     📞 {r['phone']}")
+            print(f"     {r['phone']}")
         if r.get("title"):
-            print(f"     🏷️  {r['title']}")
+            print(f"     {r['title']}")
         print(f"     Roles: {len(roles)} total, {len(active)} active")
-        print(f"     Last updated: {r.get('updated_at', 'N/A')}")
+        if r.get("last_contact"):
+            print(f"     Last contact: {r['last_contact'][:10]}")
         print()
 
-    tracker.close()
+    conn.close()
 
 
-def cmd_recruiter_show(recruiter_id: int):
-    """Show full recruiter details with interaction history."""
-    tracker = RecruiterTracker()
-    r = tracker.get_recruiter(recruiter_id)
+def cmd_recruiter_show(contact_id: int):
+    """Show full contact details with interaction history."""
+    conn = models.get_connection()
+    r = models.get_contact(conn, contact_id)
     if not r:
-        print(f"\n  ❌ Recruiter #{recruiter_id} not found.\n")
-        tracker.close()
+        print(f"\n  Contact #{contact_id} not found.\n")
+        conn.close()
         return
 
-    print(f"\n👤 {r['name']} — {r['agency']}")
+    print(f"\n {r['name']} -- {r.get('company', 'N/A')}")
     if r.get("email"):
-        print(f"   📧 {r['email']}")
+        print(f"   {r['email']}")
     if r.get("phone"):
-        print(f"   📞 {r['phone']}")
+        print(f"   {r['phone']}")
     if r.get("title"):
-        print(f"   🏷️  {r['title']}")
+        print(f"   {r['title']}")
     if r.get("notes"):
-        print(f"   📝 {r['notes']}")
+        print(f"   {r['notes']}")
 
-    # Interactions
-    interactions = tracker.get_interactions(recruiter_id)
+    interactions = models.get_contact_interactions(conn, contact_id)
     if interactions:
-        print(f"\n   📅 Recent Interactions ({len(interactions)}):")
+        print(f"\n   Recent Interactions ({len(interactions)}):")
         for i in interactions[:10]:
-            direction = "→" if i["direction"] == "outbound" else "←"
+            direction = "->" if i["direction"] == "outbound" else "<-"
             print(f"     {i['created_at'][:10]} {direction} {i['interaction_type']}: {i.get('subject', 'N/A')}")
             if i.get("summary"):
                 print(f"       {i['summary'][:80]}")
 
-    # Roles
-    roles = tracker.get_submitted_roles(recruiter_id=recruiter_id)
+    roles = models.get_submitted_roles(conn, contact_id=contact_id)
     if roles:
-        print(f"\n   📋 Submitted Roles ({len(roles)}):")
+        print(f"\n   Submitted Roles ({len(roles)}):")
         for role in roles:
-            status_emoji = {"submitted": "📤", "interviewing": "🎤", "offered": "🎉", "rejected": "❌", "withdrawn": "🚫"}.get(role["status"], "❓")
-            print(f"     {status_emoji} {role['role_title']} at {role['company']} [{role['status']}]")
+            print(f"     {role['role_title']} at {role['company']} [{role['status']}]")
             if role.get("pay_rate"):
                 print(f"        Pay: {role['pay_rate']}")
 
     print()
-    tracker.close()
+    conn.close()
 
 
-def cmd_interaction_log(recruiter_id: int):
+def cmd_interaction_log(contact_id: int):
     """Interactive interaction logging."""
-    tracker = RecruiterTracker()
-    r = tracker.get_recruiter(recruiter_id)
+    conn = models.get_connection()
+    r = models.get_contact(conn, contact_id)
     if not r:
-        print(f"\n  ❌ Recruiter #{recruiter_id} not found.\n")
-        tracker.close()
+        print(f"\n  Contact #{contact_id} not found.\n")
+        conn.close()
         return
 
-    print(f"\n📝 Log Interaction with {r['name']} ({r['agency']})\n")
+    print(f"\n Log Interaction with {r['name']} ({r.get('company', 'N/A')})\n")
     itype = input("  Type (email/call/meeting/text): ").strip() or "email"
     direction = input("  Direction (inbound/outbound): ").strip() or "inbound"
     subject = input("  Subject: ").strip() or None
@@ -188,21 +189,27 @@ def cmd_interaction_log(recruiter_id: int):
     roles = input("  Roles discussed (optional): ").strip() or None
     follow_up = input("  Follow-up date (YYYY-MM-DD, optional): ").strip() or None
 
-    iid = tracker.log_interaction(recruiter_id, itype, direction, subject, summary, roles, follow_up)
-    print(f"\n  ✅ Logged interaction #{iid}\n")
-    tracker.close()
+    iid = models.add_contact_interaction(
+        conn, contact_id, itype, direction,
+        subject=subject, summary=summary, roles_discussed=roles,
+        follow_up_date=follow_up,
+    )
+    if follow_up:
+        models.update_contact(conn, contact_id, next_followup=follow_up)
+    conn.close()
+    print(f"\n  Logged interaction #{iid}\n")
 
 
-def cmd_role_add(recruiter_id: int):
+def cmd_role_add(contact_id: int):
     """Add a submitted role."""
-    tracker = RecruiterTracker()
-    r = tracker.get_recruiter(recruiter_id)
+    conn = models.get_connection()
+    r = models.get_contact(conn, contact_id)
     if not r:
-        print(f"\n  ❌ Recruiter #{recruiter_id} not found.\n")
-        tracker.close()
+        print(f"\n  Contact #{contact_id} not found.\n")
+        conn.close()
         return
 
-    print(f"\n📋 Add Submitted Role via {r['name']} ({r['agency']})\n")
+    print(f"\n Add Submitted Role via {r['name']} ({r.get('company', 'N/A')})\n")
     company = input("  Company: ").strip()
     title = input("  Role Title: ").strip()
     pay = input("  Pay Rate (optional): ").strip() or None
@@ -210,47 +217,47 @@ def cmd_role_add(recruiter_id: int):
     rtype = input("  Type (contract/cth/direct): ").strip() or "contract"
     notes = input("  Notes (optional): ").strip() or None
 
-    rid = tracker.add_submitted_role(recruiter_id, company, title, pay_rate=pay, location=location, role_type=rtype, notes=notes)
-    print(f"\n  ✅ Added role #{rid}: {title} at {company}\n")
-    tracker.close()
+    rid = models.add_submitted_role(
+        conn, contact_id, company, title,
+        pay_rate=pay, location=location, role_type=rtype, notes=notes,
+    )
+    conn.close()
+    print(f"\n  Added role #{rid}: {title} at {company}\n")
 
 
 def cmd_role_list():
     """List all submitted roles."""
-    tracker = RecruiterTracker()
-    roles = tracker.get_submitted_roles()
+    conn = models.get_connection()
+    roles = models.get_submitted_roles(conn)
+    conn.close()
 
     if not roles:
         print("\n  No submitted roles tracked yet.\n")
-        tracker.close()
         return
 
-    print(f"\n📋 Submitted Roles ({len(roles)})\n")
+    print(f"\n Submitted Roles ({len(roles)})\n")
     for role in roles:
-        status_emoji = {"submitted": "📤", "interviewing": "🎤", "offered": "🎉", "rejected": "❌", "withdrawn": "🚫"}.get(role["status"], "❓")
-        print(f"  #{role['id']} {status_emoji} {role['role_title']} at {role['company']}")
-        print(f"     Via: {role['recruiter_name']} ({role['agency']})")
+        print(f"  #{role['id']} {role['role_title']} at {role['company']}")
+        print(f"     Via: {role['contact_name']} ({role.get('company', 'N/A')})")
         print(f"     Status: {role['status']} | Type: {role.get('role_type', 'N/A')}")
         if role.get("pay_rate"):
             print(f"     Pay: {role['pay_rate']}")
         print()
 
-    tracker.close()
-
 
 def cmd_role_update(role_id: int, status: str):
     """Update a role's status."""
-    tracker = RecruiterTracker()
     notes = input("  Notes (optional): ").strip() or None
-    tracker.update_role_status(role_id, status, notes)
-    print(f"\n  ✅ Role #{role_id} updated to '{status}'\n")
-    tracker.close()
+    conn = models.get_connection()
+    models.update_role_status(conn, role_id, status, notes)
+    conn.close()
+    print(f"\n  Role #{role_id} updated to '{status}'\n")
 
 
 def cmd_outreach(template_key: str | None = None, agency_key: str | None = None):
     """Generate an outreach email from a template."""
     if template_key == "--list" or not template_key:
-        print("\n📧 Available Outreach Templates\n")
+        print("\n Available Outreach Templates\n")
         for key, tmpl in OUTREACH_TEMPLATES.items():
             print(f"  [{key}] {tmpl['name']}")
         print(f"\n  Usage: python cli.py agencies outreach <template> <agency>\n")
@@ -267,17 +274,17 @@ def cmd_outreach(template_key: str | None = None, agency_key: str | None = None)
         start_date="immediately",
     )
 
-    print(f"\n{'═' * 60}")
+    print(f"\n{'=' * 60}")
     print(f"  {rendered['template_name']}")
-    print(f"{'═' * 60}")
+    print(f"{'=' * 60}")
     print(f"\n  Subject: {rendered['subject']}\n")
     print(rendered["body"])
-    print(f"\n{'═' * 60}")
+    print(f"\n{'=' * 60}")
 
     try:
         import pyperclip
         pyperclip.copy(f"Subject: {rendered['subject']}\n\n{rendered['body']}")
-        print("📋 Copied to clipboard!")
+        print("Copied to clipboard!")
     except ImportError:
         pass
     print()
@@ -285,21 +292,22 @@ def cmd_outreach(template_key: str | None = None, agency_key: str | None = None)
 
 def cmd_summary():
     """Show dashboard summary."""
-    tracker = RecruiterTracker()
-    stats = tracker.get_summary()
+    conn = models.get_connection()
+    stats = models.get_contacts_summary(conn)
+    conn.close()
 
-    print("\n╔══════════════════════════════════════════╗")
-    print("║   Recruiter Relationship Dashboard       ║")
-    print("╚══════════════════════════════════════════╝\n")
-    print(f"  Active Recruiters:    {stats['active_recruiters']}")
-    print(f"  Agencies:             {stats['agencies']}")
+    print("\n+==========================================+")
+    print("|   Contact Relationship Dashboard         |")
+    print("+==========================================+\n")
+    print(f"  Active Contacts:      {stats['active_contacts']}")
+    print(f"  Companies:            {stats['companies']}")
     print(f"  Roles Submitted:      {stats['total_roles_submitted']} ({stats['active_roles']} active)")
     print(f"  Total Interactions:   {stats['total_interactions']}")
     print()
-    tracker.close()
 
 
-# ── CLI Router ───────────────────────────────────────────────────────
+# -- CLI Router (legacy, kept for backward compat) ---
+
 
 def agencies_cli(args: list[str]):
     """Route agencies subcommands."""
@@ -335,7 +343,7 @@ def agencies_cli(args: list[str]):
         cmd_interaction_log(int(args[2]))
     elif cmd == "role":
         if len(args) < 2:
-            print("  Usage: agencies role [add <recruiter_id>|list|update <id> <status>]")
+            print("  Usage: agencies role [add <contact_id>|list|update <id> <status>]")
             return
         subcmd = args[1]
         if subcmd == "add" and len(args) >= 3:
