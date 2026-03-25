@@ -41,7 +41,7 @@ All schema changes below go in a single migration: `004_gmail_inbox.sql` (or the
 CREATE TABLE emails (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id UUID REFERENCES auth.users(id),
-  gmail_id TEXT NOT NULL UNIQUE,
+  gmail_id TEXT NOT NULL,
   thread_id TEXT,
   from_email TEXT NOT NULL,
   from_name TEXT,
@@ -63,7 +63,7 @@ CREATE INDEX idx_emails_user_id ON emails(user_id);
 CREATE INDEX idx_emails_from_email ON emails(from_email);
 CREATE INDEX idx_emails_from_domain ON emails(from_domain);
 CREATE INDEX idx_emails_category ON emails(category);
-CREATE INDEX idx_emails_gmail_id ON emails(gmail_id);
+CREATE UNIQUE INDEX idx_emails_user_gmail ON emails(user_id, gmail_id);
 CREATE INDEX idx_emails_thread_id ON emails(thread_id);
 CREATE INDEX idx_emails_received_at ON emails(received_at DESC);
 
@@ -83,6 +83,8 @@ CREATE TABLE email_application_links (
   linked_at TIMESTAMPTZ DEFAULT now(),
   PRIMARY KEY (email_id, application_id)
 );
+
+CREATE INDEX idx_eal_application_id ON email_application_links(application_id);
 
 ALTER TABLE email_application_links ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Users own email links" ON email_application_links
@@ -154,6 +156,8 @@ Eight email states: seven classification categories plus one temporary processin
 
 ### TypeScript Types
 
+Append to `dashboard/src/types/index.ts` (alongside existing `Application`, `ActivityEntry`, etc.):
+
 ```typescript
 interface Email {
   id: string
@@ -198,7 +202,7 @@ interface EmailApplicationLink {
   email_id: string
   application_id: string
   user_id: string
-  linked_by: "manual" | "suggested"
+  linked_by: "manual" | "confirmed_suggestion"
   linked_at: string
 }
 
@@ -229,7 +233,7 @@ API routes handle all external API calls (Gmail + Anthropic). The Anthropic API 
 
 Fetches new email metadata from Gmail with pagination.
 
-**Input:** `{ since?: string, page_token?: string }` (ISO timestamp; defaults to `last_email_scan`. `page_token` for pagination.)
+**Input:** `{ since: string, page_token?: string }` (`since` is required -- the client reads `last_email_scan` from Supabase and passes it. `page_token` for pagination.)
 
 **Flow:**
 1. Read Gmail OAuth refresh token from Vercel env vars (see OAuth section below)
@@ -313,6 +317,8 @@ API routes exchange the refresh token for short-lived access tokens on each requ
 
 If the refresh token expires or is revoked, the API route returns an auth error and the UI shows a "Gmail disconnected" banner with instructions to re-generate the token.
 
+**Route authentication:** All three Gmail API routes (`/api/gmail/scan`, `/api/gmail/message`, `/api/gmail/classify`) must verify the caller is an authenticated Supabase user before processing. Use the same auth check pattern as existing routes (e.g., `calendar-sync/route.ts`): read the Supabase auth token from the request headers, validate it, and reject unauthenticated calls with 401. This is a single-user system today, but auth checks are required for consistency with the existing route security model.
+
 ### Scan-on-Load Flow
 
 ```
@@ -341,9 +347,10 @@ Is last_email_scan < 15 minutes ago?
 3. Insert new rows into Supabase (category: 'unclassified', from_domain extracted)
 4. For each unclassified email (batches of 10, 1-second delay between batches):
    a. Call POST /api/gmail/message to get full body
-   b. Call POST /api/gmail/classify with metadata + body
-   c. Generate body_preview (first ~500 chars of body text from step a)
+   b. Generate body_preview (first ~500 chars of body text from step a)
+   c. Call POST /api/gmail/classify with metadata + body
    d. Update Supabase row: category, classification_json, body_preview
+      (body_preview is always saved from step b, even if classification in step c fails)
    e. Run suggestion logic (see below)
    f. Set suggested_application_id if match found
    g. UI updates reactively as each email is classified
@@ -352,7 +359,7 @@ Is last_email_scan < 15 minutes ago?
 
 **Key property:** The page renders instantly with cached data. Background scanning and classification are non-blocking. New emails fade in progressively as they're processed.
 
-**Orphan recovery:** If the user closes the tab mid-classification, unclassified rows persist in Supabase. On the next page load, these are detected and classified first, before checking Gmail for new emails. No orphan accumulation.
+**Orphan recovery:** If the user closes the tab mid-classification, unclassified rows persist in Supabase. On the next page load, these are detected and classified first, before checking Gmail for new emails. No orphan accumulation. To prevent infinite retry loops on emails that consistently fail (e.g., body fetch always errors for a specific `gmail_id`), track a `classification_attempts` count on the email row (or use a simple in-memory counter per session). After 3 failed attempts, auto-classify as `irrelevant` with a note in `classification_json` that classification failed.
 
 **Manual Refresh:** The "Refresh" button bypasses the 15-minute cooldown and triggers a full scan from the last scan timestamp (or allows the user to specify a wider date range).
 
@@ -471,8 +478,8 @@ Opens when an email card is clicked. Persists while clicking through different e
 - Full `body_preview` text (scrollable)
 
 **Linking section (bottom):**
-- **If `suggested_application_id` is set:** Dropdown pre-selected to that application. "Link" confirm button + "Not this one" to clear the suggestion.
-- **If no suggestion:** Empty dropdown listing all active applications. "Link" button.
+- **If `suggested_application_id` is set:** Dropdown pre-selected to that application. "Link" confirm button + "Not this one" to clear the suggestion. Confirming a suggestion writes `linked_by: 'confirmed_suggestion'` to distinguish from purely manual links in analytics.
+- **If no suggestion:** Empty dropdown listing all active applications. "Link" button. Writes `linked_by: 'manual'`.
 - **If already linked:** Shows linked application(s) as tags with an "Unlink" option per link.
 - Regardless of suggestion state, the gesture is always the same: review the dropdown, click "Link." No mode-switching.
 
