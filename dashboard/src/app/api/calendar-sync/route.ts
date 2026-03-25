@@ -236,10 +236,11 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json(result)
-  } catch (error) {
-    console.error("Calendar sync error:", error)
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error)
+    console.error("Calendar sync error:", message)
     return NextResponse.json(
-      { success: false, error: "Calendar sync failed" },
+      { success: false, error: `Calendar sync failed: ${message}` },
       { status: 500 }
     )
   }
