@@ -23,7 +23,7 @@ interface ScanState {
 export function useEmails() {
   const [emails, setEmails] = useState<Email[]>([])
   const [links, setLinks] = useState<EmailApplicationLink[]>([])
-  const [applications, setApplications] = useState<Pick<Application, "id" | "company" | "status">[]>([])
+  const [applications, setApplications] = useState<Pick<Application, "id" | "title" | "company" | "status">[]>([])
   const [loading, setLoading] = useState(true)
   const [scanState, setScanState] = useState<ScanState>({
     scanning: false,
@@ -43,13 +43,13 @@ export function useEmails() {
       const [emailsRes, linksRes, appsRes, settingsRes] = await Promise.all([
         supabase.from("emails").select("*").eq("user_id", user.id).order("received_at", { ascending: false }),
         supabase.from("email_application_links").select("*").eq("user_id", user.id),
-        supabase.from("applications").select("id, company, status").eq("user_id", user.id),
+        supabase.from("applications").select("id, title, company, status").eq("user_id", user.id),
         supabase.from("user_settings").select("last_email_scan").eq("user_id", user.id).single(),
       ])
 
       setEmails(emailsRes.data || [])
       setLinks(linksRes.data || [])
-      setApplications((appsRes.data || []) as Pick<Application, "id" | "company" | "status">[])
+      setApplications((appsRes.data || []) as Pick<Application, "id" | "title" | "company" | "status">[])
       setScanState((prev) => ({
         ...prev,
         lastScan: settingsRes.data?.last_email_scan || null,
@@ -252,7 +252,7 @@ export function useEmails() {
   // ── Suggestion computation ─────────────────────────────────────
   const computeSuggestion = async (
     email: Email,
-    apps: Pick<Application, "id" | "company" | "status">[]
+    apps: Pick<Application, "id" | "title" | "company" | "status">[]
   ): Promise<string | null> => {
     // Priority 1: thread siblings
     if (email.thread_id) {
