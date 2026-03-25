@@ -122,6 +122,41 @@ CREATE TABLE IF NOT EXISTS company_intel (
     application_id INTEGER,
     FOREIGN KEY (application_id) REFERENCES applications(id)
 );
+
+CREATE TABLE IF NOT EXISTS skill_demand (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    skill_name TEXT NOT NULL UNIQUE,
+    category TEXT,
+    times_seen INTEGER DEFAULT 1,
+    required_count INTEGER DEFAULT 0,
+    preferred_count INTEGER DEFAULT 0,
+    match_level TEXT,
+    last_seen_in TEXT,
+    updated_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS study_plan (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    skill_name TEXT NOT NULL UNIQUE,
+    priority_rank INTEGER,
+    study_hours_logged REAL DEFAULT 0,
+    target_hours REAL,
+    resources TEXT,
+    notes TEXT,
+    status TEXT DEFAULT 'not_started',
+    started_at TEXT,
+    completed_at TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS skill_application_map (
+    skill_name TEXT NOT NULL,
+    application_id INTEGER NOT NULL,
+    requirement_level TEXT,
+    FOREIGN KEY (application_id) REFERENCES applications(id),
+    PRIMARY KEY (skill_name, application_id)
+);
 """
 
 
@@ -135,6 +170,7 @@ def get_connection(db_path: Path = None) -> sqlite3.Connection:
     conn.execute("PRAGMA foreign_keys = ON")
     conn.executescript(SCHEMA_SQL)
     migrate_recruiters_to_contacts(conn)
+    migrate_applications_description(conn)
     return conn
 
 
@@ -776,3 +812,199 @@ def get_brief_for_application(conn, application_id):
         return json.loads(row["brief"])
     except (json.JSONDecodeError, TypeError):
         return None
+
+
+# --- Skill Demand + Study Plan CRUD ---
+
+
+def migrate_applications_description(conn):
+    """Add description column to applications if it doesn't exist."""
+    columns = [
+        row[1] for row in conn.execute("PRAGMA table_info(applications)").fetchall()
+    ]
+    if "description" not in columns:
+        conn.execute("ALTER TABLE applications ADD COLUMN description TEXT")
+        conn.commit()
+        logger.info("Added description column to applications table")
+
+
+def upsert_skill_demand(conn, skill_name, category=None, requirement_level="mentioned",
+                        application_id=None, last_seen_in=None):
+    """Insert or update a skill demand entry. Returns the row id."""
+    row = conn.execute(
+        "SELECT id, times_seen, required_count, preferred_count "
+        "FROM skill_demand WHERE skill_name = ?",
+        (skill_name,),
+    ).fetchone()
+
+    now = datetime.now().isoformat()
+    req_inc = 1 if requirement_level == "required" else 0
+    pref_inc = 1 if requirement_level == "preferred" else 0
+
+    if row:
+        conn.execute(
+            "UPDATE skill_demand SET times_seen = times_seen + 1, "
+            "required_count = required_count + ?, preferred_count = preferred_count + ?, "
+            "category = COALESCE(?, category), last_seen_in = COALESCE(?, last_seen_in), "
+            "updated_at = ? WHERE id = ?",
+            (req_inc, pref_inc, category, last_seen_in, now, row["id"]),
+        )
+        conn.commit()
+        return row["id"]
+    else:
+        cursor = conn.execute(
+            "INSERT INTO skill_demand (skill_name, category, times_seen, "
+            "required_count, preferred_count, last_seen_in, updated_at) "
+            "VALUES (?, ?, 1, ?, ?, ?, ?)",
+            (skill_name, category, req_inc, pref_inc, last_seen_in, now),
+        )
+        conn.commit()
+        return cursor.lastrowid
+
+
+def get_skill_demand(conn, min_count=1, match_level=None):
+    """Get skill demand entries, filtered and sorted by times_seen DESC."""
+    query = "SELECT * FROM skill_demand WHERE times_seen >= ?"
+    params = [min_count]
+    if match_level:
+        query += " AND match_level = ?"
+        params.append(match_level)
+    query += " ORDER BY times_seen DESC, skill_name"
+    rows = conn.execute(query, params).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_top_gaps(conn, limit=10):
+    """Get top gap skills sorted by demand frequency."""
+    rows = conn.execute(
+        "SELECT * FROM skill_demand WHERE match_level = 'gap' "
+        "ORDER BY times_seen DESC, skill_name LIMIT ?",
+        (limit,),
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def update_match_levels(conn):
+    """Bulk update match_level on skill_demand by joining against skills table."""
+    # Get all current skills with levels
+    skill_levels = {}
+    for row in conn.execute("SELECT name, current_level FROM skills").fetchall():
+        skill_levels[row["name"].lower()] = row["current_level"]
+
+    demands = conn.execute("SELECT id, skill_name FROM skill_demand").fetchall()
+    for d in demands:
+        level = skill_levels.get(d["skill_name"].lower())
+        if level is None:
+            match = "gap"
+        elif level >= 3:
+            match = "strong"
+        else:
+            match = "partial"
+        conn.execute(
+            "UPDATE skill_demand SET match_level = ? WHERE id = ?",
+            (match, d["id"]),
+        )
+    conn.commit()
+
+
+def upsert_study_plan(conn, skill_name, **kwargs):
+    """Create or update a study plan entry. Returns the row id."""
+    allowed = {
+        "priority_rank", "study_hours_logged", "target_hours",
+        "resources", "notes", "status", "started_at", "completed_at",
+    }
+    fields = {k: v for k, v in kwargs.items() if k in allowed and v is not None}
+
+    row = conn.execute(
+        "SELECT id FROM study_plan WHERE skill_name = ?", (skill_name,)
+    ).fetchone()
+
+    now = datetime.now().isoformat()
+    if row:
+        if fields:
+            fields["updated_at"] = now
+            set_clause = ", ".join(f"{k} = ?" for k in fields)
+            values = list(fields.values()) + [row["id"]]
+            conn.execute(f"UPDATE study_plan SET {set_clause} WHERE id = ?", values)
+            conn.commit()
+        return row["id"]
+    else:
+        columns = ["skill_name", "updated_at"] + list(fields.keys())
+        placeholders = ", ".join("?" for _ in columns)
+        col_names = ", ".join(columns)
+        values = [skill_name, now] + list(fields.values())
+        cursor = conn.execute(
+            f"INSERT INTO study_plan ({col_names}) VALUES ({placeholders})", values,
+        )
+        conn.commit()
+        return cursor.lastrowid
+
+
+def get_study_plan(conn):
+    """Get active study plan items ordered by priority."""
+    rows = conn.execute(
+        "SELECT * FROM study_plan WHERE status != 'completed' "
+        "ORDER BY COALESCE(priority_rank, 999), skill_name"
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def log_study_time(conn, skill_name, hours, note=""):
+    """Log study time for a skill. Returns True if found, False otherwise."""
+    row = conn.execute(
+        "SELECT id, study_hours_logged, notes, started_at FROM study_plan "
+        "WHERE skill_name = ?",
+        (skill_name,),
+    ).fetchone()
+    if not row:
+        return False
+
+    now = datetime.now().isoformat(timespec="seconds")
+    new_hours = (row["study_hours_logged"] or 0) + hours
+    existing_notes = row["notes"] or ""
+    if note:
+        entry = f"[{now}] +{hours}h: {note}"
+        new_notes = f"{existing_notes}\n{entry}".strip()
+    else:
+        new_notes = existing_notes
+
+    updates = {
+        "study_hours_logged": new_hours,
+        "notes": new_notes,
+        "updated_at": now,
+    }
+    if not row["started_at"]:
+        updates["started_at"] = now
+        updates["status"] = "in_progress"
+
+    set_clause = ", ".join(f"{k} = ?" for k in updates)
+    values = list(updates.values()) + [row["id"]]
+    conn.execute(f"UPDATE study_plan SET {set_clause} WHERE id = ?", values)
+    conn.commit()
+    return True
+
+
+def map_skill_to_application(conn, skill_name, application_id, requirement_level="mentioned"):
+    """Map a skill to an application (ignore on conflict)."""
+    try:
+        conn.execute(
+            "INSERT OR IGNORE INTO skill_application_map "
+            "(skill_name, application_id, requirement_level) VALUES (?, ?, ?)",
+            (skill_name, application_id, requirement_level),
+        )
+        conn.commit()
+    except sqlite3.IntegrityError:
+        pass
+
+
+def get_skills_for_application(conn, application_id):
+    """Get skills required by a specific application."""
+    rows = conn.execute(
+        "SELECT sam.skill_name, sam.requirement_level, "
+        "sd.times_seen, sd.match_level, sd.category "
+        "FROM skill_application_map sam "
+        "LEFT JOIN skill_demand sd ON sam.skill_name = sd.skill_name "
+        "WHERE sam.application_id = ? ORDER BY sam.requirement_level, sam.skill_name",
+        (application_id,),
+    ).fetchall()
+    return [dict(r) for r in rows]

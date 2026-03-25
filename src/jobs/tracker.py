@@ -39,8 +39,8 @@ class ApplicationTracker:
         now = datetime.now().isoformat()
         cursor = self._conn.execute(
             "INSERT INTO applications "
-            "(title, company, location, url, source, salary_range, status, date_found, notes, profile_id) "
-            "VALUES (?, ?, ?, ?, ?, ?, 'found', ?, '', ?)",
+            "(title, company, location, url, source, salary_range, status, date_found, notes, profile_id, description) "
+            "VALUES (?, ?, ?, ?, ?, ?, 'found', ?, '', ?, ?)",
             (
                 job_data.get("title", ""),
                 job_data.get("company", ""),
@@ -50,6 +50,7 @@ class ApplicationTracker:
                 job_data.get("salary", job_data.get("salary_range", "")),
                 now,
                 job_data.get("profile_id", ""),
+                job_data.get("description"),
             ),
         )
         self._conn.commit()

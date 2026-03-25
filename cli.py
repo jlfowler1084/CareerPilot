@@ -542,6 +542,368 @@ def skills_update(name, level):
     tracker.close()
 
 
+@skills.command("scan")
+def skills_scan():
+    """Parse all tracked applications and extract skills via AI."""
+    from rich.progress import Progress
+
+    from src.db import models
+    from src.intel.skill_analyzer import SkillGapAnalyzer
+
+    conn = models.get_connection()
+    apps = conn.execute(
+        "SELECT COUNT(*) FROM applications WHERE description IS NOT NULL AND description != ''"
+    ).fetchone()[0]
+
+    if apps == 0:
+        console.print(
+            "[yellow]No applications with stored job descriptions. "
+            "Save JDs when tracking jobs to use this feature.[/yellow]"
+        )
+        conn.close()
+        return
+
+    console.print(f"[dim]Scanning {apps} applications for skills...[/dim]")
+
+    analyzer = SkillGapAnalyzer()
+
+    with Progress(console=console) as progress:
+        task = progress.add_task("Extracting skills...", total=apps)
+
+        def on_progress(current, total):
+            progress.update(task, completed=current)
+
+        result = analyzer.scan_applications(conn, progress_callback=on_progress)
+
+    conn.close()
+
+    console.print(
+        f"\n[green]Scan complete:[/green] {result['apps_scanned']} applications, "
+        f"{result['skills_found']} skill mentions extracted."
+    )
+    console.print("[dim]Run 'skills gaps' to see your skill gap analysis.[/dim]")
+
+
+@skills.command("gaps")
+def skills_gaps():
+    """Show skill gaps ranked by market demand."""
+    from datetime import datetime as dt
+
+    from src.db import models
+
+    conn = models.get_connection()
+    demands = models.get_skill_demand(conn)
+    conn.close()
+
+    if not demands:
+        console.print("[dim]No skill demand data yet. Run 'skills scan' first.[/dim]")
+        return
+
+    # Count totals for header
+    total_skills = len(demands)
+    total_apps = conn.execute(
+        "SELECT COUNT(DISTINCT application_id) FROM skill_application_map"
+    ).fetchone()[0] if False else 0  # avoid reopening conn
+
+    # Group by match level
+    gaps = [d for d in demands if d.get("match_level") == "gap"]
+    partials = [d for d in demands if d.get("match_level") == "partial"]
+    strongs = [d for d in demands if d.get("match_level") == "strong"]
+
+    if gaps:
+        console.print("\n[bold red]HIGH DEMAND GAPS (not on resume):[/bold red]")
+        for d in gaps[:10]:
+            req = f"{d['required_count']} required" if d["required_count"] else ""
+            console.print(
+                f"  [red]{d['skill_name']}[/red] "
+                f"{'.' * max(1, 25 - len(d['skill_name']))} "
+                f"{d['times_seen']} jobs ({req}) -- Gap"
+            )
+
+    if partials:
+        console.print("\n[bold yellow]PARTIAL MATCHES (could strengthen):[/bold yellow]")
+        for d in partials[:10]:
+            req = f"{d['required_count']} required" if d["required_count"] else ""
+            console.print(
+                f"  [yellow]{d['skill_name']}[/yellow] "
+                f"{'.' * max(1, 25 - len(d['skill_name']))} "
+                f"{d['times_seen']} jobs ({req}) -- Partial"
+            )
+
+    if strongs:
+        console.print("\n[bold green]STRONG MATCHES (competitive advantages):[/bold green]")
+        for d in strongs[:10]:
+            req = f"{d['required_count']} required" if d["required_count"] else ""
+            console.print(
+                f"  [green]{d['skill_name']}[/green] "
+                f"{'.' * max(1, 25 - len(d['skill_name']))} "
+                f"{d['times_seen']} jobs ({req}) -- Strong"
+            )
+
+    console.print()
+
+
+@skills.command("plan")
+def skills_plan():
+    """Show or generate a study plan for top skill gaps."""
+    import json as _json
+
+    from src.db import models
+    from src.intel.skill_analyzer import SkillGapAnalyzer
+
+    conn = models.get_connection()
+    plan = models.get_study_plan(conn)
+
+    if not plan:
+        # Try to generate one
+        gaps = models.get_top_gaps(conn, limit=5)
+        if not gaps:
+            console.print(
+                "[dim]No skill gaps found. Run 'skills scan' first.[/dim]"
+            )
+            conn.close()
+            return
+
+        console.print("[dim]Generating study plan for top gaps...[/dim]")
+        analyzer = SkillGapAnalyzer()
+        result = analyzer.generate_study_plan(conn, gaps)
+        if not result:
+            console.print("[red]Failed to generate study plan. Check logs.[/red]")
+            conn.close()
+            return
+        plan = models.get_study_plan(conn)
+
+    console.print()
+    for p in plan:
+        target = p.get("target_hours") or 0
+        logged = p.get("study_hours_logged") or 0
+        pct = int(logged / target * 100) if target > 0 else 0
+        bar_filled = int(pct / 10)
+        bar = "\u2588" * bar_filled + "\u2591" * (10 - bar_filled)
+
+        rank = p.get("priority_rank", "?")
+        console.print(
+            f"[bold]{rank}. {p['skill_name']}[/bold] "
+            f"(Priority: {'HIGH' if rank and rank <= 2 else 'MED'})"
+        )
+        console.print(f"   Progress: {logged}/{target} hrs  {bar}  {pct}%")
+
+        # Show resources
+        try:
+            resources = _json.loads(p.get("resources") or "[]")
+        except (ValueError, TypeError):
+            resources = []
+        for r in resources[:3]:
+            console.print(f"   - {r.get('title', 'Resource')}: {r.get('url', '')}")
+
+        console.print()
+
+    conn.close()
+
+
+@skills.command("rate")
+@click.argument("skill_name")
+@click.argument("level", type=int)
+def skills_rate(skill_name, level):
+    """Self-assess a skill (1-5). Updates skills table and recomputes match levels."""
+    from src.db import models
+    from src.skills.tracker import SkillTracker
+
+    if not 1 <= level <= 5:
+        console.print("[red]Level must be between 1 and 5.[/red]")
+        return
+
+    conn = models.get_connection()
+
+    # Try to update existing skill
+    existing = models.get_skill(conn, skill_name)
+    if existing:
+        models.update_skill(conn, skill_name, level, source="self_assessment")
+    else:
+        # Add as new skill
+        models.add_skill(conn, skill_name, category="", current_level=level, target_level=max(level, 3))
+
+    models.update_match_levels(conn)
+    conn.close()
+
+    console.print(f"[green]Rated '{skill_name}' at level {level}/5. Match levels updated.[/green]")
+
+
+@skills.command("log")
+@click.argument("skill_name")
+@click.argument("hours", type=float)
+@click.option("--note", default="", help="Study note.")
+def skills_log_time(skill_name, hours, note):
+    """Log study time for a skill."""
+    from src.db import models
+
+    conn = models.get_connection()
+    if models.log_study_time(conn, skill_name, hours, note):
+        plan = conn.execute(
+            "SELECT study_hours_logged, target_hours FROM study_plan WHERE skill_name = ?",
+            (skill_name,),
+        ).fetchone()
+        logged = plan["study_hours_logged"] if plan else hours
+        target = plan["target_hours"] if plan and plan["target_hours"] else 0
+        pct = int(logged / target * 100) if target > 0 else 0
+        bar_filled = int(pct / 10)
+        bar = "\u2588" * bar_filled + "\u2591" * (10 - bar_filled)
+        console.print(
+            f"[green]Logged {hours}h for {skill_name}.[/green] "
+            f"Total: {logged}/{target} hrs  {bar}  {pct}%"
+        )
+    else:
+        console.print(
+            f"[red]'{skill_name}' not in study plan. "
+            f"Run 'skills plan' first.[/red]"
+        )
+    conn.close()
+
+
+@skills.command("focus")
+def skills_focus():
+    """Show this week's top 3 study priorities."""
+    from src.db import models
+
+    conn = models.get_connection()
+    plan = models.get_study_plan(conn)
+    conn.close()
+
+    if not plan:
+        console.print("[dim]No active study plan. Run 'skills plan' to generate one.[/dim]")
+        return
+
+    console.print("\n[bold]This Week's Focus:[/bold]")
+    for p in plan[:3]:
+        target = p.get("target_hours") or 0
+        logged = p.get("study_hours_logged") or 0
+        pct = int(logged / target * 100) if target > 0 else 0
+        bar_filled = int(pct / 10)
+        bar = "\u2588" * bar_filled + "\u2591" * (10 - bar_filled)
+
+        demand = ""
+        console.print(
+            f"  {p.get('priority_rank', '?')}. [bold]{p['skill_name']}[/bold] "
+            f"({logged}/{target} hrs)  {bar}  {pct}%"
+        )
+    console.print()
+
+
+@skills.command("match")
+@click.argument("application_id", type=int)
+def skills_match(application_id):
+    """Show skill match analysis for a specific application."""
+    from src.db import models
+
+    conn = models.get_connection()
+    app = conn.execute(
+        "SELECT title, company FROM applications WHERE id = ?", (application_id,)
+    ).fetchone()
+    if not app:
+        console.print(f"[red]Application #{application_id} not found.[/red]")
+        conn.close()
+        return
+
+    app_skills = models.get_skills_for_application(conn, application_id)
+    conn.close()
+
+    if not app_skills:
+        console.print(
+            f"[dim]No skill data for '{app['title']}' at {app['company']}. "
+            f"Run 'skills scan' first.[/dim]"
+        )
+        return
+
+    console.print(f"\n[bold]Skill Match: {app['title']} at {app['company']}[/bold]\n")
+
+    table = Table()
+    table.add_column("Skill", style="bold")
+    table.add_column("Required?")
+    table.add_column("Match")
+    table.add_column("Demand")
+
+    for s in app_skills:
+        level = s.get("requirement_level", "mentioned")
+        match = s.get("match_level") or "unknown"
+        seen = s.get("times_seen") or 0
+
+        if match == "strong":
+            match_str = "[green]Strong[/green]"
+        elif match == "partial":
+            match_str = "[yellow]Partial[/yellow]"
+        elif match == "gap":
+            match_str = "[red]Gap[/red]"
+        else:
+            match_str = "[dim]?[/dim]"
+
+        table.add_row(
+            s["skill_name"],
+            level,
+            match_str,
+            f"{seen} jobs" if seen else "",
+        )
+
+    console.print(table)
+
+
+@skills.command("report")
+def skills_report():
+    """Full skill gap report with demand, gaps, and study progress."""
+    from src.db import models
+
+    conn = models.get_connection()
+    demands = models.get_skill_demand(conn)
+    plan = models.get_study_plan(conn)
+
+    if not demands:
+        console.print("[dim]No skill data. Run 'skills scan' first.[/dim]")
+        conn.close()
+        return
+
+    gaps = [d for d in demands if d.get("match_level") == "gap"]
+    partials = [d for d in demands if d.get("match_level") == "partial"]
+    strongs = [d for d in demands if d.get("match_level") == "strong"]
+
+    console.print(Panel(
+        f"[bold]{len(demands)}[/bold] skills tracked across job applications\n"
+        f"[red]{len(gaps)}[/red] gaps | "
+        f"[yellow]{len(partials)}[/yellow] partial | "
+        f"[green]{len(strongs)}[/green] strong",
+        title="Skill Gap Report",
+    ))
+
+    # Top gaps
+    if gaps:
+        console.print("\n[bold]Top Gaps to Address:[/bold]")
+        for d in gaps[:5]:
+            console.print(
+                f"  [red]{d['skill_name']}[/red] -- "
+                f"{d['times_seen']} jobs, {d['required_count']} required"
+            )
+
+    # Study progress
+    if plan:
+        console.print("\n[bold]Study Progress:[/bold]")
+        for p in plan[:5]:
+            target = p.get("target_hours") or 0
+            logged = p.get("study_hours_logged") or 0
+            pct = int(logged / target * 100) if target > 0 else 0
+            bar_filled = int(pct / 10)
+            bar = "\u2588" * bar_filled + "\u2591" * (10 - bar_filled)
+            console.print(
+                f"  {p['skill_name']}: {logged}/{target} hrs  {bar}  {pct}%"
+            )
+
+    # Strengths
+    if strongs:
+        console.print("\n[bold]Competitive Advantages:[/bold]")
+        names = ", ".join(d["skill_name"] for d in strongs[:8])
+        console.print(f"  [green]{names}[/green]")
+
+    console.print()
+    conn.close()
+
+
 @cli.command()
 @click.option("--hours", default=15, help="Available study hours per week (default 15).")
 def roadmap(hours):
@@ -1889,6 +2251,28 @@ def morning():
                     console.print(
                         f"  [dim]●[/dim] {r['name']}{company_str} — no contact logged"
                     )
+    except Exception:
+        pass
+
+    # --- Skill study focus ---
+    try:
+        conn = models.get_connection()
+        plan = models.get_study_plan(conn)
+        conn.close()
+
+        if plan:
+            console.print()
+            console.print("[bold]Skill Focus This Week:[/bold]")
+            for p in plan[:3]:
+                target = p.get("target_hours") or 0
+                logged = p.get("study_hours_logged") or 0
+                pct = int(logged / target * 100) if target > 0 else 0
+                bar_filled = int(pct / 10)
+                bar = "\u2588" * bar_filled + "\u2591" * (10 - bar_filled)
+                console.print(
+                    f"  {p.get('priority_rank', '?')}. {p['skill_name']} "
+                    f"({logged}/{target} hrs)  {bar}  {pct}%"
+                )
     except Exception:
         pass
 
