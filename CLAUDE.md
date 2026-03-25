@@ -257,6 +257,64 @@ Connects to Atlassian Cloud (Jira, Confluence) via the official hosted MCP endpo
 
 ---
 
+## API Cost Governance
+
+**Rules for ALL outbound API calls.**
+
+Before writing, modifying, or adding ANY outbound API call (Anthropic, Google, MCP, Supabase edge functions, or third-party), you MUST:
+
+### Check alternatives first (in this order):
+
+1. Can this be done with a direct MCP server call (no AI intermediary)?
+2. Can this be done with a direct REST API call?
+3. Can this be done with rules-based logic (regex, keyword matching, lookup table)?
+4. Can this be done with cached/precomputed results?
+5. If AI is genuinely needed, can Haiku handle it?
+6. Only use Sonnet if the task requires multi-step reasoning, nuanced generation, or complex analysis.
+7. Only use Opus for critical planning tasks with high stakes.
+
+### Document the call
+
+Add/update an entry in `dashboard/docs/api-registry.md` with:
+- Route or function path
+- Target service and model (if AI)
+- Purpose (1 sentence)
+- Trigger (what fires this call)
+- Justification for model choice (if AI)
+- Estimated cost per call
+
+### Use environment variables for model strings
+
+Never hardcode model names. Use:
+- `process.env.MODEL_HAIKU` for classification, extraction, simple relay
+- `process.env.MODEL_SONNET` for reasoning, generation, complex analysis
+- `process.env.MODEL_OPUS` for critical multi-step planning (rare)
+
+### Error handling is mandatory
+
+Every API call must have try/catch with:
+- No silent retries that could double-bill
+- Graceful degradation (show cached data or a clear error, don't retry in a loop)
+- Rate limit awareness (back off, don't hammer)
+
+### Never use Claude as an MCP relay
+
+If the goal is to call an MCP tool and return its results, call the MCP server directly. Claude should only be in the path if it needs to **reason** about the results.
+
+### Model selection quick reference
+
+| Task Type | Model | Examples |
+|---|---|---|
+| Classification (< 5 categories) | Haiku | Email categorization, job relevance scoring |
+| Data extraction (structured) | Haiku | Pulling fields from text, topic tagging |
+| Simple text generation | Haiku | Short summaries, status labels |
+| Complex reasoning | Sonnet | Interview prep, cover letter drafting, pattern analysis |
+| Nuanced generation | Sonnet | Resume tailoring, reply drafting with context |
+| Multi-step planning | Opus | Architecture decisions, complex workflow design |
+| Data relay / search | NO AI | Job search via MCP, API lookups, CRUD operations |
+
+---
+
 ## Common Mistakes to Avoid
 
 - Don't hardcode absolute paths — everything goes through `config/settings.py`
