@@ -153,6 +153,8 @@ class TestSamsungImporter:
 
 
 from unittest.mock import MagicMock, patch
+from click.testing import CliRunner
+from cli import cli
 
 from src.transcripts.otter_importer import import_otter
 
@@ -459,3 +461,74 @@ class TestWatchFolder:
         assert result is not None
         assert not f.exists()  # moved to processed
         assert (processed_dir / "call.txt").exists()
+
+
+class TestCLICommands:
+    @patch("src.transcripts.samsung_importer.import_samsung")
+    @patch("src.transcripts.transcript_store.store_transcript", return_value=1)
+    def test_import_samsung_command(self, mock_store, mock_import, tmp_path):
+        mock_import.return_value = TranscriptRecord(
+            source="samsung",
+            segments=[TranscriptSegment("Speaker 1", "Hi", 0.0, 1.0)],
+            full_text="Hi", duration_seconds=1.0, language="en",
+            audio_path=None, raw_metadata={},
+        )
+        txt = tmp_path / "call.txt"
+        txt.write_text("Speaker 1: Hi\n", encoding="utf-8")
+        runner = CliRunner()
+        result = runner.invoke(cli, ["interview", "import-samsung", str(txt)], input="skip\n")
+        assert result.exit_code == 0
+
+    @patch("src.transcripts.otter_importer.import_otter")
+    @patch("src.transcripts.transcript_store.store_transcript", return_value=2)
+    def test_import_otter_command(self, mock_store, mock_import, tmp_path):
+        mock_import.return_value = TranscriptRecord(
+            source="otter",
+            segments=[TranscriptSegment("Speaker 1", "Hello", 0.0, 3.0)],
+            full_text="Hello", duration_seconds=3.0, language="en",
+            audio_path=None, raw_metadata={},
+        )
+        txt = tmp_path / "meeting.txt"
+        txt.write_text("Speaker 1  0:00\nHello\n", encoding="utf-8")
+        runner = CliRunner()
+        result = runner.invoke(cli, ["interview", "import-otter", str(txt)], input="skip\n")
+        assert result.exit_code == 0
+
+    @patch("src.transcripts.transcript_store.list_transcripts")
+    def test_list_command(self, mock_list):
+        mock_list.return_value = [
+            {"id": 1, "source": "samsung", "duration_seconds": 120, "language": "en",
+             "preview": "Hello there...", "imported_at": "2026-03-25T12:00:00",
+             "application_id": None, "company": None, "app_title": None, "analyzed_at": None},
+        ]
+        runner = CliRunner()
+        result = runner.invoke(cli, ["interview", "list"])
+        assert result.exit_code == 0
+        assert "samsung" in result.output
+
+    @patch("src.interviews.coach.InterviewCoach.analyze_interview")
+    @patch("src.transcripts.transcript_store.get_transcript")
+    @patch("src.transcripts.transcript_store.update_analysis")
+    def test_analyze_by_id(self, mock_update, mock_get, mock_analyze):
+        mock_get.return_value = TranscriptRecord(
+            source="samsung",
+            segments=[
+                TranscriptSegment("Interviewer", "Tell me about yourself", 0.0, 5.0),
+                TranscriptSegment("Candidate", "I'm a systems engineer", 5.0, 10.0),
+            ],
+            full_text="Tell me about yourself I'm a systems engineer",
+            duration_seconds=10.0, language="en", audio_path=None, raw_metadata={}, id=1,
+        )
+        mock_analyze.return_value = {
+            "overall_score": 7,
+            "questions_asked": ["Tell me about yourself"],
+            "response_quality": [],
+            "technical_gaps": [],
+            "behavioral_assessment": {},
+            "top_improvements": [],
+            "practice_questions": [],
+        }
+        runner = CliRunner()
+        result = runner.invoke(cli, ["interview", "analyze", "1", "--company", "Test"], input="n\n")
+        mock_get.assert_called_once_with(1)
+        assert mock_analyze.called

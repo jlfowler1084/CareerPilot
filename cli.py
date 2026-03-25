@@ -1444,22 +1444,33 @@ def interview():
 
 
 @interview.command("analyze")
-@click.argument("filepath")
+@click.argument("source")
 @click.option("--job-title", default=None, help="Job title for context.")
 @click.option("--company", default=None, help="Company name for context.")
-def interview_analyze(filepath, job_title, company):
-    """Analyze an interview transcript."""
+def interview_analyze(source, job_title, company):
+    """Analyze an interview transcript (file path or transcript ID)."""
     from src.interviews.coach import InterviewCoach
     from src.interviews.transcripts import TranscriptLoader
 
-    loader = TranscriptLoader()
-    turns = loader.load_transcript(filepath)
+    if source.isdigit():
+        # Load from transcripts table by ID
+        from src.transcripts.transcript_store import get_transcript, update_analysis
+        from src.transcripts.transcript_parser import to_coach_turns
 
-    if not turns:
-        console.print("[red]Failed to load transcript. Check file path and format.[/red]")
-        return
-
-    console.print(f"[dim]Loaded {len(turns)} speaker turns. Analyzing...[/dim]")
+        record = get_transcript(int(source))
+        if not record:
+            console.print(f"[red]Transcript ID {source} not found.[/red]")
+            return
+        turns = to_coach_turns(record)
+        console.print(f"[dim]Loaded transcript #{source} ({len(turns)} turns, {record.source} source). Analyzing...[/dim]")
+    else:
+        # Existing file path flow
+        loader = TranscriptLoader()
+        turns = loader.load_transcript(source)
+        if not turns:
+            console.print("[red]Failed to load transcript. Check file path and format.[/red]")
+            return
+        console.print(f"[dim]Loaded {len(turns)} speaker turns. Analyzing...[/dim]")
 
     coach = InterviewCoach()
     analysis = coach.analyze_interview(turns, job_title=job_title, company=company)
@@ -1475,14 +1486,18 @@ def interview_analyze(filepath, job_title, company):
     # Offer to save
     save = console.input("\nSave analysis and create journal entry? [bold][y][/bold]/[bold][n][/bold]: ").strip().lower()
     if save == "y":
-        analysis_id = coach.save_analysis(filepath, analysis, company=company or "", role=job_title or "")
+        analysis_id = coach.save_analysis(source, analysis, company=company or "", role=job_title or "")
+
+        # If loaded by ID, also update the transcripts table
+        if source.isdigit():
+            update_analysis(int(source), analysis)
 
         # Auto-create journal entry
         from src.journal.entries import JournalManager
         manager = JournalManager()
         content = (
             f"## Interview Analysis\n\n"
-            f"**File:** {filepath}\n"
+            f"**File:** {source}\n"
             f"**Company:** {company or 'N/A'}\n"
             f"**Role:** {job_title or 'N/A'}\n"
             f"**Overall Score:** {analysis.get('overall_score', '?')}/10\n\n"
@@ -1633,6 +1648,154 @@ def _check_skill_gaps(technical_gaps):
                 f"  [yellow]>[/yellow] '{gap_text}' matches tracked skill "
                 f"'{skill['name']}' (level {skill['current_level']}/{skill['target_level']})"
             )
+
+
+def _prompt_link_application():
+    """Prompt user to link a transcript to an application. Returns app_id or None."""
+    from src.db import models
+    conn = models.get_connection()
+    try:
+        rows = conn.execute(
+            "SELECT id, title, company FROM applications ORDER BY id DESC LIMIT 10"
+        ).fetchall()
+    finally:
+        conn.close()
+
+    if not rows:
+        return None
+
+    console.print("\n[bold]Link to an application?[/bold]")
+    for i, row in enumerate(rows, 1):
+        console.print(f"  {i}. {row['title']} at {row['company']}")
+    console.print("  skip. Don't link")
+
+    choice = console.input("\nChoice: ").strip().lower()
+    if choice == "skip" or not choice:
+        return None
+    try:
+        idx = int(choice) - 1
+        if 0 <= idx < len(rows):
+            return rows[idx]["id"]
+    except ValueError:
+        pass
+    return None
+
+
+@interview.command("import-samsung")
+@click.argument("path")
+def interview_import_samsung(path):
+    """Import a Samsung call recording transcript or directory."""
+    from src.transcripts.samsung_importer import import_samsung
+    from src.transcripts.whisper_transcriber import transcribe
+    from src.transcripts.transcript_store import store_transcript
+
+    record = import_samsung(path)
+
+    # If audio-only, offer Whisper transcription
+    if record.raw_metadata.get("needs_whisper"):
+        if record.audio_path:
+            do_whisper = console.input("No transcript found. Transcribe audio with Whisper? [bold][y][/bold]/[bold][n][/bold]: ").strip().lower()
+            if do_whisper == "y":
+                console.print("[dim]Transcribing with Whisper (base model)...[/dim]")
+                try:
+                    record = transcribe(record.audio_path)
+                except RuntimeError as e:
+                    console.print(f"[red]{e}[/red]")
+                    return
+            else:
+                console.print("[dim]Skipped transcription.[/dim]")
+                return
+        else:
+            console.print("[red]No transcript or audio file found.[/red]")
+            return
+
+    # Show summary
+    word_count = len(record.full_text.split())
+    console.print(f"[green]Imported:[/green] {record.source} | {len(record.segments)} segments | {word_count} words | {record.duration_seconds:.0f}s")
+
+    # Application linking
+    app_id = _prompt_link_application()
+    row_id = store_transcript(record, application_id=app_id)
+    console.print(f"[green]Saved as transcript #{row_id}[/green]")
+
+
+@interview.command("import-otter")
+@click.argument("file")
+def interview_import_otter(file):
+    """Import an Otter.ai transcript (.txt or .srt)."""
+    from src.transcripts.otter_importer import import_otter
+    from src.transcripts.transcript_store import store_transcript
+
+    record = import_otter(file)
+    word_count = len(record.full_text.split())
+    console.print(f"[green]Imported:[/green] {record.source} | {len(record.segments)} segments | {word_count} words | {record.duration_seconds:.0f}s")
+
+    app_id = _prompt_link_application()
+    row_id = store_transcript(record, application_id=app_id)
+    console.print(f"[green]Saved as transcript #{row_id}[/green]")
+
+
+@interview.command("transcribe")
+@click.argument("audio_file")
+@click.option("--model", default="base", help="Whisper model size (tiny/base/small/medium/large-v3/turbo).")
+def interview_transcribe(audio_file, model):
+    """Transcribe an audio file with local Whisper."""
+    from src.transcripts.whisper_transcriber import transcribe
+    from src.transcripts.transcript_store import store_transcript
+
+    console.print(f"[dim]Transcribing with Whisper ({model} model)...[/dim]")
+    try:
+        record = transcribe(audio_file, model_size=model)
+    except RuntimeError as e:
+        console.print(f"[red]{e}[/red]")
+        return
+
+    word_count = len(record.full_text.split())
+    console.print(f"[green]Done:[/green] {len(record.segments)} segments | {word_count} words | {record.duration_seconds:.0f}s | Language: {record.language}")
+
+    app_id = _prompt_link_application()
+    row_id = store_transcript(record, application_id=app_id)
+    console.print(f"[green]Saved as transcript #{row_id}[/green]")
+
+
+@interview.command("watch")
+@click.option("--model", default="base", help="Whisper model for audio files.")
+def interview_watch(model):
+    """Watch data/transcripts/ for new files and auto-import."""
+    from src.transcripts.watch_folder import watch
+    watch(model_size=model)
+
+
+@interview.command("list")
+def interview_list():
+    """List all imported transcripts."""
+    from src.transcripts.transcript_store import list_transcripts
+
+    transcripts = list_transcripts()
+    if not transcripts:
+        console.print("[dim]No transcripts imported yet.[/dim]")
+        return
+
+    table = Table(title="Imported Transcripts")
+    table.add_column("ID", style="dim", width=4)
+    table.add_column("Date", width=12)
+    table.add_column("Source", width=8)
+    table.add_column("Duration", width=8)
+    table.add_column("Application", width=20)
+    table.add_column("Preview", max_width=50)
+
+    for t in transcripts:
+        date = t["imported_at"][:10] if t.get("imported_at") else ""
+        duration = f"{t['duration_seconds']:.0f}s" if t.get("duration_seconds") else ""
+        app = t.get("company") or ""
+        if t.get("app_title"):
+            app = f"{app} ({t['app_title']})" if app else t["app_title"]
+        preview = (t.get("preview") or "")[:50]
+        analyzed = " *" if t.get("analyzed_at") else ""
+
+        table.add_row(str(t["id"]), date, t["source"] + analyzed, duration, app, preview)
+
+    console.print(table)
 
 
 @interview.command("mock")
