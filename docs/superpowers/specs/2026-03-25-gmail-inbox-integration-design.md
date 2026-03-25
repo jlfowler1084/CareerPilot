@@ -23,7 +23,9 @@ Phase 1 of SCRUM-145: Gmail email scanning + application linking for the Next.js
 
 **Option A: Dashboard only (Next.js API routes + Supabase)**
 
-Chosen over Python backend (deferred to Phase 10) and shared Supabase (unnecessary migration work). Follows the same architecture as the existing dashboard: Next.js API routes handle OAuth-protected external API calls and Claude classification, Supabase stores all data, UI streams results progressively.
+Chosen over Python backend (deferred to Phase 10) and shared Supabase (unnecessary migration work). Follows the same architecture as the existing dashboard: Next.js API routes handle OAuth-protected external API calls and Claude classification (server-side), Supabase stores all data, the client orchestrates the scan flow and streams results progressively.
+
+**Single-user vs. multi-user posture:** The OAuth flow in this phase is single-user (env var refresh token, no in-app OAuth). The data model is multi-user ready (RLS, `user_id` on all tables, composite unique constraints) as defensive design for future-proofing. Implementation should follow the single-user OAuth path; the multi-user data model is not wasted work, just insurance.
 
 The existing Python CLI Gmail scanner (`src/gmail/scanner.py`) stays as-is for terminal use. No code sharing or migration between the two systems.
 
