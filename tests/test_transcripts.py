@@ -273,3 +273,134 @@ class TestWhisperTranscriber:
         with patch("src.transcripts.whisper_transcriber.WhisperModel", None):
             with pytest.raises(RuntimeError, match="faster-whisper"):
                 transcribe(str(audio))
+
+
+import json
+from src.transcripts.transcript_store import (
+    store_transcript,
+    list_transcripts,
+    get_transcript,
+    update_analysis,
+    link_application,
+    find_matching_application,
+)
+from src.db import models
+
+
+class TestTranscriptStore:
+    def test_store_and_retrieve_roundtrip(self, tmp_path):
+        db_path = tmp_path / "test.db"
+        seg = TranscriptSegment(speaker="Interviewer", text="Hello", start_time=0.0, end_time=2.0)
+        record = TranscriptRecord(
+            source="samsung", segments=[seg], full_text="Hello",
+            duration_seconds=2.0, language="en", audio_path="/tmp/test.m4a",
+            raw_metadata={"key": "value"},
+        )
+        row_id = store_transcript(record, db_path=db_path)
+        assert row_id > 0
+
+        retrieved = get_transcript(row_id, db_path=db_path)
+        assert retrieved is not None
+        assert retrieved.id == row_id
+        assert retrieved.source == "samsung"
+        assert retrieved.full_text == "Hello"
+        assert len(retrieved.segments) == 1
+        assert retrieved.segments[0].speaker == "Interviewer"
+        assert retrieved.audio_path == "/tmp/test.m4a"
+        assert retrieved.duration_seconds == 2.0
+
+    def test_list_transcripts(self, tmp_path):
+        db_path = tmp_path / "test.db"
+        record = TranscriptRecord(
+            source="otter", segments=[], full_text="Test transcript text here",
+            duration_seconds=30.0, language="en", audio_path=None, raw_metadata={},
+        )
+        store_transcript(record, db_path=db_path)
+        store_transcript(record, db_path=db_path)
+
+        results = list_transcripts(db_path=db_path)
+        assert len(results) == 2
+        assert results[0]["source"] == "otter"
+        assert "imported_at" in results[0]
+
+    def test_update_analysis(self, tmp_path):
+        db_path = tmp_path / "test.db"
+        record = TranscriptRecord(
+            source="whisper", segments=[], full_text="Interview text",
+            duration_seconds=60.0, language="en", audio_path=None, raw_metadata={},
+        )
+        row_id = store_transcript(record, db_path=db_path)
+
+        analysis = {"overall_score": 7, "technical_gaps": ["Kubernetes"]}
+        update_analysis(row_id, analysis, db_path=db_path)
+
+        conn = models.get_connection(db_path)
+        try:
+            row = conn.execute("SELECT analysis_json, analyzed_at FROM transcripts WHERE id = ?", (row_id,)).fetchone()
+            assert row["analyzed_at"] is not None
+            parsed = json.loads(row["analysis_json"])
+            assert parsed["overall_score"] == 7
+        finally:
+            conn.close()
+
+    def test_link_application(self, tmp_path):
+        db_path = tmp_path / "test.db"
+        record = TranscriptRecord(
+            source="samsung", segments=[], full_text="",
+            duration_seconds=0, language="en", audio_path=None, raw_metadata={},
+        )
+        row_id = store_transcript(record, db_path=db_path)
+
+        conn = models.get_connection(db_path)
+        try:
+            cursor = conn.execute(
+                "INSERT INTO applications (title, company, status) VALUES (?, ?, ?)",
+                ("Systems Engineer", "Acme Corp", "applied"),
+            )
+            app_id = cursor.lastrowid
+            conn.commit()
+        finally:
+            conn.close()
+
+        link_application(row_id, app_id, db_path=db_path)
+
+        conn = models.get_connection(db_path)
+        try:
+            row = conn.execute("SELECT application_id FROM transcripts WHERE id = ?", (row_id,)).fetchone()
+            assert row["application_id"] == app_id
+        finally:
+            conn.close()
+
+    def test_find_matching_application(self, tmp_path):
+        db_path = tmp_path / "test.db"
+        conn = models.get_connection(db_path)
+        try:
+            conn.execute(
+                "INSERT INTO applications (title, company, status) VALUES (?, ?, ?)",
+                ("DevOps Engineer", "CloudCo", "applied"),
+            )
+            conn.execute(
+                "INSERT INTO applications (title, company, status) VALUES (?, ?, ?)",
+                ("SysAdmin", "Acme Corp", "found"),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+        match = find_matching_application("We discussed the DevOps role at CloudCo today", db_path=db_path)
+        assert match is not None
+
+    def test_find_matching_application_no_match(self, tmp_path):
+        db_path = tmp_path / "test.db"
+        conn = models.get_connection(db_path)
+        try:
+            conn.execute(
+                "INSERT INTO applications (title, company, status) VALUES (?, ?, ?)",
+                ("SysAdmin", "Acme Corp", "applied"),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+        match = find_matching_application("Interview about kitchen remodel", db_path=db_path)
+        assert match is None
