@@ -217,6 +217,15 @@ export async function POST(req: NextRequest) {
       )
     }
 
+    // Temporary diagnostic — remove after Vercel debugging
+    if (req.headers.get("x-debug") === "env") {
+      return NextResponse.json({
+        clientId: process.env.GOOGLE_CLIENT_ID?.substring(0, 12) + "...",
+        secretLen: process.env.GOOGLE_CLIENT_SECRET?.length,
+        tokenLen: process.env.GOOGLE_REFRESH_TOKEN?.length,
+      })
+    }
+
     const calendar = getCalendar()
 
     let result
