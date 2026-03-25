@@ -74,6 +74,21 @@ CREATE TABLE IF NOT EXISTS ats_portals (
     notes TEXT,
     active INTEGER DEFAULT 1 CHECK(active IN (0, 1))
 );
+
+CREATE TABLE IF NOT EXISTS transcripts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    source TEXT NOT NULL,
+    full_text TEXT NOT NULL,
+    segments_json TEXT NOT NULL,
+    duration_seconds REAL NOT NULL DEFAULT 0,
+    language TEXT NOT NULL DEFAULT 'en',
+    audio_path TEXT,
+    raw_metadata TEXT NOT NULL DEFAULT '{}',
+    application_id INTEGER REFERENCES applications(id),
+    analyzed_at TEXT,
+    analysis_json TEXT,
+    imported_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 """
 
 
