@@ -30,6 +30,7 @@ export interface Application {
   notes: string
   profile_id: string
   updated_at: string
+  interview_date: string | null
 }
 
 export type ApplicationStatus =
