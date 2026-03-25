@@ -2,13 +2,10 @@ import { NextRequest, NextResponse } from "next/server"
 import { google } from "googleapis"
 import { config } from "dotenv"
 import path from "path"
-import { existsSync } from "fs"
 
-// Load .env.local only if it exists (local dev). On Vercel, env vars are injected by the platform.
-const envPath = path.resolve(process.cwd(), ".env.local")
-if (existsSync(envPath)) {
-  config({ path: envPath })
-}
+// dotenv.config() silently does nothing if the file doesn't exist,
+// so this is safe on both local dev (.env.local present) and Vercel (env vars injected).
+config({ path: path.resolve(process.cwd(), ".env.local") })
 
 type CalendarAction = "follow_up" | "phone_screen" | "interview" | "offer_deadline"
 

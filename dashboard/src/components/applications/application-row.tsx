@@ -25,6 +25,7 @@ export function ApplicationRow({
   const [notes, setNotes] = useState(application.notes || "")
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [tailorOpen, setTailorOpen] = useState(false)
+  const [tailorViewMode, setTailorViewMode] = useState(false)
   const [scheduleOpen, setScheduleOpen] = useState(false)
 
   async function handleStatusChange(e: React.ChangeEvent<HTMLSelectElement>) {
@@ -110,20 +111,43 @@ export function ApplicationRow({
           </select>
 
           {/* Tailor Resume */}
-          {application.url && (
+          {application.url && application.tailored_resume ? (
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => {
+                  setTailorViewMode(true)
+                  setTailorOpen(true)
+                }}
+                className="text-[10px] font-semibold px-2 py-1 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200 transition-colors flex items-center gap-1 hover:bg-emerald-100"
+                title="View saved tailored resume"
+              >
+                <FileCheck size={10} />
+                Tailored
+              </button>
+              <button
+                onClick={() => {
+                  setTailorViewMode(false)
+                  setTailorOpen(true)
+                }}
+                className="text-[10px] font-semibold px-2 py-1 rounded-md text-zinc-400 hover:text-amber-600 transition-colors flex items-center gap-1"
+                title="Generate a new tailored resume"
+              >
+                <Sparkles size={10} />
+              </button>
+            </div>
+          ) : application.url ? (
             <button
-              onClick={() => setTailorOpen(true)}
-              className={`text-[10px] font-semibold px-2 py-1 rounded-md transition-colors flex items-center gap-1 ${
-                application.tailored_resume
-                  ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                  : "text-zinc-400 hover:text-amber-600"
-              }`}
-              title={application.tailored_resume ? "Resume tailored — click to re-tailor" : "Tailor resume for this job"}
+              onClick={() => {
+                setTailorViewMode(false)
+                setTailorOpen(true)
+              }}
+              className="text-[10px] font-semibold px-2 py-1 rounded-md text-zinc-400 hover:text-amber-600 transition-colors flex items-center gap-1"
+              title="Tailor resume for this job"
             >
-              {application.tailored_resume ? <FileCheck size={10} /> : <Sparkles size={10} />}
-              {application.tailored_resume ? "Tailored" : "Tailor"}
+              <Sparkles size={10} />
+              Tailor
             </button>
-          )}
+          ) : null}
 
           {/* Schedule */}
           {SCHEDULABLE_STATUSES.includes(application.status) && (
@@ -160,6 +184,7 @@ export function ApplicationRow({
         application={application}
         open={tailorOpen}
         onOpenChange={setTailorOpen}
+        viewMode={tailorViewMode}
         onSave={async (tailoredResume) => {
           await onUpdate(application.id, { tailored_resume: tailoredResume })
         }}

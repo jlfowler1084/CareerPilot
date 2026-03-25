@@ -1,14 +1,16 @@
-import { ExternalLink, Plus } from "lucide-react"
+import { ExternalLink, Plus, Sparkles } from "lucide-react"
 import type { Job } from "@/types"
 
 interface JobCardProps {
   job: Job
   onTrack: (job: Job) => void
+  onTailor?: (job: Job) => void
+  onTrackAndTailor?: (job: Job) => void
   tracked: boolean
   isNew?: boolean
 }
 
-export function JobCard({ job, onTrack, tracked, isNew }: JobCardProps) {
+export function JobCard({ job, onTrack, onTailor, onTrackAndTailor, tracked, isNew }: JobCardProps) {
   const sourceColor = job.source === "Indeed" ? "#2557a7" : "#0c7ff2"
 
   return (
@@ -68,12 +70,34 @@ export function JobCard({ job, onTrack, tracked, isNew }: JobCardProps) {
             <span className="text-[10px] text-zinc-400 font-mono">{job.posted}</span>
           )}
           {!tracked ? (
-            <button
-              onClick={() => onTrack(job)}
-              className="text-[10px] font-semibold px-2.5 py-1 rounded-md bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-200 transition-colors flex items-center gap-1"
-            >
-              <Plus size={10} /> Track
-            </button>
+            <div className="flex flex-col items-end gap-1.5">
+              <button
+                onClick={() => onTrack(job)}
+                className="text-[10px] font-semibold px-2.5 py-1 rounded-md bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-200 transition-colors flex items-center gap-1"
+              >
+                <Plus size={10} /> Track
+              </button>
+              {job.url && onTailor && (
+                <button
+                  onClick={() => onTailor(job)}
+                  className="text-[10px] font-semibold px-2.5 py-1 rounded-md text-zinc-400 hover:text-amber-600 transition-colors flex items-center gap-1"
+                  title="Tailor resume for this job"
+                >
+                  <Sparkles size={10} /> Tailor
+                </button>
+              )}
+              {job.url && onTrackAndTailor && (
+                <button
+                  onClick={() => onTrackAndTailor(job)}
+                  className="text-[10px] font-semibold px-2.5 py-1 rounded-md bg-violet-50 text-violet-700 hover:bg-violet-100 border border-violet-200 transition-colors flex items-center gap-1"
+                  title="Track this job and tailor resume"
+                >
+                  <Plus size={10} />
+                  <Sparkles size={10} />
+                  Track + Tailor
+                </button>
+              )}
+            </div>
           ) : (
             <span className="text-[10px] font-mono text-zinc-400">
               Tracked

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import {
   Dialog,
   DialogContent,
@@ -10,14 +10,16 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
-import { Loader2, Copy, Check, Save } from "lucide-react"
+import { Loader2, Copy, Check, Save, RefreshCw } from "lucide-react"
 import type { Application } from "@/types"
 
 interface TailorModalProps {
-  application: Application
+  application: Pick<Application, "title" | "company" | "url" | "tailored_resume">
   open: boolean
   onOpenChange: (open: boolean) => void
   onSave: (tailoredResume: string) => Promise<void>
+  /** Start in view mode showing savedResume (if available) */
+  viewMode?: boolean
 }
 
 export function TailorModal({
@@ -25,6 +27,7 @@ export function TailorModal({
   open,
   onOpenChange,
   onSave,
+  viewMode = false,
 }: TailorModalProps) {
   const [loading, setLoading] = useState(false)
   const [tailoredResume, setTailoredResume] = useState("")
@@ -32,12 +35,22 @@ export function TailorModal({
   const [error, setError] = useState("")
   const [copied, setCopied] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [viewing, setViewing] = useState(false)
+
+  // When opening in view mode with a saved resume, display it
+  useEffect(() => {
+    if (open && viewMode && application.tailored_resume) {
+      setTailoredResume(application.tailored_resume)
+      setViewing(true)
+    }
+  }, [open, viewMode, application.tailored_resume])
 
   async function handleTailor() {
     setLoading(true)
     setError("")
     setTailoredResume("")
     setFitSummary("")
+    setViewing(false)
 
     try {
       const resp = await fetch("/api/tailor-resume", {
@@ -90,6 +103,7 @@ export function TailorModal({
       setFitSummary("")
       setError("")
       setCopied(false)
+      setViewing(false)
     }
     onOpenChange(next)
   }
@@ -98,7 +112,9 @@ export function TailorModal({
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Tailor Resume</DialogTitle>
+          <DialogTitle>
+            {viewing ? "Saved Tailored Resume" : "Tailor Resume"}
+          </DialogTitle>
           <DialogDescription>
             {application.title} at {application.company}
           </DialogDescription>
@@ -162,14 +178,21 @@ export function TailorModal({
                 )}
                 {copied ? "Copied" : "Copy to Clipboard"}
               </Button>
-              <Button onClick={handleSave} disabled={saving}>
-                {saving ? (
-                  <Loader2 className="size-3.5 mr-1.5 animate-spin" />
-                ) : (
-                  <Save className="size-3.5 mr-1.5" />
-                )}
-                Save to Application
-              </Button>
+              {viewing ? (
+                <Button variant="outline" onClick={handleTailor}>
+                  <RefreshCw className="size-3.5 mr-1.5" />
+                  Re-tailor
+                </Button>
+              ) : (
+                <Button onClick={handleSave} disabled={saving}>
+                  {saving ? (
+                    <Loader2 className="size-3.5 mr-1.5 animate-spin" />
+                  ) : (
+                    <Save className="size-3.5 mr-1.5" />
+                  )}
+                  Save to Application
+                </Button>
+              )}
             </DialogFooter>
           </div>
         )}

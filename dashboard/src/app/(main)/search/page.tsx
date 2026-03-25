@@ -6,6 +6,7 @@ import { useApplications } from "@/hooks/use-applications"
 import { ProfileChips } from "@/components/search/profile-chips"
 import { SearchControls } from "@/components/search/search-controls"
 import { JobCard } from "@/components/shared/job-card"
+import { TailorModal } from "@/components/applications/tailor-modal"
 import { AlertCircle } from "lucide-react"
 import type { Job } from "@/types"
 
@@ -25,10 +26,15 @@ export default function SearchPage() {
     isNew,
   } = useSearch()
 
-  const { applications, addApplication } = useApplications()
+  const { applications, addApplication, updateApplication } = useApplications()
 
   // Track which jobs have been tracked in this session
   const [sessionTracked, setSessionTracked] = useState<Set<string>>(new Set())
+
+  // Tailor modal state
+  const [tailorJob, setTailorJob] = useState<Job | null>(null)
+  const [tailorOpen, setTailorOpen] = useState(false)
+  const [trackedAppId, setTrackedAppId] = useState<string | null>(null)
 
   function isTracked(job: Job): boolean {
     const key = `${job.title}|||${job.company}`.toLowerCase()
@@ -44,6 +50,21 @@ export default function SearchPage() {
     const key = `${job.title}|||${job.company}`.toLowerCase()
     setSessionTracked((prev) => new Set(prev).add(key))
     await addApplication(job, "search")
+  }
+
+  function handleTailor(job: Job) {
+    setTailorJob(job)
+    setTrackedAppId(null)
+    setTailorOpen(true)
+  }
+
+  async function handleTrackAndTailor(job: Job) {
+    const key = `${job.title}|||${job.company}`.toLowerCase()
+    setSessionTracked((prev) => new Set(prev).add(key))
+    const result = await addApplication(job, "search")
+    setTailorJob(job)
+    setTrackedAppId(result?.data?.id ?? null)
+    setTailorOpen(true)
   }
 
   return (
@@ -103,6 +124,8 @@ export default function SearchPage() {
                 key={`${job.title}-${job.company}-${index}`}
                 job={job}
                 onTrack={handleTrack}
+                onTailor={handleTailor}
+                onTrackAndTailor={handleTrackAndTailor}
                 tracked={isTracked(job)}
                 isNew={isNew(job)}
               />
@@ -118,6 +141,26 @@ export default function SearchPage() {
             No results found. Try selecting different profiles.
           </p>
         </div>
+      )}
+
+      {/* Tailor Modal for search results */}
+      {tailorJob && (
+        <TailorModal
+          application={{
+            title: tailorJob.title,
+            company: tailorJob.company,
+            url: tailorJob.url,
+            tailored_resume: null,
+          }}
+          open={tailorOpen}
+          onOpenChange={setTailorOpen}
+          onSave={async (tailoredResume) => {
+            if (trackedAppId) {
+              await updateApplication(trackedAppId, { tailored_resume: tailoredResume })
+            }
+            // If no tracked app (just Tailor without Track), copy is still available
+          }}
+        />
       )}
     </div>
   )
