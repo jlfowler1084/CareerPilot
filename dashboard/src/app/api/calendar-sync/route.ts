@@ -204,8 +204,14 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    const missing = ["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "GOOGLE_REFRESH_TOKEN"]
-      .filter((k) => !process.env[k])
+    const envCheck = {
+      GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID,
+      GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET,
+      GOOGLE_REFRESH_TOKEN: process.env.GOOGLE_REFRESH_TOKEN,
+    }
+    const missing = Object.entries(envCheck)
+      .filter(([, v]) => !v)
+      .map(([k]) => k)
     if (missing.length > 0) {
       console.error("Missing env vars:", missing.join(", "))
       return NextResponse.json(
