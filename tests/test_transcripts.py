@@ -152,6 +152,8 @@ class TestSamsungImporter:
         assert record.audio_path is not None
 
 
+from unittest.mock import MagicMock, patch
+
 from src.transcripts.otter_importer import import_otter
 
 
@@ -218,3 +220,56 @@ class TestOtterImporter:
         assert record.segments[1].start_time == 4.0
         assert record.segments[2].start_time == 9.0
         assert record.segments[2].end_time == 15.5
+
+
+from src.transcripts.whisper_transcriber import transcribe, SUPPORTED_MODELS
+
+
+class TestWhisperTranscriber:
+    def test_supported_models(self):
+        assert "base" in SUPPORTED_MODELS
+        assert "tiny" in SUPPORTED_MODELS
+        assert "large-v3" in SUPPORTED_MODELS
+
+    @patch("src.transcripts.whisper_transcriber.WhisperModel")
+    def test_transcribe_returns_record(self, mock_model_cls, tmp_path):
+        """Mock faster-whisper and verify TranscriptRecord shape."""
+        audio = tmp_path / "test.mp3"
+        audio.write_bytes(b"fake audio data")
+
+        mock_model = MagicMock()
+        mock_model_cls.return_value = mock_model
+
+        mock_seg1 = MagicMock()
+        mock_seg1.start = 0.0
+        mock_seg1.end = 3.0
+        mock_seg1.text = " Hello, how are you?"
+
+        mock_seg2 = MagicMock()
+        mock_seg2.start = 3.5
+        mock_seg2.end = 7.0
+        mock_seg2.text = " I'm doing great, thanks."
+
+        mock_info = MagicMock()
+        mock_info.language = "en"
+        mock_info.duration = 7.0
+
+        mock_model.transcribe.return_value = ([mock_seg1, mock_seg2], mock_info)
+
+        record = transcribe(str(audio), model_size="base")
+
+        assert record.source == "whisper"
+        assert len(record.segments) == 2
+        assert record.segments[0].text == "Hello, how are you?"
+        assert record.segments[1].start_time == 3.5
+        assert record.language == "en"
+        assert record.duration_seconds == 7.0
+        assert record.audio_path == str(audio)
+
+    def test_missing_faster_whisper_raises(self, tmp_path):
+        """When faster-whisper is not installed, raise RuntimeError."""
+        audio = tmp_path / "test.mp3"
+        audio.write_bytes(b"fake")
+        with patch("src.transcripts.whisper_transcriber.WhisperModel", None):
+            with pytest.raises(RuntimeError, match="faster-whisper"):
+                transcribe(str(audio))
