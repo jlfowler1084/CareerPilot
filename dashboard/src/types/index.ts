@@ -12,6 +12,78 @@ export interface Job {
   profileLabel: string
 }
 
+// Interview Prep types
+export interface SalaryRange {
+  low: number
+  mid: number
+  high: number
+  target?: number
+  source: string
+}
+
+export interface StarStory {
+  title: string
+  situation: string
+  task: string
+  action: string
+  result: string
+}
+
+export interface PhoneScreenContent {
+  company_quick_hits: string[]
+  elevator_pitch: string
+  likely_questions: string[]
+  talking_points: string[]
+  questions_to_ask: string[]
+  red_flags: string[]
+  salary_prep: SalaryRange
+  skills_to_study: string[]
+}
+
+export interface InterviewContent {
+  technical_deep_dive: string[]
+  scenario_questions: string[]
+  star_stories: StarStory[]
+  hands_on_prep: string[]
+  architecture_questions: string[]
+  knowledge_refresh: string[]
+  skills_to_study: string[]
+}
+
+export interface OfferContent {
+  salary_analysis: SalaryRange
+  negotiation_scripts: string[]
+  benefits_checklist: string[]
+  counter_offer_framework: { initial: string; walkaway: string; strategy: string }
+  decision_matrix: { factors: string[]; weights: Record<string, number> }
+}
+
+export interface PrepStage<T> {
+  generated_at: string
+  content: T
+}
+
+export interface Debrief {
+  round: number
+  date: string
+  rating: number
+  questions_asked: string
+  went_well: string
+  challenging: string
+  takeaways: string
+  interviewer_name: string
+  interviewer_role: string
+}
+
+export interface InterviewPrep {
+  phone_screen?: PrepStage<PhoneScreenContent>
+  interview?: PrepStage<InterviewContent>
+  offer?: PrepStage<OfferContent>
+  debriefs?: Debrief[]
+}
+
+export type PrepStageKey = "phone_screen" | "interview" | "offer"
+
 export interface Application {
   id: string
   user_id: string
@@ -31,6 +103,7 @@ export interface Application {
   profile_id: string
   updated_at: string
   interview_date: string | null
+  interview_prep?: InterviewPrep
 }
 
 export type ApplicationStatus =
