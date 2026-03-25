@@ -130,3 +130,11 @@ export interface ConversationPattern {
   weak_areas: Array<{ area: string; suggestion: string }>
   this_week: string
 }
+
+export type {
+  Email,
+  EmailCategory,
+  ClassificationResult,
+  EmailApplicationLink,
+  UserSettings,
+} from "./email"
