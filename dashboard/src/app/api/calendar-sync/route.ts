@@ -217,25 +217,6 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // Temporary diagnostic — remove after Vercel debugging
-    if (req.headers.get("x-debug") === "env") {
-      const cid = process.env.GOOGLE_CLIENT_ID ?? ""
-      const cs = process.env.GOOGLE_CLIENT_SECRET ?? ""
-      const rt = process.env.GOOGLE_REFRESH_TOKEN ?? ""
-      return NextResponse.json({
-        clientId: cid.substring(0, 12) + "..." + cid.substring(cid.length - 10),
-        clientIdLen: cid.length,
-        secretStart: cs.substring(0, 8) + "...",
-        secretLen: cs.length,
-        tokenStart: rt.substring(0, 8) + "...",
-        tokenLen: rt.length,
-        // Check for whitespace issues
-        cidTrimDiff: cid.length - cid.trim().length,
-        csTrimDiff: cs.length - cs.trim().length,
-        rtTrimDiff: rt.length - rt.trim().length,
-      })
-    }
-
     const calendar = getCalendar()
 
     let result
