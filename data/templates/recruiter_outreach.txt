@@ -1,0 +1,17 @@
+Subject: Experienced Infrastructure Engineer — Open to Contract & Full-Time (Indianapolis)
+
+Hi [Recruiter Name],
+
+I'm an infrastructure engineer with 20 years of experience in enterprise Windows/VMware environments, currently based in the Indianapolis area and open to both contract and full-time opportunities.
+
+Core strengths: Windows Server, Active Directory, VMware vSphere (700+ VMs), PowerShell automation, M365/Azure AD administration, Splunk/SolarWinds monitoring, and SCCM patch management.
+
+Most recently I was a Systems Engineer at Venable LLP (2021-2025) where I managed server commissioning, OS migrations, and built a modular PowerShell framework for infrastructure automation.
+
+I'd welcome the chance to discuss any infrastructure or systems roles you're currently staffing in the Indy area or remote. Happy to send my full resume if there's a fit.
+
+Best regards,
+Joseph Fowler
+443-787-6528
+jlfowler1084@gmail.com
+linkedin.com/in/system-administration

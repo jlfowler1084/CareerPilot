@@ -57,6 +57,21 @@ CREATE TABLE IF NOT EXISTS interview_analyses (
     role TEXT DEFAULT ''
 );
 
+CREATE TABLE IF NOT EXISTS recruiters (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    agency TEXT NOT NULL,
+    email TEXT,
+    phone TEXT,
+    linkedin_url TEXT,
+    specialization TEXT,
+    last_contact TEXT,
+    contact_method TEXT,
+    relationship_status TEXT DEFAULT 'new',
+    notes TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE TABLE IF NOT EXISTS kv_store (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
@@ -176,3 +191,104 @@ def set_kv(conn, key, value):
         (key, str(value)),
     )
     conn.commit()
+
+
+# --- Recruiters CRUD ---
+
+
+def add_recruiter(conn, name, agency, email=None, phone=None,
+                  linkedin_url=None, specialization=None, notes=None):
+    """Insert a new recruiter. Returns the row id."""
+    cursor = conn.execute(
+        "INSERT INTO recruiters (name, agency, email, phone, linkedin_url, "
+        "specialization, notes) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (name, agency, email, phone, linkedin_url, specialization, notes),
+    )
+    conn.commit()
+    logger.debug("Added recruiter: %s (%s)", name, agency)
+    return cursor.lastrowid
+
+
+def get_recruiter(conn, recruiter_id):
+    """Get a single recruiter by id. Returns dict or None."""
+    row = conn.execute(
+        "SELECT * FROM recruiters WHERE id = ?", (recruiter_id,)
+    ).fetchone()
+    return dict(row) if row else None
+
+
+def list_recruiters(conn):
+    """Get all recruiters, sorted by agency then name."""
+    rows = conn.execute(
+        "SELECT * FROM recruiters ORDER BY agency, name"
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def update_recruiter(conn, recruiter_id, **kwargs):
+    """Update recruiter fields. Returns True if found, False otherwise."""
+    allowed = {
+        "name", "agency", "email", "phone", "linkedin_url",
+        "specialization", "last_contact", "contact_method",
+        "relationship_status", "notes",
+    }
+    fields = {k: v for k, v in kwargs.items() if k in allowed}
+    if not fields:
+        return False
+
+    row = conn.execute(
+        "SELECT id FROM recruiters WHERE id = ?", (recruiter_id,)
+    ).fetchone()
+    if not row:
+        logger.warning("Recruiter id=%d not found", recruiter_id)
+        return False
+
+    set_clause = ", ".join(f"{k} = ?" for k in fields)
+    values = list(fields.values()) + [recruiter_id]
+    conn.execute(
+        f"UPDATE recruiters SET {set_clause} WHERE id = ?", values,
+    )
+    conn.commit()
+    logger.info("Updated recruiter id=%d: %s", recruiter_id, list(fields.keys()))
+    return True
+
+
+def get_stale_recruiters(conn, days=14):
+    """Get recruiters with active/warm status not contacted in `days`+ days."""
+    rows = conn.execute(
+        "SELECT * FROM recruiters "
+        "WHERE relationship_status IN ('active', 'warm') "
+        "AND last_contact IS NOT NULL "
+        "AND julianday('now') - julianday(last_contact) >= ? "
+        "ORDER BY last_contact ASC",
+        (days,),
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def log_recruiter_contact(conn, recruiter_id, method, note=""):
+    """Log a contact with a recruiter.
+
+    Updates last_contact to now, sets contact_method, and appends a
+    timestamped entry to notes.
+    """
+    row = conn.execute(
+        "SELECT id, notes FROM recruiters WHERE id = ?", (recruiter_id,)
+    ).fetchone()
+    if not row:
+        logger.warning("Recruiter id=%d not found", recruiter_id)
+        return False
+
+    now = datetime.now().isoformat(timespec="seconds")
+    existing_notes = row["notes"] or ""
+    entry = f"[{now}] ({method}) {note}".strip() if note else f"[{now}] ({method})"
+    new_notes = f"{existing_notes}\n{entry}".strip()
+
+    conn.execute(
+        "UPDATE recruiters SET last_contact = ?, contact_method = ?, notes = ? "
+        "WHERE id = ?",
+        (now, method, new_notes, recruiter_id),
+    )
+    conn.commit()
+    logger.info("Logged contact for recruiter id=%d via %s", recruiter_id, method)
+    return True

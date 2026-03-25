@@ -1845,6 +1845,43 @@ def morning():
     except Exception:
         pass
 
+    # --- Recruiter follow-ups ---
+    try:
+        conn = models.get_connection()
+        stale = models.get_stale_recruiters(conn)
+        active_warm = [
+            dict(r) for r in conn.execute(
+                "SELECT * FROM recruiters WHERE relationship_status IN ('active', 'warm') "
+                "ORDER BY last_contact ASC"
+            ).fetchall()
+        ]
+        conn.close()
+
+        if active_warm:
+            console.print()
+            console.print("[bold]Recruiter Follow-ups:[/bold]")
+            stale_ids = {r["id"] for r in stale}
+            for r in active_warm:
+                if r["id"] in stale_ids:
+                    days_ago = (datetime.now() - datetime.fromisoformat(r["last_contact"])).days
+                    console.print(
+                        f"  [yellow]⚠[/yellow] {r['name']} ({r['agency']}) "
+                        f"— last contact {days_ago} days ago"
+                    )
+                else:
+                    if r.get("last_contact"):
+                        days_ago = (datetime.now() - datetime.fromisoformat(r["last_contact"])).days
+                        console.print(
+                            f"  [green]✅[/green] {r['name']} ({r['agency']}) "
+                            f"— contacted {days_ago} days ago"
+                        )
+                    else:
+                        console.print(
+                            f"  [dim]●[/dim] {r['name']} ({r['agency']}) — no contact logged"
+                        )
+    except Exception:
+        pass
+
     # Record scan timestamp
     try:
         conn = models.get_connection()
@@ -1857,6 +1894,180 @@ def morning():
     console.print(
         f"[bold]Summary:[/bold] {email_count} emails, {job_count} jobs found."
     )
+
+
+# ═══════════════════════════════════════════════════════════════
+# Recruiters
+# ═══════════════════════════════════════════════════════════════
+
+
+@cli.group(invoke_without_command=True)
+@click.pass_context
+def recruiters(ctx):
+    """Recruiter relationship tracker."""
+    if ctx.invoked_subcommand is not None:
+        return
+
+    from datetime import datetime
+
+    from src.db import models
+
+    conn = models.get_connection()
+    all_recruiters = models.list_recruiters(conn)
+    conn.close()
+
+    if not all_recruiters:
+        console.print("[dim]No recruiters tracked yet. Use 'recruiters add' to add one.[/dim]")
+        return
+
+    table = Table(title="Recruiter Contacts")
+    table.add_column("ID", style="dim", width=4)
+    table.add_column("Name", style="bold")
+    table.add_column("Agency")
+    table.add_column("Specialization")
+    table.add_column("Last Contact")
+    table.add_column("Status")
+
+    now = datetime.now()
+    for r in all_recruiters:
+        # Color-code by freshness
+        status = r.get("relationship_status", "new")
+        style = "dim"
+        if status in ("active", "warm"):
+            if r.get("last_contact"):
+                days = (now - datetime.fromisoformat(r["last_contact"])).days
+                if days >= 14:
+                    style = "red"
+                elif days >= 7:
+                    style = "yellow"
+                else:
+                    style = "green"
+            else:
+                style = "green"
+        elif status == "do_not_contact":
+            style = "dim red"
+
+        last_contact = r.get("last_contact", "")
+        if last_contact:
+            last_contact = last_contact[:10]
+
+        table.add_row(
+            str(r["id"]),
+            f"[{style}]{r['name']}[/{style}]",
+            r.get("agency", ""),
+            r.get("specialization", "") or "",
+            last_contact,
+            f"[{style}]{status}[/{style}]",
+        )
+
+    console.print(table)
+
+
+COMMON_AGENCIES = [
+    "TEKsystems", "Robert Half", "Kforce", "Insight Global",
+    "Randstad", "Apex Systems",
+]
+
+
+@recruiters.command("add")
+def recruiters_add():
+    """Add a new recruiter contact."""
+    from src.db import models
+
+    console.print("[bold]Add Recruiter[/bold]")
+    console.print()
+
+    name = click.prompt("  Name")
+
+    console.print("  Common agencies:")
+    for i, a in enumerate(COMMON_AGENCIES, 1):
+        console.print(f"    {i}. {a}")
+    console.print(f"    {len(COMMON_AGENCIES) + 1}. Other (type custom)")
+    choice = click.prompt("  Agency", type=int, default=1)
+    if 1 <= choice <= len(COMMON_AGENCIES):
+        agency = COMMON_AGENCIES[choice - 1]
+    else:
+        agency = click.prompt("  Custom agency name")
+
+    email = click.prompt("  Email", default="", show_default=False) or None
+    phone = click.prompt("  Phone", default="", show_default=False) or None
+    linkedin = click.prompt("  LinkedIn URL", default="", show_default=False) or None
+    spec = click.prompt("  Specialization", default="Infrastructure")
+    notes = click.prompt("  Notes", default="", show_default=False) or None
+
+    conn = models.get_connection()
+    rid = models.add_recruiter(
+        conn, name, agency,
+        email=email, phone=phone, linkedin_url=linkedin,
+        specialization=spec, notes=notes,
+    )
+    conn.close()
+
+    console.print(f"\n  [green]Added recruiter #{rid}: {name} ({agency})[/green]")
+
+
+@recruiters.command("log")
+@click.argument("recruiter_id", type=int)
+def recruiters_log(recruiter_id):
+    """Log a contact with a recruiter."""
+    from src.db import models
+
+    conn = models.get_connection()
+    r = models.get_recruiter(conn, recruiter_id)
+    if not r:
+        console.print(f"[red]Recruiter #{recruiter_id} not found.[/red]")
+        conn.close()
+        return
+
+    console.print(f"[bold]Log contact with {r['name']} ({r['agency']})[/bold]")
+    method = click.prompt(
+        "  Contact method",
+        type=click.Choice(["email", "phone", "linkedin", "in_person"]),
+    )
+    note = click.prompt("  Note (optional)", default="", show_default=False)
+
+    models.log_recruiter_contact(conn, recruiter_id, method, note)
+    conn.close()
+
+    console.print(f"  [green]Contact logged for {r['name']}.[/green]")
+
+
+@recruiters.command("stale")
+def recruiters_stale():
+    """Show recruiters not contacted in 14+ days (active/warm only)."""
+    from datetime import datetime
+
+    from src.db import models
+
+    conn = models.get_connection()
+    stale = models.get_stale_recruiters(conn)
+    conn.close()
+
+    if not stale:
+        console.print("[green]No stale recruiter contacts. All follow-ups are current.[/green]")
+        return
+
+    table = Table(title="Stale Recruiter Contacts (14+ days)")
+    table.add_column("ID", style="dim", width=4)
+    table.add_column("Name", style="bold red")
+    table.add_column("Agency")
+    table.add_column("Last Contact", style="yellow")
+    table.add_column("Days Ago", style="red")
+    table.add_column("Status")
+
+    now = datetime.now()
+    for r in stale:
+        days = (now - datetime.fromisoformat(r["last_contact"])).days
+        table.add_row(
+            str(r["id"]),
+            r["name"],
+            r.get("agency", ""),
+            r["last_contact"][:10],
+            str(days),
+            r.get("relationship_status", ""),
+        )
+
+    console.print(table)
 
 
 @cli.command()

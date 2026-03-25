@@ -27,6 +27,7 @@
 param(
     [switch]$Quick,
     [switch]$Gov,
+    [switch]$Staffing,
     [switch]$DirectOnly,
     [switch]$Export,
     [switch]$ListJobs,
@@ -301,6 +302,12 @@ elseif ($Gov) {
     $reportFile = Join-Path $ReportsDir "gov_$(Get-Date -Format 'yyyy-MM-dd_HHmm')"
     & $PythonExe $MorningScan --gov --output $reportFile
 }
+elseif ($Staffing) {
+    # Staffing agency sources only
+    Write-Host "  Mode: Staffing agencies only (TEKsystems, Robert Half, Kforce, etc.)" -ForegroundColor Cyan
+    $reportFile = Join-Path $ReportsDir "staffing_$(Get-Date -Format 'yyyy-MM-dd_HHmm')"
+    & $PythonExe $MorningScan --staffing --output $reportFile
+}
 elseif ($Quick) {
     # Morning scan, direct only (skip boards)
     Write-Host "  Mode: Quick scan (direct employers only)" -ForegroundColor Cyan
@@ -309,7 +316,7 @@ elseif ($Quick) {
 }
 else {
     # Full morning scan -- all sources
-    Write-Host "  Mode: Full scan (Direct + Indeed + Dice + Gov)" -ForegroundColor Cyan
+    Write-Host "  Mode: Full scan (Direct + Indeed + Dice + Gov + Staffing)" -ForegroundColor Cyan
     $reportFile = Join-Path $ReportsDir "morning_$(Get-Date -Format 'yyyy-MM-dd_HHmm')"
     if ($Company) {
         & $PythonExe $MorningScan --company $Company --output $reportFile
