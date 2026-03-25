@@ -404,3 +404,58 @@ class TestTranscriptStore:
 
         match = find_matching_application("Interview about kitchen remodel", db_path=db_path)
         assert match is None
+
+
+from src.transcripts.watch_folder import classify_file, process_file
+
+
+class TestWatchFolder:
+    def test_classify_srt_as_otter(self, tmp_path):
+        f = tmp_path / "interview.srt"
+        f.write_text("1\n00:00:00,000 --> 00:00:03,000\nHello\n", encoding="utf-8")
+        assert classify_file(f) == "otter"
+
+    def test_classify_otter_txt(self, tmp_path):
+        f = tmp_path / "meeting.txt"
+        f.write_text("Speaker 1  0:00\nHello there.\n", encoding="utf-8")
+        assert classify_file(f) == "otter"
+
+    def test_classify_samsung_txt(self, tmp_path):
+        f = tmp_path / "call.txt"
+        f.write_text("[00:00] Speaker 1: Hello\n", encoding="utf-8")
+        assert classify_file(f) == "samsung"
+
+    def test_classify_plain_txt_as_samsung(self, tmp_path):
+        f = tmp_path / "notes.txt"
+        f.write_text("The interview went well overall.\n", encoding="utf-8")
+        assert classify_file(f) == "samsung"
+
+    def test_classify_audio_as_whisper(self, tmp_path):
+        f = tmp_path / "recording.m4a"
+        f.write_bytes(b"fake audio")
+        assert classify_file(f) == "whisper"
+
+    def test_classify_mp3_as_whisper(self, tmp_path):
+        f = tmp_path / "recording.mp3"
+        f.write_bytes(b"fake audio")
+        assert classify_file(f) == "whisper"
+
+    def test_classify_unknown_extension(self, tmp_path):
+        f = tmp_path / "data.csv"
+        f.write_text("a,b,c", encoding="utf-8")
+        assert classify_file(f) is None
+
+    @patch("src.transcripts.watch_folder.import_samsung")
+    def test_process_file_samsung(self, mock_import, tmp_path):
+        mock_import.return_value = TranscriptRecord(
+            source="samsung", segments=[], full_text="Hello",
+            duration_seconds=5.0, language="en", audio_path=None, raw_metadata={},
+        )
+        f = tmp_path / "call.txt"
+        f.write_text("[00:00] Speaker 1: Hello\n", encoding="utf-8")
+        processed_dir = tmp_path / "processed"
+
+        result = process_file(f, processed_dir, db_path=tmp_path / "test.db")
+        assert result is not None
+        assert not f.exists()  # moved to processed
+        assert (processed_dir / "call.txt").exists()
