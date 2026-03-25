@@ -26,7 +26,10 @@ import {
   RefreshCw,
   Mail,
   Phone,
+  Loader2,
+  Download,
 } from "lucide-react"
+import { toast } from "sonner"
 import type { Application, ApplicationStatus, ApplicationEvent } from "@/types"
 
 // --- Event type icons ---
@@ -102,6 +105,7 @@ export function DetailPanel({
   // --- Job description state ---
   const [jobDesc, setJobDesc] = useState(application.job_description || "")
   const jobDescTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [fetching, setFetching] = useState(false)
 
   // --- Modals ---
   const [tailorOpen, setTailorOpen] = useState(false)
@@ -163,6 +167,51 @@ export function DetailPanel({
       if (jobDescTimer.current) clearTimeout(jobDescTimer.current)
     }
   }, [])
+
+  // --- Fetch job details from URL ---
+  const fetchFromUrl = useCallback(async () => {
+    if (!application.url) return
+    setFetching(true)
+    try {
+      const res = await fetch("/api/extract-job", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: application.url }),
+      })
+      const json = await res.json()
+      if (!res.ok || !json.success) {
+        toast.error(json.error || "Failed to fetch job details")
+        return
+      }
+      const data = json.data
+      const updates: Partial<Application> = {}
+      if (data.job_description) {
+        updates.job_description = data.job_description
+        setJobDesc(data.job_description)
+      }
+      if (data.location && !application.location) updates.location = data.location
+      if (data.salary_range && !application.salary_range) updates.salary_range = data.salary_range
+      if (data.job_type && !application.job_type) updates.job_type = data.job_type
+      if (data.contact_name && !application.contact_name) {
+        updates.contact_name = data.contact_name
+        setContactName(data.contact_name)
+      }
+      if (data.contact_email && !application.contact_email) {
+        updates.contact_email = data.contact_email
+        setContactEmail(data.contact_email)
+      }
+      if (Object.keys(updates).length > 0) {
+        await onUpdate(application.id, updates)
+        toast.success("Job details updated")
+      } else {
+        toast.info("No new details found")
+      }
+    } catch {
+      toast.error("Failed to connect to extraction service")
+    } finally {
+      setFetching(false)
+    }
+  }, [application, onUpdate])
 
   return (
     <>
@@ -543,9 +592,26 @@ export function DetailPanel({
                 </div>
 
                 <div className="mt-3">
-                  <label className="text-xs font-medium text-zinc-600 mb-1 block">
-                    Job Description
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs font-medium text-zinc-600">
+                      Job Description
+                    </label>
+                    {!jobDesc && application.url && (
+                      <Button
+                        variant="outline"
+                        size="xs"
+                        onClick={fetchFromUrl}
+                        disabled={fetching}
+                      >
+                        {fetching ? (
+                          <Loader2 size={12} className="animate-spin" />
+                        ) : (
+                          <Download size={12} />
+                        )}
+                        {fetching ? "Fetching..." : "Fetch from URL"}
+                      </Button>
+                    )}
+                  </div>
                   <textarea
                     value={jobDesc}
                     onChange={(e) => setJobDesc(e.target.value)}

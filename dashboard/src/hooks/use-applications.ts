@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/client"
 import { RESPONSE_STATUSES } from "@/lib/constants"
 import { logActivity } from "@/hooks/use-activity-log"
 import { toast } from "sonner"
-import type { Application, ApplicationStatus, ApplicationEventType, Job } from "@/types"
+import type { Application, ApplicationStatus, ApplicationEventType, ExtractedJob, Job } from "@/types"
 
 const supabase = createClient()
 
@@ -225,6 +225,49 @@ export function useApplications() {
     }
   }, [applications])
 
+  const createFromExtraction = useCallback(
+    async (extracted: ExtractedJob, url: string) => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+      if (!user) return { data: null, error: "Not authenticated" }
+
+      const { data, error } = await supabase
+        .from("applications")
+        .insert({
+          user_id: user.id,
+          title: extracted.title,
+          company: extracted.company,
+          location: extracted.location,
+          url,
+          source: extracted.source,
+          salary_range: extracted.salary_range,
+          status: "interested" as ApplicationStatus,
+          job_type: extracted.job_type,
+          posted_date: extracted.posted_date,
+          job_description: extracted.job_description,
+          contact_name: extracted.contact_name,
+          contact_email: extracted.contact_email,
+          profile_id: "",
+          notes: "",
+        })
+        .select()
+        .single()
+
+      if (!error && data) {
+        await logActivity(`Tracked: ${data.title} at ${data.company}`)
+        await insertApplicationEvent(
+          data.id,
+          "tracked",
+          `Imported from ${extracted.source} via URL extraction`
+        )
+      }
+
+      return { data, error }
+    },
+    []
+  )
+
   const updateContact = useCallback(
     async (
       id: string,
@@ -298,6 +341,7 @@ export function useApplications() {
     applications,
     loading,
     addApplication,
+    createFromExtraction,
     updateApplication,
     deleteApplication,
     updateContact,

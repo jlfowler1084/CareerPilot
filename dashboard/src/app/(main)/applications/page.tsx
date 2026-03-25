@@ -6,6 +6,7 @@ import { useApplications } from "@/hooks/use-applications"
 import { computeStats } from "@/hooks/use-stats"
 import { KanbanSummary } from "@/components/applications/kanban-summary"
 import { AddForm } from "@/components/applications/add-form"
+import { UrlImport } from "@/components/applications/url-import"
 import { ApplicationRow } from "@/components/applications/application-row"
 import { DetailPanel } from "@/components/applications/detail-panel"
 import { EmptyState } from "@/components/shared/empty-state"
@@ -38,6 +39,7 @@ function ApplicationsContent() {
     applications,
     loading,
     addApplication,
+    createFromExtraction,
     updateApplication,
     deleteApplication,
     updateContact,
@@ -128,6 +130,9 @@ function ApplicationsContent() {
         activeFilter={statusFilter}
         onFilter={setStatusFilter}
       />
+
+      {/* URL Import */}
+      <UrlImport onSave={createFromExtraction} onUpdate={updateApplication} />
 
       {/* Add Form */}
       <AddForm onAdd={addApplication} />

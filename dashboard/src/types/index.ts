@@ -48,6 +48,7 @@ export type ApplicationEventType =
   | "calendar_scheduled"
   | "contact_added"
   | "follow_up"
+  | "tracked"
 
 export interface ApplicationEvent {
   id: string
@@ -85,6 +86,22 @@ export interface SearchCacheEntry {
   results: Job[]
   result_count: number
   searched_at: string
+}
+
+export interface ExtractedJob {
+  title: string
+  company: string
+  location: string | null
+  salary_range: string | null
+  job_type: string | null
+  job_description: string | null
+  contact_name: string | null
+  contact_email: string | null
+  posted_date: string | null
+  source: string
+  key_requirements: string[]
+  nice_to_haves: string[]
+  fit_analysis: string | null
 }
 
 export interface SearchRun {
