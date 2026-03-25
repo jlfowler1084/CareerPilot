@@ -10,6 +10,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
+import { toast } from "sonner"
 import { Loader2, Copy, Check, Save, RefreshCw } from "lucide-react"
 import type { Application } from "@/types"
 
@@ -82,6 +83,7 @@ export function TailorModal({
   async function handleCopy() {
     await navigator.clipboard.writeText(tailoredResume)
     setCopied(true)
+    toast.success("Copied to clipboard")
     setTimeout(() => setCopied(false), 2000)
   }
 
@@ -89,9 +91,10 @@ export function TailorModal({
     setSaving(true)
     try {
       await onSave(tailoredResume)
+      toast.success(`Resume tailored for ${application.company}`)
       onOpenChange(false)
     } catch {
-      setError("Failed to save")
+      toast.error("Failed to save tailored resume")
     } finally {
       setSaving(false)
     }

@@ -10,6 +10,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
+import { toast } from "sonner"
 import { Loader2, Check, CalendarCheck } from "lucide-react"
 import type { Application, ApplicationStatus } from "@/types"
 
@@ -112,6 +113,7 @@ export function ScheduleModal({
 
       setSuccess(true)
       setDetails(data.details || "Events created successfully")
+      toast.success("Calendar event created")
 
       // Save calendar info back to the application
       const updates: Partial<Application> = {

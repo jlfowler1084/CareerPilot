@@ -99,8 +99,9 @@ export function JobCard({ job, onTrack, onTailor, onTrackAndTailor, tracked, isN
               )}
             </div>
           ) : (
-            <span className="text-[10px] font-mono text-zinc-400">
-              Tracked
+            <span className="text-[10px] font-bold px-2 py-1 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
+              <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 5l2.5 2.5L8 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+              Tracking
             </span>
           )}
         </div>

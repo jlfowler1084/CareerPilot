@@ -6,11 +6,13 @@ import { KpiCard } from "@/components/shared/kpi-card"
 import { SourceChart } from "@/components/analytics/source-chart"
 import { PipelineFunnel } from "@/components/analytics/pipeline-funnel"
 import { TimelineChart } from "@/components/analytics/timeline-chart"
+import { EmptyState } from "@/components/shared/empty-state"
 import {
   Briefcase,
   Send,
   MessageSquare,
   TrendingUp,
+  BarChart3,
 } from "lucide-react"
 
 export default function AnalyticsPage() {
@@ -26,6 +28,20 @@ export default function AnalyticsPage() {
             <div key={i} className="h-28 bg-zinc-100 rounded-xl" />
           ))}
         </div>
+      </div>
+    )
+  }
+
+  if (applications.length === 0) {
+    return (
+      <div className="p-6 space-y-6">
+        <h2 className="text-lg font-bold">Analytics</h2>
+        <EmptyState
+          icon={BarChart3}
+          title="Not enough data yet"
+          description="Track some applications first to see analytics and trends."
+          actions={[{ label: "Search Jobs", href: "/search" }]}
+        />
       </div>
     )
   }

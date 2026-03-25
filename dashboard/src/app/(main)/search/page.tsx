@@ -7,7 +7,8 @@ import { ProfileChips } from "@/components/search/profile-chips"
 import { SearchControls } from "@/components/search/search-controls"
 import { JobCard } from "@/components/shared/job-card"
 import { TailorModal } from "@/components/applications/tailor-modal"
-import { AlertCircle } from "lucide-react"
+import { EmptyState } from "@/components/shared/empty-state"
+import { AlertCircle, SearchX } from "lucide-react"
 import type { Job } from "@/types"
 
 export default function SearchPage() {
@@ -27,6 +28,9 @@ export default function SearchPage() {
   } = useSearch()
 
   const { applications, addApplication, updateApplication } = useApplications()
+
+  // Sort state
+  const [sortBy, setSortBy] = useState<"newest" | "salary" | "company">("newest")
 
   // Track which jobs have been tracked in this session
   const [sessionTracked, setSessionTracked] = useState<Set<string>>(new Set())
@@ -115,11 +119,32 @@ export default function SearchPage() {
       {/* Results */}
       {searchResults.length > 0 && (
         <div className="space-y-3">
-          <div className="text-xs font-medium text-zinc-500 uppercase tracking-wider">
-            Results
+          <div className="flex items-center justify-between">
+            <div className="text-xs font-medium text-zinc-500 uppercase tracking-wider">
+              {searchResults.length} Results
+            </div>
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+              className="text-xs px-3 py-1.5 rounded-lg border border-zinc-200 bg-white text-zinc-700 cursor-pointer focus:outline-none focus:ring-1 focus:ring-amber-300"
+            >
+              <option value="newest">Newest First</option>
+              <option value="salary">Salary (High to Low)</option>
+              <option value="company">Company A-Z</option>
+            </select>
           </div>
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
-            {searchResults.map((job, index) => (
+            {[...searchResults].sort((a, b) => {
+              if (sortBy === "company") return a.company.localeCompare(b.company)
+              if (sortBy === "salary") {
+                const extractNum = (s: string) => {
+                  const m = s.replace(/,/g, "").match(/\d+/)
+                  return m ? parseInt(m[0]) : 0
+                }
+                return extractNum(b.salary || "0") - extractNum(a.salary || "0")
+              }
+              return 0 // Keep original order for newest
+            }).map((job, index) => (
               <JobCard
                 key={`${job.title}-${job.company}-${index}`}
                 job={job}
@@ -136,11 +161,11 @@ export default function SearchPage() {
 
       {/* Empty state */}
       {searchComplete && searchResults.length === 0 && !loading && (
-        <div className="bg-white rounded-xl border border-zinc-200 p-8 text-center">
-          <p className="text-sm text-zinc-500">
-            No results found. Try selecting different profiles.
-          </p>
-        </div>
+        <EmptyState
+          icon={SearchX}
+          title="No results found"
+          description="Try selecting different search profiles or broadening your search criteria."
+        />
       )}
 
       {/* Tailor Modal for search results */}

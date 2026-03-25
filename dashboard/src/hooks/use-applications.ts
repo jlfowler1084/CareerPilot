@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { RESPONSE_STATUSES } from "@/lib/constants"
 import { logActivity } from "@/hooks/use-activity-log"
+import { toast } from "sonner"
 import type { Application, ApplicationStatus, ApplicationEventType, Job } from "@/types"
 
 const supabase = createClient()
@@ -163,7 +164,14 @@ export function useApplications() {
         .select()
         .single()
 
+      if (error) {
+        toast.error("Failed to update application")
+      }
+
       if (!error && data) {
+        if (updates.status) {
+          toast.success(`Status updated to ${updates.status}`)
+        }
         const statusLabel = updates.status
           ? ` → ${updates.status}`
           : ""
@@ -206,9 +214,14 @@ export function useApplications() {
 
   const deleteApplication = useCallback(async (id: string) => {
     const app = applications.find((a) => a.id === id)
-    await supabase.from("applications").delete().eq("id", id)
-    if (app) {
-      await logActivity(`Removed: ${app.title} at ${app.company}`)
+    const { error } = await supabase.from("applications").delete().eq("id", id)
+    if (error) {
+      toast.error("Failed to delete application")
+    } else {
+      toast.success("Application deleted")
+      if (app) {
+        await logActivity(`Removed: ${app.title} at ${app.company}`)
+      }
     }
   }, [applications])
 
@@ -224,7 +237,11 @@ export function useApplications() {
         .select()
         .single()
 
+      if (error) {
+        toast.error("Failed to save contact info")
+      }
       if (!error && data) {
+        toast.success("Contact info saved")
         await insertApplicationEvent(
           id,
           "contact_added",
@@ -246,7 +263,11 @@ export function useApplications() {
         .select()
         .single()
 
+      if (error) {
+        toast.error("Failed to save notes")
+      }
       if (!error && data) {
+        toast.success("Notes saved")
         await insertApplicationEvent(
           id,
           "note_added",

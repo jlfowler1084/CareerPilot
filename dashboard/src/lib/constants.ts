@@ -2,14 +2,14 @@ import type { ApplicationStatus } from "@/types"
 
 export const STATUSES = [
   { id: "found" as const, label: "Found", color: "#6b7280" },
-  { id: "interested" as const, label: "Interested", color: "#06b6d4" },
-  { id: "applied" as const, label: "Applied", color: "#3b82f6" },
+  { id: "interested" as const, label: "Interested", color: "#3b82f6" },
+  { id: "applied" as const, label: "Applied", color: "#6366f1" },
   { id: "phone_screen" as const, label: "Phone Screen", color: "#8b5cf6" },
-  { id: "interview" as const, label: "Interview", color: "#f59e0b" },
+  { id: "interview" as const, label: "Interview", color: "#7c3aed" },
   { id: "offer" as const, label: "Offer", color: "#10b981" },
   { id: "rejected" as const, label: "Rejected", color: "#ef4444" },
-  { id: "withdrawn" as const, label: "Withdrawn", color: "#9ca3af" },
-  { id: "ghosted" as const, label: "Ghosted", color: "#d1d5db" },
+  { id: "withdrawn" as const, label: "Withdrawn", color: "#f97316" },
+  { id: "ghosted" as const, label: "Ghosted", color: "#94a3b8" },
 ] as const
 
 export const RESPONSE_STATUSES: ApplicationStatus[] = [
