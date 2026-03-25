@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from "next/server"
 import { google } from "googleapis"
+import { config } from "dotenv"
+import path from "path"
+
+// Turbopack may not resolve process.env for non-NEXT_PUBLIC_ vars in route
+// handlers. Load .env.local explicitly so credentials are always available.
+config({ path: path.resolve(process.cwd(), ".env.local") })
 
 type CalendarAction = "follow_up" | "phone_screen" | "interview" | "offer_deadline"
 
@@ -204,18 +210,9 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    const envCheck = {
-      GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID,
-      GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET,
-      GOOGLE_REFRESH_TOKEN: process.env.GOOGLE_REFRESH_TOKEN,
-    }
-    const missing = Object.entries(envCheck)
-      .filter(([, v]) => !v)
-      .map(([k]) => k)
-    if (missing.length > 0) {
-      console.error("Missing env vars:", missing.join(", "))
+    if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET || !process.env.GOOGLE_REFRESH_TOKEN) {
       return NextResponse.json(
-        { error: `Google Calendar credentials not configured (missing: ${missing.join(", ")})` },
+        { error: "Google Calendar credentials not configured" },
         { status: 500 }
       )
     }
