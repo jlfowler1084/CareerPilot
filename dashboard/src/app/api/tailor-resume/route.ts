@@ -1,16 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { BASE_RESUME } from "@/lib/base-resume"
 
-const TAILOR_SYSTEM_PROMPT = `You are a resume optimization expert. You will be given a base resume and a target job description. Produce a tailored version of the resume as plain text and a brief fit summary.
-
-Rules:
-- NEVER fabricate experience or add skills the candidate doesn't have.
-- ONLY reorder bullets within each role to put the most relevant first.
-- Adjust the Professional Summary to emphasize what this job cares about.
-- Naturally weave in keywords from the job description into existing bullet points where they genuinely apply.
-- Keep the same section structure and formatting as the original resume.
-
-You must respond with ONLY a JSON object, no markdown backticks, no preamble. The JSON must have exactly two keys: fitSummary (a 2-3 sentence analysis of how well the candidate fits this role) and tailoredResume (the complete tailored resume text with all sections).`
+const TAILOR_SYSTEM_PROMPT = `You are a resume tailoring expert. You will receive a candidate's resume and a job description. Respond with ONLY a valid JSON object containing exactly two keys: fitSummary (2-3 sentences analyzing how the candidate fits this role) and tailoredResume (the complete rewritten resume with bullets reordered to emphasize relevant experience). Rules: Never fabricate experience. Only reorder, re-emphasize, and naturally add keywords from the job description. Keep all sections: Professional Summary, Core Skills, Professional Experience, Education, Technical Knowledge.`
 
 export async function POST(req: NextRequest) {
   try {
@@ -140,32 +131,38 @@ function parseResponse(
   )
   const raw = textBlock?.text || ""
 
-  // 1. Try JSON.parse() directly
-  const direct = tryParseJson(raw)
-  if (direct) return NextResponse.json(direct)
+  // 1. Strip markdown backticks first (```json ... ``` or ``` ... ```)
+  const stripped = raw
+    .replace(/^```(?:json)?\s*\n?/gim, "")
+    .replace(/\n?```\s*$/gim, "")
+    .trim()
 
-  // 2. Strip markdown backticks (```json ... ```) and retry
-  const stripped = raw.replace(/^```(?:json)?\s*\n?/i, "").replace(/\n?```\s*$/, "")
-  if (stripped !== raw) {
-    const fromStripped = tryParseJson(stripped)
-    if (fromStripped) return NextResponse.json(fromStripped)
+  // 2. Try JSON.parse on stripped content
+  const fromStripped = tryParseJson(stripped)
+  if (fromStripped) return NextResponse.json(fromStripped)
+
+  // 3. Try extracting a JSON object from mixed text
+  const jsonMatch = stripped.match(/\{[\s\S]*"tailoredResume"[\s\S]*\}/)
+  if (jsonMatch) {
+    const extracted = tryParseJson(jsonMatch[0])
+    if (extracted) return NextResponse.json(extracted)
   }
 
-  // 3. Heuristic: split on first "PROFESSIONAL SUMMARY" or "JOSEPH FOWLER"
-  const splitPattern = /(PROFESSIONAL SUMMARY|JOSEPH FOWLER)/i
-  const splitMatch = raw.match(splitPattern)
+  // 4. Heuristic: split on first "JOSEPH FOWLER" or "PROFESSIONAL SUMMARY"
+  const splitPattern = /(JOSEPH FOWLER|PROFESSIONAL SUMMARY)/i
+  const splitMatch = stripped.match(splitPattern)
   if (splitMatch?.index != null && splitMatch.index > 0) {
-    const fitSummary = raw.slice(0, splitMatch.index).trim()
-    const tailoredResume = raw.slice(splitMatch.index).trim()
+    const fitSummary = stripped.slice(0, splitMatch.index).trim()
+    const tailoredResume = stripped.slice(splitMatch.index).trim()
     if (fitSummary && tailoredResume) {
       return NextResponse.json({ tailoredResume, fitSummary })
     }
   }
 
-  // 4. Last resort: entire response as tailoredResume
+  // 5. Last resort: entire response as tailoredResume
   return NextResponse.json({
-    tailoredResume: raw,
-    fitSummary: `Resume tailored for ${title || "this role"} at ${company || "this company"}`,
+    tailoredResume: stripped || raw,
+    fitSummary: `Resume tailored for ${title || "this role"} at ${company || "this company"}.`,
   })
 }
 
