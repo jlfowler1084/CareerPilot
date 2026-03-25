@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useRef } from "react"
 import { useInterviewPrep, isPrepStage } from "@/hooks/use-interview-prep"
+import type { DebriefInput } from "@/hooks/use-interview-prep"
+import { DebriefForm } from "@/components/applications/debrief-form"
 import {
   ChevronDown,
   ChevronRight,
@@ -172,7 +174,7 @@ function RenderContentValue({ keyName, value }: { keyName: string; value: unknow
 }
 
 export function InterviewPrepSection({ application }: InterviewPrepSectionProps) {
-  const { prep, currentStagePrep, generating, error, generatePrep } =
+  const { prep, currentStagePrep, generating, error, generatePrep, submitDebrief } =
     useInterviewPrep(application)
   const [open, setOpen] = useState(false)
   const [copied, setCopied] = useState(false)
@@ -206,8 +208,13 @@ export function InterviewPrepSection({ application }: InterviewPrepSectionProps)
     setTimeout(() => setCopied(false), 2000)
   }
 
-  function handleDebrief() {
-    setDebriefOpen(!debriefOpen)
+  async function handleDebrief(debrief: DebriefInput) {
+    const result = await submitDebrief(debrief)
+    if (result) {
+      toast.success("Debrief saved. Prep for your next round will incorporate this feedback.")
+      setDebriefOpen(false)
+    }
+    return result
   }
 
   const contentEntries = currentStagePrep?.content
@@ -263,7 +270,7 @@ export function InterviewPrepSection({ application }: InterviewPrepSectionProps)
             <button
               onClick={(e) => {
                 e.stopPropagation()
-                handleDebrief()
+                setDebriefOpen(true)
               }}
               className="text-[10px] font-semibold text-amber-600 hover:text-amber-800 flex items-center gap-0.5"
               title="Log debrief"
@@ -273,6 +280,13 @@ export function InterviewPrepSection({ application }: InterviewPrepSectionProps)
           </span>
         )}
       </button>
+
+      <DebriefForm
+        open={debriefOpen}
+        onOpenChange={setDebriefOpen}
+        onSubmit={handleDebrief}
+        nextRound={(prep.debriefs?.length || 0) + 1}
+      />
 
       {/* Content */}
       {open && (
