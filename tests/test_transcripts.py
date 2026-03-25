@@ -89,3 +89,64 @@ class TestToCoachTurns:
             duration_seconds=0, language="en", audio_path=None, raw_metadata={},
         )
         assert to_coach_turns(record) == []
+
+
+from src.transcripts.samsung_importer import import_samsung
+
+
+class TestSamsungImporter:
+    def test_parse_speaker_labeled_with_timestamps(self, tmp_path):
+        """Samsung transcript with 'Speaker N:' labels and [MM:SS] timestamps."""
+        txt = tmp_path / "recording.txt"
+        txt.write_text(
+            "[00:00] Speaker 1: Hi, thanks for calling.\n"
+            "[00:05] Speaker 2: Thanks for having me.\n"
+            "[01:30] Speaker 1: Tell me about your experience.\n",
+            encoding="utf-8",
+        )
+        record = import_samsung(str(txt))
+        assert record.source == "samsung"
+        assert len(record.segments) == 3
+        assert record.segments[0].speaker == "Speaker 1"
+        assert record.segments[0].start_time == 0.0
+        assert record.segments[1].start_time == 5.0
+        assert record.segments[2].start_time == 90.0
+
+    def test_parse_speaker_labels_no_timestamps(self, tmp_path):
+        """Samsung transcript with speaker labels but no timestamps."""
+        txt = tmp_path / "recording.txt"
+        txt.write_text(
+            "Interviewer: What's your background?\n"
+            "Joe: I've been in IT for 20 years.\n",
+            encoding="utf-8",
+        )
+        record = import_samsung(str(txt))
+        assert len(record.segments) == 2
+        assert record.segments[0].speaker == "Interviewer"
+        assert record.segments[1].speaker == "Joe"
+        assert record.segments[0].start_time == 0.0
+
+    def test_single_speaker_no_labels(self, tmp_path):
+        """Plain text with no speaker labels — single speaker fallback."""
+        txt = tmp_path / "notes.txt"
+        txt.write_text("The interview went well. We discussed PowerShell automation.", encoding="utf-8")
+        record = import_samsung(str(txt))
+        assert len(record.segments) == 1
+        assert record.segments[0].speaker == "Speaker"
+
+    def test_directory_with_audio_and_transcript(self, tmp_path):
+        """Directory containing both .txt and .m4a."""
+        (tmp_path / "call.txt").write_text("Speaker 1: Hello\n", encoding="utf-8")
+        (tmp_path / "call.m4a").write_bytes(b"fake audio")
+        record = import_samsung(str(tmp_path))
+        assert record.audio_path is not None
+        assert record.audio_path.endswith(".m4a")
+        assert len(record.segments) == 1
+
+    def test_directory_audio_only_needs_whisper(self, tmp_path):
+        """Directory with only audio — flags needs_whisper."""
+        (tmp_path / "call.m4a").write_bytes(b"fake audio")
+        record = import_samsung(str(tmp_path))
+        assert record.raw_metadata.get("needs_whisper") is True
+        assert len(record.segments) == 0
+        assert record.audio_path is not None
