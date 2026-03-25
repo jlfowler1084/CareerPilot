@@ -150,3 +150,71 @@ class TestSamsungImporter:
         assert record.raw_metadata.get("needs_whisper") is True
         assert len(record.segments) == 0
         assert record.audio_path is not None
+
+
+from src.transcripts.otter_importer import import_otter
+
+
+class TestOtterImporter:
+    def test_parse_otter_txt_format(self, tmp_path):
+        """Otter TXT with 'Speaker N  M:SS' format."""
+        txt = tmp_path / "meeting.txt"
+        txt.write_text(
+            "Speaker 1  0:00\n"
+            "Hello, thanks for calling about the systems engineer position.\n"
+            "\n"
+            "Speaker 2  0:05\n"
+            "Hi, yes, I'm Joe Fowler, thanks for taking the time.\n"
+            "\n"
+            "Speaker 1  0:15\n"
+            "Great. Tell me about your background.\n",
+            encoding="utf-8",
+        )
+        record = import_otter(str(txt))
+        assert record.source == "otter"
+        assert len(record.segments) == 3
+        assert record.segments[0].speaker == "Speaker 1"
+        assert record.segments[0].start_time == 0.0
+        assert record.segments[1].speaker == "Speaker 2"
+        assert record.segments[1].start_time == 5.0
+        assert record.segments[2].start_time == 15.0
+
+    def test_parse_otter_txt_with_real_names(self, tmp_path):
+        """Otter TXT with real speaker names instead of 'Speaker N'."""
+        txt = tmp_path / "call.txt"
+        txt.write_text(
+            "Jane Smith  0:00\n"
+            "Welcome to the interview.\n"
+            "\n"
+            "Joe Fowler  0:03\n"
+            "Thank you for having me.\n",
+            encoding="utf-8",
+        )
+        record = import_otter(str(txt))
+        assert record.segments[0].speaker == "Jane Smith"
+        assert record.segments[1].speaker == "Joe Fowler"
+
+    def test_parse_srt_format(self, tmp_path):
+        """Standard SRT subtitle format."""
+        srt = tmp_path / "interview.srt"
+        srt.write_text(
+            "1\n"
+            "00:00:00,000 --> 00:00:03,500\n"
+            "Hello, welcome to the interview.\n"
+            "\n"
+            "2\n"
+            "00:00:04,000 --> 00:00:08,000\n"
+            "Thank you, glad to be here.\n"
+            "\n"
+            "3\n"
+            "00:00:09,000 --> 00:00:15,500\n"
+            "Tell me about your PowerShell experience.\n",
+            encoding="utf-8",
+        )
+        record = import_otter(str(srt))
+        assert record.source == "otter"
+        assert len(record.segments) == 3
+        assert record.segments[0].start_time == 0.0
+        assert record.segments[1].start_time == 4.0
+        assert record.segments[2].start_time == 9.0
+        assert record.segments[2].end_time == 15.5
