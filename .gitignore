@@ -45,3 +45,4 @@ env/
 # Local Claude settings (user-specific permissions)
 .claude/settings.local.json
 .claude/hooks/billing-events.log
+.vercel

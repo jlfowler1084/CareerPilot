@@ -319,14 +319,17 @@ def generate_report(
     scan_time: datetime,
     gov_jobs: list = None,
     staffing_jobs: list = None,
+    hidden_jobs: list = None,
 ) -> str:
     """Generate the morning briefing report."""
     if gov_jobs is None:
         gov_jobs = []
     if staffing_jobs is None:
         staffing_jobs = []
+    if hidden_jobs is None:
+        hidden_jobs = []
     all_jobs = deduplicate(filter_irrelevant(
-        direct_jobs + board_jobs + gov_jobs + staffing_jobs
+        direct_jobs + board_jobs + gov_jobs + staffing_jobs + hidden_jobs
     ))
 
     lines = []
@@ -342,6 +345,7 @@ def generate_report(
     usajobs_count = len([j for j in all_jobs if j.get("source") == "USAJobs"])
     workone_count = len([j for j in all_jobs if j.get("source") == "WorkOne"])
     staffing_count = len([j for j in all_jobs if j.get("source") == "Staffing"])
+    hidden_count = len([j for j in all_jobs if j.get("source") == "Hidden Market"])
     lines.append(f"  Total: {len(all_jobs)} unique jobs")
     parts = [f"{direct_count} Direct", f"{indeed_count} Indeed", f"{dice_count} Dice"]
     if usajobs_count:
@@ -350,6 +354,8 @@ def generate_report(
         parts.append(f"{workone_count} WorkOne")
     if staffing_count:
         parts.append(f"{staffing_count} Staffing")
+    if hidden_count:
+        parts.append(f"{hidden_count} Hidden Market")
     lines.append(f"  Sources: {' | '.join(parts)}")
     lines.append("")
 
@@ -419,6 +425,22 @@ def generate_report(
                 lines.append(f"    🔗 {job['url']}")
             lines.append("")
 
+    # Hidden market results
+    hidden = [j for j in all_jobs if j.get("source") == "Hidden Market"]
+    if hidden:
+        lines.append("─" * 64)
+        lines.append(f"  🔍 HIDDEN MARKET ({len(hidden)} results)")
+        lines.append("─" * 64)
+        for job in hidden:
+            salary_note = ""
+            if job.get("salary") and job["salary"] != "Not listed":
+                salary_note = f" | {job['salary']}"
+            lines.append(f"  ▸ {job['title']}")
+            lines.append(f"    {job.get('company', '')} · {job.get('location', '')}{salary_note}")
+            if job.get("url"):
+                lines.append(f"    🔗 {job['url']}")
+            lines.append("")
+
     if not all_jobs:
         lines.append("  No relevant jobs found in this scan.")
         lines.append("  Consider broadening search keywords or adding more companies.")
@@ -443,6 +465,8 @@ def main():
                         help="Government sources only (USAJobs + WorkOne)")
     parser.add_argument("--staffing", action="store_true",
                         help="Staffing agency sources only")
+    parser.add_argument("--hidden", action="store_true",
+                        help="Hidden market sources only (schools, dioceses, small orgs)")
     parser.add_argument("--output", "-o", help="Save report to file")
     parser.add_argument("--json", action="store_true",
                         help="Output JSON instead of text report")
@@ -462,9 +486,9 @@ def main():
                  (scan_id, scan_time.isoformat()))
     conn.commit()
 
-    # Phase 1: Direct employer career pages (skip if --gov or --staffing)
+    # Phase 1: Direct employer career pages (skip if --gov, --staffing, or --hidden)
     direct_jobs = []
-    if not args.gov and not args.staffing:
+    if not args.gov and not args.staffing and not args.hidden:
         print("\n  🏢 Scanning direct employer career pages...")
 
         companies = COMPANIES
@@ -497,9 +521,9 @@ def main():
             conn.commit()
             time.sleep(1)
 
-    # Phase 2: Indeed + Dice (skip if --quick, --gov, or --staffing)
+    # Phase 2: Indeed + Dice (skip if --quick, --gov, --staffing, or --hidden)
     board_jobs = []
-    if not args.quick and not args.gov and not args.staffing:
+    if not args.quick and not args.gov and not args.staffing and not args.hidden:
         print("\n  🔍 Scanning job boards (Indeed + Dice)...")
         for search in BOARD_SEARCHES:
             print(f"     {search['label']}...", end=" ", flush=True)
@@ -517,9 +541,9 @@ def main():
             print(f"{len(search_jobs)} results")
             time.sleep(1)
 
-    # Phase 3: Government job boards (USAJobs + WorkOne) — skip if --staffing
+    # Phase 3: Government job boards (USAJobs + WorkOne) — skip if --staffing or --hidden
     gov_jobs = []
-    if not args.staffing and (args.gov or (not args.quick and not getattr(args, "company", None))):
+    if not args.staffing and not args.hidden and (args.gov or (not args.quick and not getattr(args, "company", None))):
         from usajobs_scraper import search_usajobs
         from workone_scraper import search_workone
 
@@ -562,9 +586,9 @@ def main():
                 "source": "WorkOne",
             })
 
-    # Phase 4: Staffing agencies
+    # Phase 4: Staffing agencies — skip if --hidden
     staffing_jobs = []
-    if args.staffing or (not args.quick and not args.gov and not getattr(args, "company", None)):
+    if not args.hidden and (args.staffing or (not args.quick and not args.gov and not getattr(args, "company", None))):
         from staffing_scraper import search_staffing_agencies
 
         print("\n  🤝 Scanning staffing agency job boards...")
@@ -589,6 +613,33 @@ def main():
                 "source": "Staffing",
             })
 
+    # Phase 5: Hidden market (schools, dioceses, small orgs)
+    hidden_jobs = []
+    if args.hidden or (not args.quick and not args.gov and not args.staffing and not getattr(args, "company", None)):
+        from hidden_market_scraper import search_hidden_market
+
+        print("\n  🔍 Scanning hidden job market (schools, dioceses, small orgs)...")
+        hidden_results = search_hidden_market()
+        print(f"     {len(hidden_results)} total hidden market results")
+
+        # Upsert to DB
+        for job in hidden_results:
+            upsert_job(conn, job, scan_id)
+        conn.commit()
+
+        # Convert DB-format dicts to report-format dicts
+        for job in hidden_results:
+            hidden_jobs.append({
+                "title": job["title"],
+                "company": job["company_name"],
+                "location": job.get("location", ""),
+                "salary": job.get("salary", "Not listed"),
+                "url": job.get("url", ""),
+                "posted": job.get("posted_date", ""),
+                "type": job.get("job_type", ""),
+                "source": "Hidden Market",
+            })
+
     # Update scan record and close DB
     conn.execute("""
         UPDATE scans SET completed_at = ?, companies_scanned = ?,
@@ -596,7 +647,7 @@ def main():
         WHERE id = ?
     """, (
         datetime.now(timezone.utc).isoformat(),
-        0, len(direct_jobs) + len(gov_jobs) + len(staffing_jobs),
+        0, len(direct_jobs) + len(gov_jobs) + len(staffing_jobs) + len(hidden_jobs),
         0, scan_id,
     ))
     conn.commit()
@@ -605,12 +656,13 @@ def main():
     # Generate output
     if args.json:
         all_jobs = deduplicate(filter_irrelevant(
-            direct_jobs + board_jobs + gov_jobs + staffing_jobs
+            direct_jobs + board_jobs + gov_jobs + staffing_jobs + hidden_jobs
         ))
         output = json.dumps(all_jobs, indent=2)
     else:
         output = generate_report(
-            direct_jobs, board_jobs, scan_time, gov_jobs, staffing_jobs
+            direct_jobs, board_jobs, scan_time, gov_jobs, staffing_jobs,
+            hidden_jobs,
         )
 
     if args.output:
