@@ -4229,6 +4229,266 @@ def agencies_seed():
     console.print("[bold green]Seed complete.[/bold green]")
 
 
+# ── Intel ─────────────────────────────────────────────────────────────────────
+
+
+def _display_brief(brief, company):
+    """Render a company intel brief as Rich panels."""
+    from rich.markdown import Markdown
+    from rich.text import Text
+
+    console.print()
+    console.print(
+        Panel(
+            f"[bold white]{company}[/bold white]",
+            title="Company Intelligence",
+            border_style="bright_cyan",
+            expand=True,
+        )
+    )
+
+    # --- Overview ---
+    overview = brief.get("company_overview", {})
+    lines = []
+    if overview.get("description"):
+        lines.append(overview["description"])
+    if overview.get("headquarters"):
+        lines.append(f"HQ: {overview['headquarters']}")
+    parts = []
+    if overview.get("size"):
+        parts.append(overview["size"])
+    if overview.get("revenue_or_funding"):
+        parts.append(overview["revenue_or_funding"])
+    if parts:
+        lines.append(" | ".join(parts))
+    if overview.get("key_products"):
+        lines.append(f"Key products: {', '.join(overview['key_products'])}")
+    if overview.get("recent_news"):
+        lines.append("")
+        lines.append("[bold]Recent News:[/bold]")
+        for item in overview["recent_news"][:5]:
+            date = item.get("date", "")
+            headline = item.get("headline", "")
+            lines.append(f"  [{date}] {headline}")
+    console.print(Panel("\n".join(lines), title="OVERVIEW", border_style="blue"))
+
+    # --- Culture ---
+    culture = brief.get("culture", {})
+    lines = []
+    if culture.get("glassdoor_rating"):
+        lines.append(f"Glassdoor: {culture['glassdoor_rating']}")
+    if culture.get("sentiment_summary"):
+        lines.append(culture["sentiment_summary"])
+    if culture.get("remote_policy"):
+        lines.append(f"Remote policy: {culture['remote_policy']}")
+    if culture.get("work_life_balance"):
+        lines.append(f"Work-life balance: {culture['work_life_balance']}")
+    if culture.get("pros"):
+        lines.append(f"[green]Pros:[/green] {', '.join(culture['pros'])}")
+    if culture.get("cons"):
+        lines.append(f"[red]Cons:[/red] {', '.join(culture['cons'])}")
+    console.print(Panel("\n".join(lines), title="CULTURE & ENVIRONMENT", border_style="yellow"))
+
+    # --- IT Intelligence ---
+    it_intel = brief.get("it_intelligence", {})
+    lines = []
+    if it_intel.get("tech_stack"):
+        lines.append(f"Stack: {', '.join(it_intel['tech_stack'])}")
+    if it_intel.get("cloud_provider"):
+        lines.append(f"Cloud: {it_intel['cloud_provider']}")
+    if it_intel.get("infrastructure_scale"):
+        lines.append(f"Scale: {it_intel['infrastructure_scale']}")
+    if it_intel.get("recent_it_postings"):
+        lines.append("")
+        lines.append("[bold]Recent IT Hiring:[/bold]")
+        for p in it_intel["recent_it_postings"][:5]:
+            lines.append(f"  {p.get('title', '')} — {p.get('signal', '')}")
+    if it_intel.get("it_challenges"):
+        lines.append(f"Challenges: {', '.join(it_intel['it_challenges'])}")
+    console.print(Panel("\n".join(lines), title="IT & TECHNOLOGY", border_style="green"))
+
+    # --- Role Analysis (conditional) ---
+    role = brief.get("role_analysis")
+    if role:
+        lines = []
+        if role.get("org_fit"):
+            lines.append(f"Org fit: {role['org_fit']}")
+        if role.get("day_to_day"):
+            lines.append(f"Day-to-day: {role['day_to_day']}")
+        if role.get("growth_potential"):
+            lines.append(f"Growth: {role['growth_potential']}")
+        if role.get("red_flags"):
+            lines.append(f"[red]Red flags:[/red] {', '.join(role['red_flags'])}")
+        if role.get("questions_to_ask"):
+            lines.append("")
+            lines.append("[bold]Questions to ask:[/bold]")
+            for q in role["questions_to_ask"]:
+                lines.append(f"  - {q}")
+        console.print(Panel("\n".join(lines), title="ROLE ANALYSIS", border_style="magenta"))
+
+    # --- Interviewer Prep (conditional) ---
+    prep = brief.get("interviewer_prep")
+    if prep:
+        lines = []
+        if prep.get("linkedin_summary"):
+            lines.append(prep["linkedin_summary"])
+        if prep.get("likely_interview_style"):
+            lines.append(f"Interview style: {prep['likely_interview_style']}")
+        if prep.get("rapport_topics"):
+            lines.append(f"Rapport topics: {', '.join(prep['rapport_topics'])}")
+        console.print(Panel("\n".join(lines), title="INTERVIEWER PREP", border_style="cyan"))
+
+    # --- Sources ---
+    sources = brief.get("sources", [])
+    if sources:
+        console.print(Panel("\n".join(sources), title="SOURCES", border_style="dim"))
+
+    generated = brief.get("generated_at", "")
+    if generated:
+        console.print(f"[dim]Generated: {generated}[/dim]")
+    console.print()
+
+
+@cli.group()
+def intel():
+    """Company intelligence — research briefs for target companies."""
+
+
+@intel.command("research")
+@click.argument("company")
+@click.option("--role", default=None, help="Role title for role analysis section.")
+@click.option("--contact", default=None, help="Interviewer name for prep section.")
+@click.option("--url", default=None, help="Job posting URL for context.")
+def intel_research(company, role, contact, url):
+    """Generate a fresh company intelligence brief."""
+    from src.db import models
+    from src.intel.company_intel import CompanyIntelEngine
+
+    console.print(f"[bold cyan]Researching {company}...[/bold cyan]")
+    console.print("[dim]This may take 30-60 seconds (web search + analysis).[/dim]")
+
+    engine = CompanyIntelEngine()
+    brief = engine.generate_brief(
+        company, role_title=role, contact_name=contact, job_url=url,
+    )
+
+    if brief is None:
+        console.print("[red]Failed to generate intel brief. Check logs.[/red]")
+        return
+
+    # Cache the brief
+    conn = models.get_connection()
+    try:
+        models.cache_brief(conn, company, role, brief)
+    finally:
+        conn.close()
+
+    _display_brief(brief, company)
+
+
+@intel.command("show")
+@click.argument("company")
+def intel_show(company):
+    """Show cached company intel brief (no API call)."""
+    from src.db import models
+
+    conn = models.get_connection()
+    try:
+        brief, row = models.get_cached_brief(conn, company)
+    finally:
+        conn.close()
+
+    if brief is None:
+        console.print(f"[yellow]No cached brief for '{company}'. Run: python cli.py intel research {company}[/yellow]")
+        return
+
+    _display_brief(brief, company)
+
+
+@intel.command("refresh")
+@click.argument("company")
+@click.option("--role", default=None, help="Role title for role analysis section.")
+@click.option("--contact", default=None, help="Interviewer name for prep section.")
+@click.option("--url", default=None, help="Job posting URL for context.")
+def intel_refresh(company, role, contact, url):
+    """Force regenerate a company intel brief (ignores cache)."""
+    from src.db import models
+    from src.intel.company_intel import CompanyIntelEngine
+
+    console.print(f"[bold cyan]Refreshing intel for {company}...[/bold cyan]")
+
+    engine = CompanyIntelEngine()
+    brief = engine.generate_brief(
+        company, role_title=role, contact_name=contact, job_url=url,
+    )
+
+    if brief is None:
+        console.print("[red]Failed to generate intel brief. Check logs.[/red]")
+        return
+
+    conn = models.get_connection()
+    try:
+        models.cache_brief(conn, company, role, brief)
+    finally:
+        conn.close()
+
+    _display_brief(brief, company)
+
+
+@intel.command("prep")
+@click.argument("application_id", type=int)
+def intel_prep(application_id):
+    """Generate/show intel brief for a tracked application."""
+    from src.db import models
+
+    conn = models.get_connection()
+    try:
+        app = conn.execute(
+            "SELECT * FROM applications WHERE id = ?", (application_id,)
+        ).fetchone()
+        if not app:
+            console.print(f"[red]Application #{application_id} not found.[/red]")
+            return
+        app = dict(app)
+
+        company = app["company"]
+        role_title = app["title"]
+
+        # Check for existing linked brief
+        existing = models.get_brief_for_application(conn, application_id)
+        if existing:
+            console.print(f"[dim]Using cached brief for application #{application_id}[/dim]")
+            _display_brief(existing, company)
+            return
+
+        # Check for any cached brief for this company
+        cached, row = models.get_cached_brief(conn, company)
+        if cached:
+            # Link it to the application
+            models.link_brief_to_application(conn, row["id"], application_id)
+            console.print(f"[dim]Found existing brief for {company}, linked to application #{application_id}[/dim]")
+            _display_brief(cached, company)
+            return
+
+        # Generate fresh
+        from src.intel.company_intel import CompanyIntelEngine
+
+        console.print(f"[bold cyan]Researching {company} for application #{application_id}...[/bold cyan]")
+        console.print("[dim]This may take 30-60 seconds.[/dim]")
+
+        engine = CompanyIntelEngine()
+        brief = engine.generate_brief(company, role_title=role_title)
+
+        if brief is None:
+            console.print("[red]Failed to generate intel brief. Check logs.[/red]")
+            return
+
+        brief_id = models.cache_brief(conn, company, role_title, brief, application_id=application_id)
+        _display_brief(brief, company)
+    finally:
+        conn.close()
+
+
 if __name__ == "__main__":
     try:
         cli()

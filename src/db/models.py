@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from config import settings
@@ -109,6 +110,17 @@ CREATE TABLE IF NOT EXISTS submitted_roles (
 CREATE TABLE IF NOT EXISTS kv_store (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS company_intel (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    company TEXT NOT NULL,
+    role_title TEXT,
+    brief TEXT NOT NULL,
+    generated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    expires_at TEXT,
+    application_id INTEGER,
+    FOREIGN KEY (application_id) REFERENCES applications(id)
 );
 """
 
@@ -688,3 +700,79 @@ def find_contact_by_email(conn, email):
         "SELECT * FROM contacts WHERE lower(email) = ?", (email.lower(),)
     ).fetchone()
     return dict(row) if row else None
+
+
+# --- Company Intel CRUD ---
+
+
+def cache_brief(conn, company, role_title, brief_dict, application_id=None):
+    """Cache a company intel brief. Returns the row id."""
+    now = datetime.now().isoformat()
+    expires = (datetime.now() + timedelta(days=30)).isoformat()
+    brief_json = json.dumps(brief_dict, ensure_ascii=False)
+
+    cursor = conn.execute(
+        "INSERT INTO company_intel (company, role_title, brief, generated_at, "
+        "expires_at, application_id) VALUES (?, ?, ?, ?, ?, ?)",
+        (company, role_title, brief_json, now, expires, application_id),
+    )
+    conn.commit()
+    logger.info("Cached intel brief for %s (id=%d)", company, cursor.lastrowid)
+    return cursor.lastrowid
+
+
+def get_cached_brief(conn, company, max_age_days=30):
+    """Get a cached brief for a company if it exists and hasn't expired.
+
+    Returns (brief_dict, row_dict) or (None, None).
+    """
+    row = conn.execute(
+        "SELECT * FROM company_intel WHERE lower(company) = lower(?) "
+        "AND (expires_at IS NULL OR datetime(expires_at) > datetime('now')) "
+        "ORDER BY generated_at DESC LIMIT 1",
+        (company,),
+    ).fetchone()
+
+    if not row:
+        return None, None
+
+    # Additional max_age check
+    generated = row["generated_at"]
+    if generated:
+        try:
+            gen_dt = datetime.fromisoformat(generated)
+            if datetime.now() - gen_dt > timedelta(days=max_age_days):
+                return None, None
+        except (ValueError, TypeError):
+            pass
+
+    try:
+        brief = json.loads(row["brief"])
+    except (json.JSONDecodeError, TypeError):
+        return None, None
+
+    return brief, dict(row)
+
+
+def link_brief_to_application(conn, brief_id, application_id):
+    """Link an existing brief to an application."""
+    conn.execute(
+        "UPDATE company_intel SET application_id = ? WHERE id = ?",
+        (application_id, brief_id),
+    )
+    conn.commit()
+
+
+def get_brief_for_application(conn, application_id):
+    """Get the cached brief linked to an application. Returns dict or None."""
+    row = conn.execute(
+        "SELECT * FROM company_intel WHERE application_id = ? "
+        "ORDER BY generated_at DESC LIMIT 1",
+        (application_id,),
+    ).fetchone()
+    if not row:
+        return None
+    try:
+        return json.loads(row["brief"])
+    except (json.JSONDecodeError, TypeError):
+        return None
