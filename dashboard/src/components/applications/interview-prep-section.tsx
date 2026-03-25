@@ -32,7 +32,7 @@ function formatPrepAsMarkdown(prep: InterviewPrep, stage: PrepStageKey): string 
   const stagePrep = prep[stage]
   if (!stagePrep?.content) return ""
 
-  const content = stagePrep.content as Record<string, unknown>
+  const content = stagePrep.content as unknown as Record<string, unknown>
   const lines: string[] = [`# ${stage.replace("_", " ").toUpperCase()} Prep\n`]
 
   for (const [key, value] of Object.entries(content)) {
@@ -218,7 +218,7 @@ export function InterviewPrepSection({ application }: InterviewPrepSectionProps)
   }
 
   const contentEntries = currentStagePrep?.content
-    ? Object.entries(currentStagePrep.content as Record<string, unknown>)
+    ? Object.entries(currentStagePrep.content as unknown as Record<string, unknown>)
     : []
 
   return (
