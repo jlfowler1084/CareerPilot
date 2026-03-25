@@ -2,10 +2,13 @@ import { NextRequest, NextResponse } from "next/server"
 import { google } from "googleapis"
 import { config } from "dotenv"
 import path from "path"
+import { existsSync } from "fs"
 
-// Turbopack may not resolve process.env for non-NEXT_PUBLIC_ vars in route
-// handlers. Load .env.local explicitly so credentials are always available.
-config({ path: path.resolve(process.cwd(), ".env.local") })
+// Load .env.local only if it exists (local dev). On Vercel, env vars are injected by the platform.
+const envPath = path.resolve(process.cwd(), ".env.local")
+if (existsSync(envPath)) {
+  config({ path: envPath })
+}
 
 type CalendarAction = "follow_up" | "phone_screen" | "interview" | "offer_deadline"
 
