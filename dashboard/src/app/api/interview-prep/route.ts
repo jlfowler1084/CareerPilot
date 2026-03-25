@@ -1,0 +1,152 @@
+import { NextRequest, NextResponse } from "next/server"
+import { createServerSupabaseClient } from "@/lib/supabase/server"
+import {
+  buildPhoneScreenPrompt,
+  buildInterviewPrompt,
+  buildOfferPrompt,
+  PREP_STAGES,
+} from "@/lib/interview-prep-prompts"
+import type { InterviewPrep, PrepStageKey } from "@/types"
+
+export async function POST(req: NextRequest) {
+  try {
+    const supabase = await createServerSupabaseClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    const { applicationId, stage } = await req.json()
+
+    if (!applicationId || !stage || !PREP_STAGES.includes(stage)) {
+      return NextResponse.json(
+        { error: "applicationId and valid stage (phone_screen, interview, offer) required" },
+        { status: 400 }
+      )
+    }
+
+    // Fetch application
+    const { data: app, error: appError } = await supabase
+      .from("applications")
+      .select("id, title, company, url, salary_range, interview_prep, status, notes")
+      .eq("id", applicationId)
+      .eq("user_id", user.id)
+      .single()
+
+    if (appError || !app) {
+      return NextResponse.json({ error: "Application not found" }, { status: 404 })
+    }
+
+    // Fetch conversations for context
+    const { data: conversations } = await supabase
+      .from("conversations")
+      .select("notes")
+      .eq("application_id", applicationId)
+      .eq("user_id", user.id)
+      .order("date", { ascending: true })
+
+    const existingPrep: InterviewPrep = app.interview_prep || {}
+    const debriefs = existingPrep.debriefs || []
+    const convos = conversations || []
+
+    // Build stage-specific prompt
+    let prompt: string
+    const typedStage = stage as PrepStageKey
+    switch (typedStage) {
+      case "phone_screen":
+        prompt = buildPhoneScreenPrompt(app, convos)
+        break
+      case "interview":
+        prompt = buildInterviewPrompt(app, convos, debriefs)
+        break
+      case "offer":
+        prompt = buildOfferPrompt(app, convos, debriefs)
+        break
+    }
+
+    // Call Claude with web_search tool
+    const apiKey = process.env.ANTHROPIC_API_KEY
+    if (!apiKey) {
+      return NextResponse.json({ error: "ANTHROPIC_API_KEY not configured" }, { status: 500 })
+    }
+
+    // web_search_20250305 is a server-side tool — Anthropic executes the search
+    // automatically and returns the final response with text + search results in
+    // a single call. No multi-turn loop needed.
+    const resp = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-6",
+        max_tokens: 4096,
+        tools: [{ type: "web_search_20250305", name: "web_search" }],
+        messages: [{ role: "user", content: prompt }],
+      }),
+      signal: AbortSignal.timeout(120_000),
+    })
+
+    if (!resp.ok) {
+      const errBody = await resp.text()
+      console.error("Claude API error:", resp.status, errBody)
+      return NextResponse.json({ error: "AI generation failed" }, { status: 502 })
+    }
+
+    const data = await resp.json()
+
+    // Extract text from response — may contain web_search_tool_result blocks
+    // alongside the final text block
+    const textBlock = data.content?.find((c: { type: string }) => c.type === "text")
+    const finalText = textBlock?.text || ""
+
+    if (!finalText) {
+      return NextResponse.json({ error: "No response generated" }, { status: 502 })
+    }
+
+    // Parse JSON from response
+    const match = finalText.match(/\{[\s\S]*\}/)
+    if (!match) {
+      return NextResponse.json({ error: "Could not parse structured response" }, { status: 502 })
+    }
+
+    let content: unknown
+    try {
+      content = JSON.parse(match[0])
+    } catch {
+      return NextResponse.json({ error: "Invalid JSON in response" }, { status: 502 })
+    }
+
+    // Store in interview_prep
+    const updatedPrep: InterviewPrep = {
+      ...existingPrep,
+      [typedStage]: {
+        generated_at: new Date().toISOString(),
+        content,
+      },
+    }
+
+    const { error: updateError } = await supabase
+      .from("applications")
+      .update({ interview_prep: updatedPrep })
+      .eq("id", applicationId)
+      .eq("user_id", user.id)
+
+    if (updateError) {
+      console.error("Failed to store prep:", updateError.message)
+      return NextResponse.json({ error: "Failed to store prep" }, { status: 500 })
+    }
+
+    return NextResponse.json({
+      stage: typedStage,
+      generated_at: updatedPrep[typedStage]!.generated_at,
+      content,
+    })
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error)
+    console.error("Interview prep error:", message)
+    return NextResponse.json({ error: message }, { status: 500 })
+  }
+}
