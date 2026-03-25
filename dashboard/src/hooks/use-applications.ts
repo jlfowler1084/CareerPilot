@@ -4,9 +4,31 @@ import { useEffect, useState, useCallback } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { RESPONSE_STATUSES } from "@/lib/constants"
 import { logActivity } from "@/hooks/use-activity-log"
-import type { Application, ApplicationStatus, Job } from "@/types"
+import type { Application, ApplicationStatus, ApplicationEventType, Job } from "@/types"
 
 const supabase = createClient()
+
+async function insertApplicationEvent(
+  applicationId: string,
+  eventType: ApplicationEventType,
+  description: string,
+  previousValue?: string | null,
+  newValue?: string | null
+) {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return
+
+  await supabase.from("application_events").insert({
+    application_id: applicationId,
+    user_id: user.id,
+    event_type: eventType,
+    description,
+    previous_value: previousValue ?? null,
+    new_value: newValue ?? null,
+  })
+}
 
 function computeDateUpdates(
   newStatus: ApplicationStatus,
@@ -122,17 +144,16 @@ export function useApplications() {
 
   const updateApplication = useCallback(
     async (id: string, updates: Partial<Application>) => {
+      const current = applications.find((a) => a.id === id)
+
       // Compute automatic date fields
-      if (updates.status) {
-        const current = applications.find((a) => a.id === id)
-        if (current) {
-          const dateUpdates = computeDateUpdates(
-            updates.status,
-            current.date_applied,
-            current.date_response
-          )
-          Object.assign(updates, dateUpdates)
-        }
+      if (updates.status && current) {
+        const dateUpdates = computeDateUpdates(
+          updates.status,
+          current.date_applied,
+          current.date_response
+        )
+        Object.assign(updates, dateUpdates)
       }
 
       const { data, error } = await supabase
@@ -147,6 +168,35 @@ export function useApplications() {
           ? ` → ${updates.status}`
           : ""
         await logActivity(`Updated: ${data.title}${statusLabel}`)
+
+        // Log status change event
+        if (updates.status && current && updates.status !== current.status) {
+          await insertApplicationEvent(
+            id,
+            "status_change",
+            `Status changed from ${current.status} to ${updates.status}`,
+            current.status,
+            updates.status
+          )
+        }
+
+        // Log resume tailored event
+        if (updates.tailored_resume && !current?.tailored_resume) {
+          await insertApplicationEvent(
+            id,
+            "resume_tailored",
+            `Resume tailored for ${data.title} at ${data.company}`
+          )
+        }
+
+        // Log calendar scheduled event
+        if (updates.calendar_event_id && !current?.calendar_event_id) {
+          await insertApplicationEvent(
+            id,
+            "calendar_scheduled",
+            `Calendar event scheduled for ${data.title}`
+          )
+        }
       }
 
       return { data, error }
@@ -162,5 +212,75 @@ export function useApplications() {
     }
   }, [applications])
 
-  return { applications, loading, addApplication, updateApplication, deleteApplication }
+  const updateContact = useCallback(
+    async (
+      id: string,
+      contact: Pick<Application, "contact_name" | "contact_email" | "contact_phone" | "contact_role">
+    ) => {
+      const { data, error } = await supabase
+        .from("applications")
+        .update(contact)
+        .eq("id", id)
+        .select()
+        .single()
+
+      if (!error && data) {
+        await insertApplicationEvent(
+          id,
+          "contact_added",
+          `Contact info updated: ${contact.contact_name || "unnamed"}`
+        )
+      }
+
+      return { data, error }
+    },
+    []
+  )
+
+  const updateNotes = useCallback(
+    async (id: string, notes: string) => {
+      const { data, error } = await supabase
+        .from("applications")
+        .update({ notes })
+        .eq("id", id)
+        .select()
+        .single()
+
+      if (!error && data) {
+        await insertApplicationEvent(
+          id,
+          "note_added",
+          "Notes updated"
+        )
+      }
+
+      return { data, error }
+    },
+    []
+  )
+
+  const updateJobDescription = useCallback(
+    async (id: string, job_description: string) => {
+      const { data, error } = await supabase
+        .from("applications")
+        .update({ job_description })
+        .eq("id", id)
+        .select()
+        .single()
+
+      return { data, error }
+    },
+    []
+  )
+
+  return {
+    applications,
+    loading,
+    addApplication,
+    updateApplication,
+    deleteApplication,
+    updateContact,
+    updateNotes,
+    updateJobDescription,
+  }
 }

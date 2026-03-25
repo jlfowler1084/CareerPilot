@@ -14,12 +14,14 @@ interface ApplicationRowProps {
   application: Application
   onUpdate: (id: string, updates: Partial<Application>) => Promise<unknown>
   onDelete: (id: string) => Promise<void>
+  onClick?: () => void
 }
 
 export function ApplicationRow({
   application,
   onUpdate,
   onDelete,
+  onClick,
 }: ApplicationRowProps) {
   const [editingNotes, setEditingNotes] = useState(false)
   const [notes, setNotes] = useState(application.notes || "")
@@ -53,7 +55,18 @@ export function ApplicationRow({
     : ""
 
   return (
-    <div className="bg-white rounded-xl border border-zinc-200 p-4 hover:shadow-md transition-shadow">
+    <div
+      className="bg-white rounded-xl border border-zinc-200 p-4 hover:shadow-md transition-shadow cursor-pointer"
+      onClick={onClick}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault()
+          onClick?.()
+        }
+      }}
+    >
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
@@ -96,7 +109,7 @@ export function ApplicationRow({
           </div>
         </div>
 
-        <div className="flex flex-col items-end gap-2 flex-shrink-0">
+        <div className="flex flex-col items-end gap-2 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
           {/* Status dropdown */}
           <select
             value={application.status}
@@ -200,7 +213,7 @@ export function ApplicationRow({
       />
 
       {/* Notes section */}
-      <div className="mt-3 pt-3 border-t border-zinc-100">
+      <div className="mt-3 pt-3 border-t border-zinc-100" onClick={(e) => e.stopPropagation()}>
         {editingNotes ? (
           <div className="flex gap-2">
             <textarea
