@@ -28,6 +28,7 @@ param(
     [switch]$Quick,
     [switch]$Gov,
     [switch]$Staffing,
+    [switch]$Hidden,
     [switch]$DirectOnly,
     [switch]$Export,
     [switch]$ListJobs,
@@ -307,6 +308,12 @@ elseif ($Staffing) {
     Write-Host "  Mode: Staffing agencies only (TEKsystems, Robert Half, Kforce, etc.)" -ForegroundColor Cyan
     $reportFile = Join-Path $ReportsDir "staffing_$(Get-Date -Format 'yyyy-MM-dd_HHmm')"
     & $PythonExe $MorningScan --staffing --output $reportFile
+}
+elseif ($Hidden) {
+    # Hidden market sources only (schools, dioceses, small orgs)
+    Write-Host "  Mode: Hidden market only (schools, dioceses, small orgs)" -ForegroundColor Cyan
+    $reportFile = Join-Path $ReportsDir "hidden_$(Get-Date -Format 'yyyy-MM-dd_HHmm')"
+    & $PythonExe $MorningScan --hidden --output $reportFile
 }
 elseif ($Quick) {
     # Morning scan, direct only (skip boards)
