@@ -6,6 +6,7 @@ import { KpiCard } from "@/components/shared/kpi-card"
 import { PipelineChart } from "@/components/dashboard/pipeline-chart"
 import { WeeklyChart } from "@/components/dashboard/weekly-chart"
 import { ActivityFeed } from "@/components/dashboard/activity-feed"
+import { SkillGapsWidget } from "@/components/dashboard/skill-gaps-widget"
 import {
   Briefcase,
   Send,
@@ -76,6 +77,9 @@ export default function OverviewPage() {
         <PipelineChart byStatus={stats.by_status} />
         <WeeklyChart data={stats.weekly} />
       </div>
+
+      {/* Skill Gaps */}
+      <SkillGapsWidget applications={applications} />
 
       {/* Activity Feed */}
       <ActivityFeed />
