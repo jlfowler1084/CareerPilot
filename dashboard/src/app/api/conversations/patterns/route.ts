@@ -57,7 +57,7 @@ export async function GET() {
         "anthropic-version": "2023-06-01",
       },
       body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
+        model: process.env.MODEL_SONNET || "claude-sonnet-4-6",
         max_tokens: 2000,
         system: `You analyze job search conversation patterns. Return ONLY valid JSON with this exact structure:
 {

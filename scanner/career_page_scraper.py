@@ -40,8 +40,9 @@ except ImportError:
 
 ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages"
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
-MODEL = "claude-sonnet-4-20250514"
+MODEL = os.environ.get("MODEL_SONNET", "claude-sonnet-4-6")
 DB_PATH = Path(__file__).parent / "data" / "career_pages.db"
+CACHE_TTL_HOURS = 24
 
 # Target role keywords — matched against job titles
 ROLE_KEYWORDS = [
@@ -248,8 +249,38 @@ def init_db():
     conn.execute("""
         CREATE INDEX IF NOT EXISTS idx_jobs_scan ON jobs(scan_id)
     """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS api_cache (
+            company_id TEXT PRIMARY KEY,
+            response_json TEXT NOT NULL,
+            cached_at TEXT NOT NULL
+        )
+    """)
     conn.commit()
     return conn
+
+
+def get_cached_response(conn, company_id: str) -> list[dict] | None:
+    """Return cached API response if within TTL, else None."""
+    row = conn.execute(
+        "SELECT response_json, cached_at FROM api_cache WHERE company_id = ?",
+        (company_id,)
+    ).fetchone()
+    if not row:
+        return None
+    cached_at = datetime.fromisoformat(row["cached_at"])
+    if datetime.now(timezone.utc) - cached_at > timedelta(hours=CACHE_TTL_HOURS):
+        return None
+    return json.loads(row["response_json"])
+
+
+def set_cached_response(conn, company_id: str, jobs: list[dict]):
+    """Store API response in cache."""
+    conn.execute(
+        "INSERT OR REPLACE INTO api_cache (company_id, response_json, cached_at) VALUES (?, ?, ?)",
+        (company_id, json.dumps(jobs), datetime.now(timezone.utc).isoformat())
+    )
+    conn.commit()
 
 
 def job_id(title: str, company: str, url: str = "") -> str:
@@ -472,10 +503,23 @@ def cmd_scan(args):
     print(f"  Scanning {len(companies)} companies")
     print(f"{'═' * 60}\n")
 
+    cache_hits = 0
+    cache_misses = 0
+
     for company in companies:
         print(f"  🔍 {company['name']} ({company['careers_url']})")
 
-        jobs = search_company(company)
+        # Check cache unless --force-refresh
+        cached = None if args.force_refresh else get_cached_response(conn, company["id"])
+        if cached is not None:
+            jobs = cached
+            cache_hits += 1
+            print(f"     📦 Cache hit ({len(jobs)} jobs)")
+        else:
+            jobs = search_company(company)
+            set_cached_response(conn, company["id"], jobs)
+            cache_misses += 1
+
         new_count = 0
 
         for job in jobs:
@@ -507,6 +551,7 @@ def cmd_scan(args):
 
     print(f"\n{'─' * 60}")
     print(f"  Scan complete: {total_found} total, {total_new} new")
+    print(f"  API calls: {cache_misses} (cache hits: {cache_hits})")
     if total_new > 0:
         print(f"\n  🆕 New jobs found:")
         rows = conn.execute("""
@@ -681,6 +726,8 @@ def main():
 
     scan_parser = subparsers.add_parser("scan", help="Run career page scan")
     scan_parser.add_argument("--company", help="Scan a single company by ID")
+    scan_parser.add_argument("--force-refresh", action="store_true",
+                             help="Bypass 24-hour cache and make fresh API calls")
     scan_parser.set_defaults(func=cmd_scan)
 
     list_parser = subparsers.add_parser("list", help="List all tracked jobs")

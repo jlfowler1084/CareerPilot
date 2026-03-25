@@ -12,6 +12,7 @@ from typing import Dict, List, Optional
 import anthropic
 
 from config import settings
+from config.settings import MODEL_HAIKU, MODEL_SONNET
 from src.db import models
 
 logger = logging.getLogger(__name__)
@@ -171,7 +172,7 @@ class InterviewCoach:
         try:
             client = self._get_claude_client()
             response = client.messages.create(
-                model="claude-sonnet-4-6",
+                model=MODEL_SONNET,
                 max_tokens=4096,
                 system=ANALYSIS_SYSTEM_PROMPT,
                 messages=[{"role": "user", "content": user_message[:30000]}],
@@ -233,7 +234,7 @@ class InterviewCoach:
         try:
             client = self._get_claude_client()
             response = client.messages.create(
-                model="claude-sonnet-4-6",
+                model=MODEL_SONNET,
                 max_tokens=2048,
                 system=COMPARE_SYSTEM_PROMPT,
                 messages=[{"role": "user", "content": user_message}],
@@ -293,7 +294,7 @@ class InterviewCoach:
             # Generate question
             try:
                 q_response = client.messages.create(
-                    model="claude-sonnet-4-6",
+                    model=MODEL_HAIKU,
                     max_tokens=512,
                     messages=[{
                         "role": "user",
@@ -322,7 +323,7 @@ class InterviewCoach:
             # Evaluate response
             try:
                 eval_response = client.messages.create(
-                    model="claude-sonnet-4-6",
+                    model=MODEL_SONNET,
                     max_tokens=1024,
                     messages=[{
                         "role": "user",
@@ -369,7 +370,7 @@ class InterviewCoach:
 
         try:
             summary_response = client.messages.create(
-                model="claude-sonnet-4-6",
+                model=MODEL_SONNET,
                 max_tokens=2048,
                 messages=[{
                     "role": "user",

@@ -44,7 +44,7 @@ export function useEmails() {
         supabase.from("emails").select("*").eq("user_id", user.id).order("received_at", { ascending: false }),
         supabase.from("email_application_links").select("*").eq("user_id", user.id),
         supabase.from("applications").select("id, title, company, status").eq("user_id", user.id),
-        supabase.from("user_settings").select("last_email_scan").eq("user_id", user.id).single(),
+        supabase.from("user_settings").select("last_email_scan").eq("user_id", user.id).maybeSingle(),
       ])
 
       setEmails(emailsRes.data || [])
@@ -90,7 +90,7 @@ export function useEmails() {
 
     setScanState((prev) => ({ ...prev, scanning: true }))
 
-    const since = forceSince || scanState.lastScan || new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+    const since = forceSince || scanState.lastScan || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
     let pageToken: string | null = null
     const allNewEmails: Email[] = []
 
@@ -167,13 +167,11 @@ export function useEmails() {
       total: toClassify.length,
     }))
 
-    for (let i = 0; i < toClassify.length; i++) {
-      const email = toClassify[i]
-
-      // Check retry limit
+    // Filter out emails that exceeded retry limit
+    const eligible: Email[] = []
+    for (const email of toClassify) {
       const attempts = classifyAttemptsRef.current[email.gmail_id] || 0
       if (attempts >= MAX_CLASSIFY_ATTEMPTS) {
-        // Auto-mark as irrelevant after max attempts
         await supabase.from("emails").update({
           category: "irrelevant",
           classification_json: { category: "irrelevant", company: null, role: null, urgency: "low", summary: "Classification failed after multiple attempts" },
@@ -183,65 +181,81 @@ export function useEmails() {
           e.id === email.id ? { ...e, category: "irrelevant", dismissed: true } : e
         ))
         setScanState((prev) => ({ ...prev, classified: prev.classified + 1 }))
-        continue
+      } else {
+        classifyAttemptsRef.current[email.gmail_id] = attempts + 1
+        eligible.push(email)
       }
-      classifyAttemptsRef.current[email.gmail_id] = attempts + 1
+    }
+
+    // Process in batches of BATCH_SIZE
+    for (let batchStart = 0; batchStart < eligible.length; batchStart += BATCH_SIZE) {
+      const batch = eligible.slice(batchStart, batchStart + BATCH_SIZE)
 
       try {
-        // Fetch full body
-        const bodyResp = await fetch("/api/gmail/message", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ gmail_id: email.gmail_id }),
-        })
-        const { body } = await bodyResp.json()
+        // Fetch bodies for the batch in parallel
+        const bodyResults = await Promise.all(
+          batch.map(async (email) => {
+            try {
+              const resp = await fetch("/api/gmail/message", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ gmail_id: email.gmail_id }),
+              })
+              const { body } = await resp.json()
+              return body || ""
+            } catch {
+              return ""
+            }
+          })
+        )
 
-        const bodyPreview = (body || "").slice(0, 500)
+        // Build batch request
+        const emailInputs = batch.map((email, i) => ({
+          from_email: email.from_email,
+          from_name: email.from_name,
+          subject: email.subject,
+          received_at: email.received_at,
+          body: bodyResults[i],
+        }))
 
-        // Classify
         const classifyResp = await fetch("/api/gmail/classify", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            from_email: email.from_email,
-            from_name: email.from_name,
-            subject: email.subject,
-            received_at: email.received_at,
-            body: body || "",
-          }),
+          body: JSON.stringify({ emails: emailInputs }),
         })
-        const classification: ClassificationResult = await classifyResp.json()
+        const { results } = await classifyResp.json() as { results: ClassificationResult[] }
 
-        // Compute suggestion
-        const suggestedAppId = await computeSuggestion(email, applications)
+        // Process each result
+        for (let j = 0; j < batch.length; j++) {
+          const email = batch[j]
+          const classification = results?.[j] || { category: "irrelevant", company: null, role: null, urgency: "low", summary: "Classification failed" } as ClassificationResult
+          const bodyPreview = (bodyResults[j] || "").slice(0, 500)
+          const suggestedAppId = await computeSuggestion(email, applications)
 
-        // Update Supabase
-        const updates: Record<string, any> = {
-          category: classification.category,
-          classification_json: classification,
-          body_preview: bodyPreview,
-          suggested_application_id: suggestedAppId,
+          const updates: Record<string, unknown> = {
+            category: classification.category,
+            classification_json: classification,
+            body_preview: bodyPreview,
+            suggested_application_id: suggestedAppId,
+          }
+          if (classification.category === "irrelevant") {
+            updates.dismissed = true
+          }
+
+          await supabase.from("emails").update(updates).eq("id", email.id)
+          setEmails((prev) => prev.map((e) =>
+            e.id === email.id ? { ...e, ...updates } : e
+          ))
+          setScanState((prev) => ({ ...prev, classified: prev.classified + 1 }))
         }
-        if (classification.category === "irrelevant") {
-          updates.dismissed = true
-        }
-
-        await supabase.from("emails").update(updates).eq("id", email.id)
-
-        // Update local state
-        setEmails((prev) => prev.map((e) =>
-          e.id === email.id
-            ? { ...e, ...updates }
-            : e
-        ))
       } catch (error) {
-        console.error(`Failed to classify email ${email.gmail_id}:`, error)
+        console.error("Batch classification failed:", error)
+        // Mark batch progress even on failure
+        setScanState((prev) => ({ ...prev, classified: prev.classified + batch.length }))
       }
 
-      setScanState((prev) => ({ ...prev, classified: prev.classified + 1 }))
-
-      // Batch delay
-      if ((i + 1) % BATCH_SIZE === 0 && i + 1 < toClassify.length) {
+      // Delay between batches
+      if (batchStart + BATCH_SIZE < eligible.length) {
         await new Promise((r) => setTimeout(r, BATCH_DELAY_MS))
       }
     }
@@ -352,6 +366,12 @@ export function useEmails() {
     ))
   }, [])
 
+  const markReplied = useCallback((emailId: string) => {
+    setEmails((prev) => prev.map((e) =>
+      e.id === emailId ? { ...e, replied_at: new Date().toISOString() } : e
+    ))
+  }, [])
+
   // ── Manual refresh ─────────────────────────────────────────────
   const refresh = useCallback(() => runScan(), [runScan])
 
@@ -368,6 +388,7 @@ export function useEmails() {
     dismissMany,
     linkMany,
     markRead,
+    markReplied,
     refresh,
   }
 }

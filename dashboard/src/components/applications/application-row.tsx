@@ -3,7 +3,9 @@
 import { useState } from "react"
 import { StatusBadge } from "@/components/shared/status-badge"
 import { ConversationSection } from "@/components/conversations/conversation-section"
+import { CommunicationsSection } from "@/components/applications/communications-section"
 import { InterviewPrepSection } from "@/components/applications/interview-prep-section"
+import { CoachingSection } from "@/components/coaching/coaching-section"
 import { STATUSES } from "@/lib/constants"
 import { ExternalLink, Trash2, Save } from "lucide-react"
 import type { Application, ApplicationStatus } from "@/types"
@@ -150,11 +152,17 @@ export function ApplicationRow({
         )}
       </div>
 
+      {/* Communications (linked emails) */}
+      <CommunicationsSection application={application} />
+
       {/* Conversations */}
       <ConversationSection application={application} />
 
       {/* Interview Prep */}
       <InterviewPrepSection application={application} />
+
+      {/* Performance Coach */}
+      <CoachingSection application={application} />
     </div>
   )
 }

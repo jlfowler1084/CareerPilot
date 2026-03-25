@@ -212,3 +212,12 @@ export type {
   EmailApplicationLink,
   UserSettings,
 } from "./email"
+
+export type {
+  CoachingSession,
+  CoachingAnalysis,
+  QuestionAnalysis,
+  CoachingImprovement,
+  PatternAnalysis,
+  PracticeQuestion,
+} from "./coaching"

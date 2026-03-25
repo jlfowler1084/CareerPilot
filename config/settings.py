@@ -34,6 +34,10 @@ CALENDAR_SCOPES = os.getenv(
     "CALENDAR_SCOPES", "https://www.googleapis.com/auth/calendar"
 ).split(",")
 
+# --- Claude Model Selection (API Cost Governance) ---
+MODEL_HAIKU = os.getenv("MODEL_HAIKU", "claude-haiku-4-5-20251001")
+MODEL_SONNET = os.getenv("MODEL_SONNET", "claude-sonnet-4-6")
+
 # --- Database ---
 DB_PATH = Path(os.getenv("DB_PATH", str(PROJECT_ROOT / "data" / "careerpilot.db")))
 

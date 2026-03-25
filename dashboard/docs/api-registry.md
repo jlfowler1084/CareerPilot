@@ -8,13 +8,13 @@ This file documents every outbound API call in the project. Updated by Claude Co
 
 | Route / Function | Service | Model | Purpose | Trigger | Cost/Call | Justification |
 |---|---|---|---|---|---|---|
-| `/api/search-indeed` | Anthropic + Indeed MCP | Sonnet (hardcoded) | Search Indeed job listings via Claude as MCP relay | User clicks Run Search | ~$0.04-0.08 | **VIOLATION: Claude used as MCP relay. No auth check. Refactor to direct MCP** |
-| `/api/search-dice` | Anthropic + Dice MCP | Sonnet (hardcoded) | Search Dice job listings via Claude as MCP relay | User clicks Run Search | ~$0.04-0.08 | **VIOLATION: Claude used as MCP relay. No auth check. Refactor to direct MCP** |
-| `/api/gmail/classify` | Anthropic | Sonnet (hardcoded) | Categorize email into 7 categories + extract metadata | Email scan pipeline (auto on inbox load) | ~$0.005 | **Downgrade to Haiku** — simple classification |
-| `/api/conversations` POST | Anthropic | Sonnet (hardcoded) | Extract 3-7 topic tags from conversation notes | User logs a conversation | ~$0.003 | **Downgrade to Haiku** — simple keyword extraction |
-| `/api/conversations/[id]` PATCH | Anthropic | Sonnet (hardcoded) | Re-extract topic tags when notes change | User edits conversation | ~$0.003 | **Downgrade to Haiku** — same as above |
-| `/api/conversations/patterns` | Anthropic | Sonnet (hardcoded) | Analyze patterns across all conversations | User views patterns page | ~$0.02-0.06 | Justified: cross-conversation reasoning. **Add caching** |
-| `/api/interview-prep` | Anthropic | Sonnet (hardcoded) + web_search | Generate stage-specific interview prep material | User clicks Generate Prep | ~$0.08-0.15 | Justified: complex generation + web search |
+| `/api/search-indeed` | Anthropic + Indeed MCP | Haiku (env var) | Search Indeed job listings via Claude MCP relay | User clicks Run Search | ~$0.01-0.02 | Indeed MCP requires Claude proxy (`/claude/` path). Downgraded to Haiku (SCRUM-154). Auth added (SCRUM-156) |
+| `/api/search-dice` | Anthropic + Dice MCP | Haiku (env var) | Search Dice job listings via Claude MCP relay | User clicks Run Search | ~$0.01-0.02 | Dice MCP endpoint is standard HTTP but building a full MCP client isn't worth $3.60/mo savings. Downgraded to Haiku (SCRUM-154). Auth added (SCRUM-156) |
+| `/api/gmail/classify` | Anthropic | Haiku (env var) | Categorize email into 7 categories + extract metadata | Email scan pipeline (auto on inbox load) | ~$0.001 | Downgraded to Haiku (SCRUM-154 P3) — simple classification |
+| `/api/conversations` POST | Anthropic | Haiku (env var) | Extract 3-7 topic tags from conversation notes | User logs a conversation | ~$0.0008 | Downgraded to Haiku (SCRUM-154 P3) — simple extraction |
+| `/api/conversations/[id]` PATCH | Anthropic | Haiku (env var) | Re-extract topic tags when notes change | User edits conversation | ~$0.0008 | Downgraded to Haiku (SCRUM-154 P3) — same as above |
+| `/api/conversations/patterns` | Anthropic | Sonnet (env var) | Analyze patterns across all conversations | User views patterns page | ~$0.02-0.06 | Justified: cross-conversation reasoning. **Add caching** |
+| `/api/interview-prep` | Anthropic | Sonnet (env var) + web_search | Generate stage-specific interview prep material | User clicks Generate Prep | ~$0.08-0.15 | Justified: complex generation + web search |
 | `/api/interview-prep/debrief` | Supabase | — | Store debrief and create conversation record | User submits debrief | $0.00 | No AI needed |
 | `/api/gmail/scan` | Gmail API | — | Paginated inbox scan for new emails | Auto on page load (15-min cooldown) | $0.00 | Direct Google API |
 | `/api/gmail/message` | Gmail API | — | Fetch full email body by Gmail ID | During classification | $0.00 | Direct Google API |
@@ -38,9 +38,9 @@ This file documents every outbound API call in the project. Updated by Claude Co
 | `src/skills/roadmap.py:68` | Anthropic SDK | Sonnet (hardcoded) | Generate week-by-week study plan | `cli.py roadmap` | ~$0.06 | Justified: complex planning |
 | `src/interviews/coach.py:174` | Anthropic SDK | Sonnet (hardcoded) | Analyze full interview transcript | `cli.py interview analyze` | ~$0.08 | Justified: deep analysis |
 | `src/interviews/coach.py:236` | Anthropic SDK | Sonnet (hardcoded) | Compare multiple interview analyses | `cli.py interview compare` | ~$0.04 | Justified: cross-interview synthesis |
-| `src/interviews/coach.py:296` | Anthropic SDK | Sonnet (hardcoded) | Generate mock interview question (x5) | `cli.py interview mock` | ~$0.005 x5 | **Downgrade to Haiku** — question gen is simple |
-| `src/interviews/coach.py:325` | Anthropic SDK | Sonnet (hardcoded) | Evaluate mock answer (x5) | `cli.py interview mock` | ~$0.01 x5 | Justified: evaluation requires reasoning |
-| `src/interviews/coach.py:372` | Anthropic SDK | Sonnet (hardcoded) | Final mock assessment | End of mock session | ~$0.03 | Justified: comprehensive assessment |
+| `src/interviews/coach.py:297` | Anthropic SDK | Haiku (env var) | Generate mock interview question (x5) | `cli.py interview mock` | ~$0.001 x5 | Downgraded to Haiku (SCRUM-154 P3) — question gen is simple |
+| `src/interviews/coach.py:326` | Anthropic SDK | Sonnet (env var) | Evaluate mock answer (x5) | `cli.py interview mock` | ~$0.01 x5 | Justified: evaluation requires reasoning |
+| `src/interviews/coach.py:373` | Anthropic SDK | Sonnet (env var) | Final mock assessment | End of mock session | ~$0.03 | Justified: comprehensive assessment |
 | `src/interviews/transcripts.py:229` | Anthropic SDK | Sonnet (hardcoded) | Label speakers in unparseable transcripts | Transcript load fallback | ~$0.06 | Justified: NLP speaker diarization (rare) |
 | `src/profile/manager.py:181` | Anthropic SDK | Sonnet (hardcoded) | Parse resume into structured profile JSON | Manual CLI (one-time) | ~$0.06 | Justified: one-time complex extraction |
 

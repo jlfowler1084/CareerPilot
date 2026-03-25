@@ -11,7 +11,8 @@ interface EmailListProps {
   applications: Pick<Application, "id" | "company" | "title" | "status">[]
   selectedEmailId: string | null
   checkedIds: Set<string>
-  filter: string
+  excludedFilters: Set<string>
+  showUnlinkedOnly: boolean
   showDismissed: boolean
   onSelect: (id: string) => void
   onCheck: (id: string, checked: boolean) => void
@@ -28,10 +29,11 @@ const FILTER_CATEGORIES: Record<string, EmailCategory[]> = {
   offers: ["offer"],
   alerts: ["job_alert"],
   rejected: ["rejection"],
+  irrelevant: ["irrelevant"],
 }
 
 export function EmailList({
-  emails, links, applications, selectedEmailId, checkedIds, filter, showDismissed,
+  emails, links, applications, selectedEmailId, checkedIds, excludedFilters, showUnlinkedOnly, showDismissed,
   onSelect, onCheck, onSelectAll, onDeselectAll, onDismissMany, onLinkMany,
 }: EmailListProps) {
   const linkedEmailIds = useMemo(() => {
@@ -46,17 +48,31 @@ export function EmailList({
     return map
   }, [applications])
 
+  // Build set of excluded email categories from excluded filter IDs
+  const excludedCategories = useMemo(() => {
+    const cats = new Set<EmailCategory>()
+    excludedFilters.forEach((filterId) => {
+      const mapping = FILTER_CATEGORIES[filterId]
+      if (mapping) mapping.forEach((c) => cats.add(c))
+    })
+    return cats
+  }, [excludedFilters])
+
   const filtered = useMemo(() => {
     let list = showDismissed ? emails : emails.filter((e) => !e.dismissed)
 
-    if (filter === "unlinked") {
+    // Apply category exclusions
+    if (excludedCategories.size > 0) {
+      list = list.filter((e) => !excludedCategories.has(e.category))
+    }
+
+    // Apply unlinked filter
+    if (showUnlinkedOnly) {
       list = list.filter((e) => !linkedEmailIds.has(e.id))
-    } else if (FILTER_CATEGORIES[filter]) {
-      list = list.filter((e) => FILTER_CATEGORIES[filter].includes(e.category))
     }
 
     return list
-  }, [emails, filter, showDismissed, linkedEmailIds])
+  }, [emails, excludedCategories, showUnlinkedOnly, showDismissed, linkedEmailIds])
 
   return (
     <div className="flex flex-col h-full">

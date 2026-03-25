@@ -1,8 +1,15 @@
 import { NextRequest, NextResponse } from "next/server"
+import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { parseIndeedResults } from "@/lib/parsers/indeed"
 
 export async function POST(req: NextRequest) {
   try {
+    const supabase = await createServerSupabaseClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
     const { keyword, location } = await req.json()
 
     if (!keyword || !location) {
@@ -21,7 +28,7 @@ export async function POST(req: NextRequest) {
         "anthropic-beta": "mcp-client-2025-04-04",
       },
       body: JSON.stringify({
-        model: "claude-sonnet-4-6",
+        model: process.env.MODEL_HAIKU || "claude-haiku-4-5-20251001",
         max_tokens: 4000,
         system:
           "You are a job search assistant. Use the Indeed MCP tool to search for jobs. Return the raw results exactly as the tool provides them. Do not add commentary.",

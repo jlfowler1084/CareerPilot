@@ -33,6 +33,7 @@ export interface Email {
   suggested_application_id: string | null
   is_read: boolean
   dismissed: boolean
+  replied_at: string | null
   created_at: string
   updated_at: string
 }

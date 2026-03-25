@@ -5,57 +5,118 @@ import type { Email, EmailApplicationLink, EmailCategory } from "@/types"
 interface FilterChipsProps {
   emails: Email[]
   links: EmailApplicationLink[]
-  activeFilter: string
-  onFilter: (filter: string) => void
+  excludedFilters: Set<string>
+  showUnlinkedOnly: boolean
+  onToggleFilter: (filterId: string) => void
+  onShowAll: () => void
+  onConversations: () => void
+  onToggleUnlinked: () => void
   showDismissed: boolean
 }
 
-const FILTERS: { id: string; label: string; categories?: EmailCategory[] }[] = [
-  { id: "all", label: "All" },
+const CATEGORY_FILTERS: { id: string; label: string; categories: EmailCategory[] }[] = [
   { id: "recruiter", label: "Recruiter", categories: ["recruiter_outreach"] },
   { id: "interview", label: "Interview", categories: ["interview_request"] },
   { id: "follow_up", label: "Follow-up", categories: ["follow_up"] },
   { id: "offers", label: "Offers", categories: ["offer"] },
   { id: "alerts", label: "Alerts", categories: ["job_alert"] },
   { id: "rejected", label: "Rejected", categories: ["rejection"] },
-  { id: "unlinked", label: "Unlinked" },
+  { id: "irrelevant", label: "Irrelevant", categories: ["irrelevant"] },
 ]
 
-export function FilterChips({ emails, links, activeFilter, onFilter, showDismissed }: FilterChipsProps) {
+export const ALL_FILTER_IDS = CATEGORY_FILTERS.map((f) => f.id)
+
+const CONVERSATIONS_EXCLUDED = new Set(["alerts", "irrelevant"])
+
+export function FilterChips({
+  emails, links, excludedFilters, showUnlinkedOnly,
+  onToggleFilter, onShowAll, onConversations, onToggleUnlinked, showDismissed,
+}: FilterChipsProps) {
   const visible = showDismissed ? emails : emails.filter((e) => !e.dismissed)
   const linkedEmailIds = new Set(links.map((l) => l.email_id))
 
-  function getCount(filter: (typeof FILTERS)[number]): number {
-    if (filter.id === "all") return visible.length
-    if (filter.id === "unlinked") return visible.filter((e) => !linkedEmailIds.has(e.id)).length
-    if (filter.categories) return visible.filter((e) => filter.categories!.includes(e.category)).length
-    return 0
+  const allActive = excludedFilters.size === 0
+  const isConversationsPreset =
+    excludedFilters.size === CONVERSATIONS_EXCLUDED.size &&
+    [...CONVERSATIONS_EXCLUDED].every((id) => excludedFilters.has(id))
+
+  function getCategoryCount(filter: (typeof CATEGORY_FILTERS)[number]): number {
+    return visible.filter((e) => filter.categories.includes(e.category)).length
   }
+
+  const allCount = visible.length
+  const unlinkedCount = visible.filter((e) => !linkedEmailIds.has(e.id)).length
 
   return (
     <div className="flex flex-wrap gap-1.5">
-      {FILTERS.map((filter) => {
-        const count = getCount(filter)
-        const active = activeFilter === filter.id
+      {/* All chip */}
+      <button
+        onClick={onShowAll}
+        className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all ${
+          allActive && !showUnlinkedOnly
+            ? "bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30"
+            : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border border-transparent hover:border-zinc-300 dark:hover:border-zinc-600"
+        }`}
+      >
+        {allActive ? "All" : `All (-${excludedFilters.size})`}
+        <span className="ml-1">{allCount}</span>
+      </button>
+
+      {/* Category chips */}
+      {CATEGORY_FILTERS.map((filter) => {
+        const count = getCategoryCount(filter)
+        const active = !excludedFilters.has(filter.id)
         return (
           <button
             key={filter.id}
-            onClick={() => onFilter(filter.id)}
+            onClick={() => onToggleFilter(filter.id)}
             className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all ${
               active
                 ? "bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30"
                 : count === 0
-                ? "bg-zinc-100 dark:bg-zinc-800/50 text-zinc-400 dark:text-zinc-600 border border-transparent"
-                : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border border-transparent hover:border-zinc-300 dark:hover:border-zinc-600"
+                ? "bg-zinc-100 dark:bg-zinc-800/50 text-zinc-400 dark:text-zinc-600 border border-transparent line-through"
+                : "bg-zinc-100 dark:bg-zinc-800 text-zinc-400 dark:text-zinc-500 border border-transparent hover:border-zinc-300 dark:hover:border-zinc-600"
             }`}
           >
             {filter.label}
-            <span className={`ml-1 ${count === 0 && !active ? "opacity-50" : ""}`}>
+            <span className={`ml-1 ${!active && count === 0 ? "opacity-50" : ""}`}>
               {count}
             </span>
           </button>
         )
       })}
+
+      {/* Separator */}
+      <div className="w-px bg-zinc-200 dark:bg-zinc-700 mx-0.5 self-stretch" />
+
+      {/* Conversations preset */}
+      <button
+        onClick={onConversations}
+        className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all ${
+          isConversationsPreset && !showUnlinkedOnly
+            ? "bg-blue-500/20 text-blue-600 dark:text-blue-400 border border-blue-500/30"
+            : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border border-transparent hover:border-zinc-300 dark:hover:border-zinc-600"
+        }`}
+      >
+        Conversations
+      </button>
+
+      {/* Unlinked chip */}
+      <button
+        onClick={onToggleUnlinked}
+        className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all ${
+          showUnlinkedOnly
+            ? "bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30"
+            : unlinkedCount === 0
+            ? "bg-zinc-100 dark:bg-zinc-800/50 text-zinc-400 dark:text-zinc-600 border border-transparent"
+            : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border border-transparent hover:border-zinc-300 dark:hover:border-zinc-600"
+        }`}
+      >
+        Unlinked
+        <span className={`ml-1 ${unlinkedCount === 0 && !showUnlinkedOnly ? "opacity-50" : ""}`}>
+          {unlinkedCount}
+        </span>
+      </button>
     </div>
   )
 }

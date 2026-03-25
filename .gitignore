@@ -56,3 +56,6 @@ resumes/*.pdf
 resumes/*.docx
 data/resumes/
 data/cover_letters/
+
+# Vercel
+.vercel/

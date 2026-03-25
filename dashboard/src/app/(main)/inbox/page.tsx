@@ -3,19 +3,22 @@
 import { useState, useCallback, useMemo } from "react"
 import { RefreshCw } from "lucide-react"
 import { useEmails } from "@/hooks/use-emails"
-import { FilterChips } from "@/components/inbox/filter-chips"
+import { FilterChips, ALL_FILTER_IDS } from "@/components/inbox/filter-chips"
 import { EmailList } from "@/components/inbox/email-list"
 import { EmailDetail } from "@/components/inbox/email-detail"
+
+const CONVERSATIONS_EXCLUDED = new Set(["alerts", "irrelevant"])
 
 export default function InboxPage() {
   const {
     emails, links, applications, loading, scanState,
-    linkEmail, unlinkEmail, dismissEmail, undismissEmail, dismissMany, linkMany, markRead, refresh,
+    linkEmail, unlinkEmail, dismissEmail, undismissEmail, dismissMany, linkMany, markRead, markReplied, refresh,
   } = useEmails()
 
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set())
-  const [filter, setFilter] = useState("all")
+  const [excludedFilters, setExcludedFilters] = useState<Set<string>>(new Set())
+  const [showUnlinkedOnly, setShowUnlinkedOnly] = useState(false)
   const [showDismissed, setShowDismissed] = useState(false)
 
   const selectedEmail = useMemo(
@@ -43,6 +46,29 @@ export default function InboxPage() {
   }, [emails, showDismissed])
 
   const handleDeselectAll = useCallback(() => setCheckedIds(new Set()), [])
+
+  const handleToggleFilter = useCallback((filterId: string) => {
+    setExcludedFilters((prev) => {
+      const next = new Set(prev)
+      if (next.has(filterId)) next.delete(filterId)
+      else next.add(filterId)
+      return next
+    })
+  }, [])
+
+  const handleShowAll = useCallback(() => {
+    setExcludedFilters(new Set())
+    setShowUnlinkedOnly(false)
+  }, [])
+
+  const handleConversations = useCallback(() => {
+    setExcludedFilters(new Set(CONVERSATIONS_EXCLUDED))
+    setShowUnlinkedOnly(false)
+  }, [])
+
+  const handleToggleUnlinked = useCallback(() => {
+    setShowUnlinkedOnly((prev) => !prev)
+  }, [])
 
   const handleDismissMany = useCallback((ids: string[]) => {
     dismissMany(ids)
@@ -108,8 +134,12 @@ export default function InboxPage() {
         <FilterChips
           emails={emails}
           links={links}
-          activeFilter={filter}
-          onFilter={setFilter}
+          excludedFilters={excludedFilters}
+          showUnlinkedOnly={showUnlinkedOnly}
+          onToggleFilter={handleToggleFilter}
+          onShowAll={handleShowAll}
+          onConversations={handleConversations}
+          onToggleUnlinked={handleToggleUnlinked}
           showDismissed={showDismissed}
         />
       </div>
@@ -124,7 +154,8 @@ export default function InboxPage() {
             applications={applications}
             selectedEmailId={selectedId}
             checkedIds={checkedIds}
-            filter={filter}
+            excludedFilters={excludedFilters}
+            showUnlinkedOnly={showUnlinkedOnly}
             showDismissed={showDismissed}
             onSelect={handleSelect}
             onCheck={handleCheck}
@@ -146,6 +177,7 @@ export default function InboxPage() {
               onUnlink={unlinkEmail}
               onDismiss={dismissEmail}
               onUndismiss={undismissEmail}
+              onEmailReplied={markReplied}
             />
           ) : (
             <div className="flex flex-col items-center justify-center h-full text-zinc-400 dark:text-zinc-500">

@@ -51,6 +51,11 @@ export function EmailCard({
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <CategoryBadge category={email.category} />
+          {email.replied_at && (
+            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400">
+              Replied
+            </span>
+          )}
           {linkedApp && (
             <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-500">
               {linkedApp.title} @ {linkedApp.company}
