@@ -471,6 +471,10 @@ def main():
     parser.add_argument("--json", action="store_true",
                         help="Output JSON instead of text report")
     parser.add_argument("--company", help="Scan single direct employer by ID")
+    parser.add_argument("--force-all", action="store_true",
+                        help="Bypass cache and force fresh scans for all sources")
+    parser.add_argument("--cache-ttl", type=int, default=24,
+                        help="Cache TTL in hours (default: 24)")
     args = parser.parse_args()
 
     scan_time = datetime.now(timezone.utc)
@@ -495,14 +499,20 @@ def main():
         if args.company:
             companies = [c for c in COMPANIES if c["id"] == args.company]
 
+        force = getattr(args, "force_all", False)
+        cache_ttl = getattr(args, "cache_ttl", 24)
+
         for company in companies:
             print(f"     {company['name']}...", end=" ", flush=True)
-            jobs = search_company(company)
+            jobs, was_cached = search_company(
+                company, conn=conn, force=force, cache_ttl=cache_ttl
+            )
             new_count = 0
-            for job in jobs:
-                is_new = upsert_job(conn, job, scan_id)
-                if is_new:
-                    new_count += 1
+            if not was_cached:
+                for job in jobs:
+                    is_new = upsert_job(conn, job, scan_id)
+                    if is_new:
+                        new_count += 1
 
             # Convert to common format
             for job in jobs:
