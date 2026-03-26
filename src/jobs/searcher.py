@@ -1,4 +1,8 @@
-"""Job search via Indeed and Dice MCP servers through the Anthropic API."""
+"""Job search via Indeed and Dice MCP servers.
+
+Dice: called directly via Streamable HTTP (no Claude API cost).
+Indeed: requires Claude connector auth, currently disabled.
+"""
 
 from __future__ import annotations
 
@@ -7,7 +11,7 @@ import logging
 import re
 from typing import Dict, List, Optional
 
-import anthropic
+import requests
 
 from config import settings
 from config.search_profiles import SEARCH_PROFILES
@@ -57,17 +61,117 @@ def _is_irrelevant(title: str) -> bool:
     return any(kw in title_lower for kw in IRRELEVANT_KEYWORDS)
 
 
+def _search_dice_direct(keyword: str, location: str, contract_only: bool = False,
+                         jobs_per_page: int = 15) -> dict:
+    """Call Dice MCP directly via Streamable HTTP — no Claude API cost.
+
+    Args:
+        keyword: Job title or search keywords.
+        location: City/state or "remote".
+        contract_only: If True, filter for contract positions only.
+        jobs_per_page: Number of results to return.
+
+    Returns:
+        Raw JSON-RPC result dict from Dice MCP, or empty dict on failure.
+    """
+    headers_init = {
+        "Content-Type": "application/json",
+        "Accept": "application/json, text/event-stream",
+    }
+
+    # Step 1: Initialize the MCP session
+    try:
+        init_resp = requests.post(
+            DICE_MCP_URL,
+            headers=headers_init,
+            json={
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+                "params": {
+                    "protocolVersion": "2025-03-26",
+                    "capabilities": {},
+                    "clientInfo": {"name": "careerpilot-cli", "version": "1.0.0"},
+                },
+            },
+            timeout=15,
+        )
+        init_resp.raise_for_status()
+    except Exception:
+        logger.error("Dice MCP initialize failed", exc_info=True)
+        return {}
+
+    session_id = init_resp.headers.get("mcp-session-id", "")
+    if not session_id:
+        logger.error("Dice MCP did not return a session ID")
+        return {}
+
+    session_headers = {
+        "Content-Type": "application/json",
+        "Accept": "application/json, text/event-stream",
+        "mcp-session-id": session_id,
+    }
+
+    # Step 2: Send initialized notification
+    try:
+        requests.post(
+            DICE_MCP_URL,
+            headers=session_headers,
+            json={"jsonrpc": "2.0", "method": "notifications/initialized"},
+            timeout=5,
+        )
+    except Exception:
+        logger.warning("Dice MCP initialized notification failed", exc_info=True)
+
+    # Step 3: Call search_jobs tool
+    tool_args = {"keyword": keyword, "location": location, "jobs_per_page": jobs_per_page}
+    if contract_only:
+        tool_args["employment_types"] = ["CONTRACTS"]
+
+    try:
+        result_resp = requests.post(
+            DICE_MCP_URL,
+            headers=session_headers,
+            json={
+                "jsonrpc": "2.0",
+                "id": 2,
+                "method": "tools/call",
+                "params": {
+                    "name": "search_jobs",
+                    "arguments": tool_args,
+                },
+            },
+            timeout=30,
+        )
+        result_resp.raise_for_status()
+
+        # Handle SSE response format
+        content_type = result_resp.headers.get("content-type", "")
+        if "text/event-stream" in content_type:
+            # Parse SSE events to extract the JSON-RPC result
+            for line in result_resp.text.splitlines():
+                if line.startswith("data: "):
+                    try:
+                        event_data = json.loads(line[6:])
+                        if "result" in event_data:
+                            return event_data["result"]
+                    except json.JSONDecodeError:
+                        continue
+            return {}
+        else:
+            data = result_resp.json()
+            return data.get("result", data)
+
+    except Exception:
+        logger.error("Dice MCP tools/call failed", exc_info=True)
+        return {}
+
+
 class JobSearcher:
-    """Search Indeed and Dice via MCP servers through the Anthropic API."""
+    """Search Indeed and Dice via MCP servers."""
 
     def __init__(self, anthropic_api_key: str = None):
         self._api_key = anthropic_api_key or settings.ANTHROPIC_API_KEY
-        self._client = None
-
-    def _get_client(self):
-        if self._client is None:
-            self._client = anthropic.Anthropic(api_key=self._api_key)
-        return self._client
 
     def search_indeed(self, keyword: str, location: str) -> List[Dict]:
         """Search Indeed via MCP server.
@@ -93,7 +197,7 @@ class JobSearcher:
     def search_dice(
         self, keyword: str, location: str, contract_only: bool = False,
     ) -> List[Dict]:
-        """Search Dice via MCP server.
+        """Search Dice directly via MCP Streamable HTTP — no Claude API cost.
 
         Args:
             keyword: Job title or search keywords.
@@ -104,37 +208,50 @@ class JobSearcher:
             List of job result dicts, or empty list on failure.
         """
         loc_display = location if location else "remote"
-        contract_note = " Filter for contract positions only." if contract_only else ""
-        user_msg = (
-            f'Search for "{keyword}" jobs in {loc_display}.{contract_note} '
-            f"Return up to 15 results."
-        )
 
         try:
-            client = self._get_client()
-            response = client.beta.messages.create(
-                model="claude-sonnet-4-6",
-                max_tokens=4096,
-                system=SEARCH_SYSTEM_PROMPT,
-                mcp_servers=[{
-                    "type": "url",
-                    "url": DICE_MCP_URL,
-                    "name": "dice",
-                }],
-                betas=["mcp-client-2025-04-04"],
-                messages=[{"role": "user", "content": user_msg}],
+            raw = _search_dice_direct(
+                keyword, location, contract_only=contract_only, jobs_per_page=15,
             )
 
-            text = self._extract_text(response)
-            results = _parse_json_response(text)
-            if results is None:
-                return []
+            # Extract job data from MCP result
+            # The result contains content[].text with JSON, or structuredContent
+            jobs_data = []
+            if "structuredContent" in raw and raw["structuredContent"]:
+                jobs_data = raw["structuredContent"].get("data", []) or []
+            elif "content" in raw:
+                # Parse text content blocks
+                for block in (raw.get("content") or []):
+                    if isinstance(block, dict) and block.get("type") == "text":
+                        parsed = _parse_json_response(block.get("text", ""))
+                        if parsed:
+                            jobs_data = parsed
+                            break
 
-            for r in results:
-                r.setdefault("source", "dice")
-                r.setdefault("easy_apply", False)
+            # Normalize to standard result format
+            results = []
+            for job in jobs_data:
+                loc = ""
+                if isinstance(job.get("jobLocation"), dict):
+                    loc = job["jobLocation"].get("displayName", "")
+                elif job.get("isRemote"):
+                    loc = "Remote"
 
-            logger.info("Dice search '%s' in %s: %d results", keyword, loc_display, len(results))
+                results.append({
+                    "title": job.get("title", ""),
+                    "company": job.get("companyName", "Unknown"),
+                    "location": loc,
+                    "salary": job.get("salary", ""),
+                    "url": job.get("detailsPageUrl", ""),
+                    "posted_date": job.get("postedDate", ""),
+                    "job_type": job.get("employmentType", ""),
+                    "source": "dice",
+                    "easy_apply": job.get("easyApply", False),
+                })
+
+            logger.info(
+                "Dice search '%s' in %s: %d results", keyword, loc_display, len(results),
+            )
             return results
 
         except Exception:
@@ -211,11 +328,3 @@ class JobSearcher:
                 unique.append(r)
         return unique
 
-    @staticmethod
-    def _extract_text(response) -> str:
-        """Extract text content from a beta messages response."""
-        parts = []
-        for block in response.content:
-            if hasattr(block, "text"):
-                parts.append(block.text)
-        return "\n".join(parts)

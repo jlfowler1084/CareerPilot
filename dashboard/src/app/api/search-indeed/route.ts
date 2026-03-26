@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
         "anthropic-beta": "mcp-client-2025-04-04",
       },
       body: JSON.stringify({
-        model: process.env.MODEL_SONNET || "claude-sonnet-4-20250514",
+        model: process.env.MODEL_HAIKU || "claude-haiku-4-5-20251001",
         max_tokens: 4000,
         system:
           "You are a job search assistant. Use the Indeed MCP tool to search for jobs. Return the raw results exactly as the tool provides them. Do not add commentary.",
@@ -49,8 +49,18 @@ export async function POST(req: NextRequest) {
     })
 
     if (!resp.ok) {
+      const errBody = await resp.text()
+      console.error("Indeed MCP upstream error:", resp.status, errBody.slice(0, 500))
+      const isAuthError = errBody.includes("Authentication error") || errBody.includes("authorization")
       return NextResponse.json(
-        { jobs: [], source: "Indeed", count: 0, error: "Search service unavailable" },
+        {
+          jobs: [],
+          source: "Indeed",
+          count: 0,
+          error: isAuthError
+            ? "Indeed requires authentication — configure INDEED_MCP_TOKEN in .env"
+            : `Indeed service unavailable (${resp.status})`,
+        },
         { status: 502 }
       )
     }
