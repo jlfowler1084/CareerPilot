@@ -33,6 +33,9 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 
+# one-time token scripts
+get-refresh-token.js
+
 # vercel
 .vercel
 

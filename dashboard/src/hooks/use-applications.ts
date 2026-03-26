@@ -4,7 +4,8 @@ import { useEffect, useState, useCallback } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { RESPONSE_STATUSES } from "@/lib/constants"
 import { logActivity } from "@/hooks/use-activity-log"
-import type { Application, ApplicationStatus, ApplicationEventType, Job } from "@/types"
+import { toast } from "sonner"
+import type { Application, ApplicationStatus, ApplicationEventType, ExtractedJob, Job } from "@/types"
 
 const supabase = createClient()
 
@@ -144,17 +145,16 @@ export function useApplications() {
 
   const updateApplication = useCallback(
     async (id: string, updates: Partial<Application>) => {
+      const current = applications.find((a) => a.id === id)
+
       // Compute automatic date fields
-      if (updates.status) {
-        const current = applications.find((a) => a.id === id)
-        if (current) {
-          const dateUpdates = computeDateUpdates(
-            updates.status,
-            current.date_applied,
-            current.date_response
-          )
-          Object.assign(updates, dateUpdates)
-        }
+      if (updates.status && current) {
+        const dateUpdates = computeDateUpdates(
+          updates.status,
+          current.date_applied,
+          current.date_response
+        )
+        Object.assign(updates, dateUpdates)
       }
 
       const { data, error } = await supabase
@@ -164,8 +164,14 @@ export function useApplications() {
         .select()
         .single()
 
+      if (error) {
+        toast.error("Failed to update application")
+      }
+
       if (!error && data) {
-        const current = applications.find((a) => a.id === id)
+        if (updates.status) {
+          toast.success(`Status updated to ${updates.status}`)
+        }
         const statusLabel = updates.status
           ? ` → ${updates.status}`
           : ""
@@ -208,11 +214,59 @@ export function useApplications() {
 
   const deleteApplication = useCallback(async (id: string) => {
     const app = applications.find((a) => a.id === id)
-    await supabase.from("applications").delete().eq("id", id)
-    if (app) {
-      await logActivity(`Removed: ${app.title} at ${app.company}`)
+    const { error } = await supabase.from("applications").delete().eq("id", id)
+    if (error) {
+      toast.error("Failed to delete application")
+    } else {
+      toast.success("Application deleted")
+      if (app) {
+        await logActivity(`Removed: ${app.title} at ${app.company}`)
+      }
     }
   }, [applications])
+
+  const createFromExtraction = useCallback(
+    async (extracted: ExtractedJob, url: string) => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+      if (!user) return { data: null, error: "Not authenticated" }
+
+      const { data, error } = await supabase
+        .from("applications")
+        .insert({
+          user_id: user.id,
+          title: extracted.title,
+          company: extracted.company,
+          location: extracted.location,
+          url,
+          source: extracted.source,
+          salary_range: extracted.salary_range,
+          status: "interested" as ApplicationStatus,
+          job_type: extracted.job_type,
+          posted_date: extracted.posted_date,
+          job_description: extracted.job_description,
+          contact_name: extracted.contact_name,
+          contact_email: extracted.contact_email,
+          profile_id: "",
+          notes: "",
+        })
+        .select()
+        .single()
+
+      if (!error && data) {
+        await logActivity(`Tracked: ${data.title} at ${data.company}`)
+        await insertApplicationEvent(
+          data.id,
+          "tracked",
+          `Imported from ${extracted.source} via URL extraction`
+        )
+      }
+
+      return { data, error }
+    },
+    []
+  )
 
   const updateContact = useCallback(
     async (
@@ -226,7 +280,11 @@ export function useApplications() {
         .select()
         .single()
 
+      if (error) {
+        toast.error("Failed to save contact info")
+      }
       if (!error && data) {
+        toast.success("Contact info saved")
         await insertApplicationEvent(
           id,
           "contact_added",
@@ -248,7 +306,11 @@ export function useApplications() {
         .select()
         .single()
 
+      if (error) {
+        toast.error("Failed to save notes")
+      }
       if (!error && data) {
+        toast.success("Notes saved")
         await insertApplicationEvent(
           id,
           "note_added",
@@ -279,6 +341,7 @@ export function useApplications() {
     applications,
     loading,
     addApplication,
+    createFromExtraction,
     updateApplication,
     deleteApplication,
     updateContact,

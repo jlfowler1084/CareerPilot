@@ -8,7 +8,8 @@ import { SearchControls } from "@/components/search/search-controls"
 import { JobCard } from "@/components/shared/job-card"
 import { TailorModal } from "@/components/applications/tailor-modal"
 import { CoverLetterModal } from "@/components/applications/cover-letter-modal"
-import { AlertCircle } from "lucide-react"
+import { EmptyState } from "@/components/shared/empty-state"
+import { AlertCircle, SearchX } from "lucide-react"
 import type { Job } from "@/types"
 
 export default function SearchPage() {
@@ -28,10 +29,21 @@ export default function SearchPage() {
     lastSearchTime,
   } = useSearch()
 
-  const { applications, addApplication } = useApplications()
+  const { applications, addApplication, updateApplication } = useApplications()
+
+  // Sort state
+  const [sortBy, setSortBy] = useState<"newest" | "salary" | "company">("newest")
 
   // Track which jobs have been tracked in this session
   const [sessionTracked, setSessionTracked] = useState<Set<string>>(new Set())
+
+  // Tailor modal state
+  const [tailorJob, setTailorJob] = useState<Job | null>(null)
+  const [tailorOpen, setTailorOpen] = useState(false)
+  const [trackedAppId, setTrackedAppId] = useState<string | null>(null)
+
+  // Cover letter modal state
+  const [coverLetterJob, setCoverLetterJob] = useState<Job | null>(null)
 
   function isTracked(job: Job): boolean {
     const key = `${job.title}|||${job.company}`.toLowerCase()
@@ -43,19 +55,25 @@ export default function SearchPage() {
     )
   }
 
-  // Modal state for tailor/cover letter from search
-  const [tailorJob, setTailorJob] = useState<Job | null>(null)
-  const [coverLetterJob, setCoverLetterJob] = useState<Job | null>(null)
-
   async function handleTrack(job: Job) {
     const key = `${job.title}|||${job.company}`.toLowerCase()
     setSessionTracked((prev) => new Set(prev).add(key))
     await addApplication(job, "search")
   }
 
-  async function handleTrackAndTailor(job: Job) {
-    await handleTrack(job)
+  function handleTailor(job: Job) {
     setTailorJob(job)
+    setTrackedAppId(null)
+    setTailorOpen(true)
+  }
+
+  async function handleTrackAndTailor(job: Job) {
+    const key = `${job.title}|||${job.company}`.toLowerCase()
+    setSessionTracked((prev) => new Set(prev).add(key))
+    const result = await addApplication(job, "search")
+    setTailorJob(job)
+    setTrackedAppId(result?.data?.id ?? null)
+    setTailorOpen(true)
   }
 
   return (
@@ -108,21 +126,42 @@ export default function SearchPage() {
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <div className="text-xs font-medium text-zinc-500 uppercase tracking-wider">
-              Results
+              {searchResults.length} Results
             </div>
-            {lastSearchTime && (
-              <span className="text-[10px] text-zinc-400">
-                Last search: {lastSearchTime.toLocaleString()}
-              </span>
-            )}
+            <div className="flex items-center gap-3">
+              {lastSearchTime && (
+                <span className="text-[10px] text-zinc-400">
+                  Last search: {lastSearchTime.toLocaleString()}
+                </span>
+              )}
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+                className="text-xs px-3 py-1.5 rounded-lg border border-zinc-200 bg-white text-zinc-700 cursor-pointer focus:outline-none focus:ring-1 focus:ring-amber-300"
+              >
+                <option value="newest">Newest First</option>
+                <option value="salary">Salary (High to Low)</option>
+                <option value="company">Company A-Z</option>
+              </select>
+            </div>
           </div>
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
-            {searchResults.map((job, index) => (
+            {[...searchResults].sort((a, b) => {
+              if (sortBy === "company") return a.company.localeCompare(b.company)
+              if (sortBy === "salary") {
+                const extractNum = (s: string) => {
+                  const m = s.replace(/,/g, "").match(/\d+/)
+                  return m ? parseInt(m[0]) : 0
+                }
+                return extractNum(b.salary || "0") - extractNum(a.salary || "0")
+              }
+              return 0 // Keep original order for newest
+            }).map((job, index) => (
               <JobCard
                 key={`${job.title}-${job.company}-${index}`}
                 job={job}
                 onTrack={handleTrack}
-                onTailor={(j) => setTailorJob(j)}
+                onTailor={handleTailor}
                 onCoverLetter={(j) => setCoverLetterJob(j)}
                 onTrackAndTailor={handleTrackAndTailor}
                 tracked={isTracked(job)}
@@ -135,20 +174,30 @@ export default function SearchPage() {
 
       {/* Empty state */}
       {searchComplete && searchResults.length === 0 && !loading && (
-        <div className="bg-white rounded-xl border border-zinc-200 p-8 text-center">
-          <p className="text-sm text-zinc-500">
-            No results found. Try selecting different profiles.
-          </p>
-        </div>
+        <EmptyState
+          icon={SearchX}
+          title="No results found"
+          description="Try selecting different search profiles or broadening your search criteria."
+        />
       )}
 
-      {/* Tailor Modal */}
+      {/* Tailor Modal for search results */}
       {tailorJob && (
         <TailorModal
-          application={{ title: tailorJob.title, company: tailorJob.company, url: tailorJob.url, tailored_resume: null }}
-          open={!!tailorJob}
-          onOpenChange={(open) => !open && setTailorJob(null)}
-          onSave={async () => { setTailorJob(null) }}
+          application={{
+            title: tailorJob.title,
+            company: tailorJob.company,
+            url: tailorJob.url,
+            tailored_resume: null,
+          }}
+          open={tailorOpen}
+          onOpenChange={setTailorOpen}
+          onSave={async (tailoredResume) => {
+            if (trackedAppId) {
+              await updateApplication(trackedAppId, { tailored_resume: tailoredResume })
+            }
+            // If no tracked app (just Tailor without Track), copy is still available
+          }}
         />
       )}
 

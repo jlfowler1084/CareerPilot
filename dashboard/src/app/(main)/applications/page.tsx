@@ -1,23 +1,46 @@
 "use client"
 
-import { useState, useMemo, useEffect } from "react"
+import { Suspense, useState, useMemo, useEffect } from "react"
+import { useSearchParams, useRouter } from "next/navigation"
 import { useApplications } from "@/hooks/use-applications"
 import { computeStats } from "@/hooks/use-stats"
 import { KanbanSummary } from "@/components/applications/kanban-summary"
 import { AddForm } from "@/components/applications/add-form"
+import { UrlImport } from "@/components/applications/url-import"
 import { ApplicationRow } from "@/components/applications/application-row"
 import { DetailPanel } from "@/components/applications/detail-panel"
-import { Search } from "lucide-react"
+import { EmptyState } from "@/components/shared/empty-state"
+import { Search, Briefcase } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import type { Application, ApplicationStatus } from "@/types"
 
 type SortKey = "date_found" | "company" | "title" | "status"
 
 export default function ApplicationsPage() {
+  return (
+    <Suspense fallback={
+      <div className="p-6">
+        <h2 className="text-lg font-bold mb-6">Applications</h2>
+        <div className="space-y-3 animate-pulse">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="h-24 bg-zinc-100 rounded-xl" />
+          ))}
+        </div>
+      </div>
+    }>
+      <ApplicationsContent />
+    </Suspense>
+  )
+}
+
+function ApplicationsContent() {
+  const searchParams = useSearchParams()
+  const router = useRouter()
   const {
     applications,
     loading,
     addApplication,
+    createFromExtraction,
     updateApplication,
     deleteApplication,
     updateContact,
@@ -41,10 +64,17 @@ export default function ApplicationsPage() {
       })
   }, [applications])
 
-  const [statusFilter, setStatusFilter] = useState<ApplicationStatus | null>(null)
+  // Read status filter from URL query params
+  const urlStatus = searchParams.get("status") as ApplicationStatus | null
+  const [statusFilter, setStatusFilter] = useState<ApplicationStatus | null>(urlStatus)
   const [searchQuery, setSearchQuery] = useState("")
   const [sortKey, setSortKey] = useState<SortKey>("date_found")
   const [selectedApplication, setSelectedApplication] = useState<Application | null>(null)
+
+  // Sync URL status param to filter state
+  useEffect(() => {
+    setStatusFilter(urlStatus)
+  }, [urlStatus])
 
   // Keep selectedApplication in sync with real-time updates
   const currentSelected = selectedApplication
@@ -117,6 +147,9 @@ export default function ApplicationsPage() {
         onFilter={setStatusFilter}
       />
 
+      {/* URL Import */}
+      <UrlImport onSave={createFromExtraction} onUpdate={updateApplication} />
+
       {/* Add Form */}
       <AddForm onAdd={addApplication} />
 
@@ -147,7 +180,10 @@ export default function ApplicationsPage() {
         </select>
         {statusFilter && (
           <button
-            onClick={() => setStatusFilter(null)}
+            onClick={() => {
+              setStatusFilter(null)
+              if (urlStatus) router.replace("/applications")
+            }}
             className="text-[10px] font-semibold text-amber-600 hover:text-amber-800 transition-colors"
           >
             Clear filter
@@ -172,12 +208,19 @@ export default function ApplicationsPage() {
             />
           ))}
         </div>
+      ) : applications.length === 0 ? (
+        <EmptyState
+          icon={Briefcase}
+          title="No applications tracked yet"
+          description="Start tracking jobs from search results or add one manually above."
+          actions={[
+            { label: "Search Jobs", href: "/search" },
+          ]}
+        />
       ) : (
         <div className="bg-white rounded-xl border border-zinc-200 p-8 text-center">
           <p className="text-sm text-zinc-500">
-            {applications.length === 0
-              ? "No applications tracked yet. Use the search page or add one manually."
-              : "No applications match your filters."}
+            No applications match your filters.
           </p>
         </div>
       )}

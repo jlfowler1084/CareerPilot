@@ -542,6 +542,368 @@ def skills_update(name, level):
     tracker.close()
 
 
+@skills.command("scan")
+def skills_scan():
+    """Parse all tracked applications and extract skills via AI."""
+    from rich.progress import Progress
+
+    from src.db import models
+    from src.intel.skill_analyzer import SkillGapAnalyzer
+
+    conn = models.get_connection()
+    apps = conn.execute(
+        "SELECT COUNT(*) FROM applications WHERE description IS NOT NULL AND description != ''"
+    ).fetchone()[0]
+
+    if apps == 0:
+        console.print(
+            "[yellow]No applications with stored job descriptions. "
+            "Save JDs when tracking jobs to use this feature.[/yellow]"
+        )
+        conn.close()
+        return
+
+    console.print(f"[dim]Scanning {apps} applications for skills...[/dim]")
+
+    analyzer = SkillGapAnalyzer()
+
+    with Progress(console=console) as progress:
+        task = progress.add_task("Extracting skills...", total=apps)
+
+        def on_progress(current, total):
+            progress.update(task, completed=current)
+
+        result = analyzer.scan_applications(conn, progress_callback=on_progress)
+
+    conn.close()
+
+    console.print(
+        f"\n[green]Scan complete:[/green] {result['apps_scanned']} applications, "
+        f"{result['skills_found']} skill mentions extracted."
+    )
+    console.print("[dim]Run 'skills gaps' to see your skill gap analysis.[/dim]")
+
+
+@skills.command("gaps")
+def skills_gaps():
+    """Show skill gaps ranked by market demand."""
+    from datetime import datetime as dt
+
+    from src.db import models
+
+    conn = models.get_connection()
+    demands = models.get_skill_demand(conn)
+    conn.close()
+
+    if not demands:
+        console.print("[dim]No skill demand data yet. Run 'skills scan' first.[/dim]")
+        return
+
+    # Count totals for header
+    total_skills = len(demands)
+    total_apps = conn.execute(
+        "SELECT COUNT(DISTINCT application_id) FROM skill_application_map"
+    ).fetchone()[0] if False else 0  # avoid reopening conn
+
+    # Group by match level
+    gaps = [d for d in demands if d.get("match_level") == "gap"]
+    partials = [d for d in demands if d.get("match_level") == "partial"]
+    strongs = [d for d in demands if d.get("match_level") == "strong"]
+
+    if gaps:
+        console.print("\n[bold red]HIGH DEMAND GAPS (not on resume):[/bold red]")
+        for d in gaps[:10]:
+            req = f"{d['required_count']} required" if d["required_count"] else ""
+            console.print(
+                f"  [red]{d['skill_name']}[/red] "
+                f"{'.' * max(1, 25 - len(d['skill_name']))} "
+                f"{d['times_seen']} jobs ({req}) -- Gap"
+            )
+
+    if partials:
+        console.print("\n[bold yellow]PARTIAL MATCHES (could strengthen):[/bold yellow]")
+        for d in partials[:10]:
+            req = f"{d['required_count']} required" if d["required_count"] else ""
+            console.print(
+                f"  [yellow]{d['skill_name']}[/yellow] "
+                f"{'.' * max(1, 25 - len(d['skill_name']))} "
+                f"{d['times_seen']} jobs ({req}) -- Partial"
+            )
+
+    if strongs:
+        console.print("\n[bold green]STRONG MATCHES (competitive advantages):[/bold green]")
+        for d in strongs[:10]:
+            req = f"{d['required_count']} required" if d["required_count"] else ""
+            console.print(
+                f"  [green]{d['skill_name']}[/green] "
+                f"{'.' * max(1, 25 - len(d['skill_name']))} "
+                f"{d['times_seen']} jobs ({req}) -- Strong"
+            )
+
+    console.print()
+
+
+@skills.command("plan")
+def skills_plan():
+    """Show or generate a study plan for top skill gaps."""
+    import json as _json
+
+    from src.db import models
+    from src.intel.skill_analyzer import SkillGapAnalyzer
+
+    conn = models.get_connection()
+    plan = models.get_study_plan(conn)
+
+    if not plan:
+        # Try to generate one
+        gaps = models.get_top_gaps(conn, limit=5)
+        if not gaps:
+            console.print(
+                "[dim]No skill gaps found. Run 'skills scan' first.[/dim]"
+            )
+            conn.close()
+            return
+
+        console.print("[dim]Generating study plan for top gaps...[/dim]")
+        analyzer = SkillGapAnalyzer()
+        result = analyzer.generate_study_plan(conn, gaps)
+        if not result:
+            console.print("[red]Failed to generate study plan. Check logs.[/red]")
+            conn.close()
+            return
+        plan = models.get_study_plan(conn)
+
+    console.print()
+    for p in plan:
+        target = p.get("target_hours") or 0
+        logged = p.get("study_hours_logged") or 0
+        pct = int(logged / target * 100) if target > 0 else 0
+        bar_filled = int(pct / 10)
+        bar = "\u2588" * bar_filled + "\u2591" * (10 - bar_filled)
+
+        rank = p.get("priority_rank", "?")
+        console.print(
+            f"[bold]{rank}. {p['skill_name']}[/bold] "
+            f"(Priority: {'HIGH' if rank and rank <= 2 else 'MED'})"
+        )
+        console.print(f"   Progress: {logged}/{target} hrs  {bar}  {pct}%")
+
+        # Show resources
+        try:
+            resources = _json.loads(p.get("resources") or "[]")
+        except (ValueError, TypeError):
+            resources = []
+        for r in resources[:3]:
+            console.print(f"   - {r.get('title', 'Resource')}: {r.get('url', '')}")
+
+        console.print()
+
+    conn.close()
+
+
+@skills.command("rate")
+@click.argument("skill_name")
+@click.argument("level", type=int)
+def skills_rate(skill_name, level):
+    """Self-assess a skill (1-5). Updates skills table and recomputes match levels."""
+    from src.db import models
+    from src.skills.tracker import SkillTracker
+
+    if not 1 <= level <= 5:
+        console.print("[red]Level must be between 1 and 5.[/red]")
+        return
+
+    conn = models.get_connection()
+
+    # Try to update existing skill
+    existing = models.get_skill(conn, skill_name)
+    if existing:
+        models.update_skill(conn, skill_name, level, source="self_assessment")
+    else:
+        # Add as new skill
+        models.add_skill(conn, skill_name, category="", current_level=level, target_level=max(level, 3))
+
+    models.update_match_levels(conn)
+    conn.close()
+
+    console.print(f"[green]Rated '{skill_name}' at level {level}/5. Match levels updated.[/green]")
+
+
+@skills.command("log")
+@click.argument("skill_name")
+@click.argument("hours", type=float)
+@click.option("--note", default="", help="Study note.")
+def skills_log_time(skill_name, hours, note):
+    """Log study time for a skill."""
+    from src.db import models
+
+    conn = models.get_connection()
+    if models.log_study_time(conn, skill_name, hours, note):
+        plan = conn.execute(
+            "SELECT study_hours_logged, target_hours FROM study_plan WHERE skill_name = ?",
+            (skill_name,),
+        ).fetchone()
+        logged = plan["study_hours_logged"] if plan else hours
+        target = plan["target_hours"] if plan and plan["target_hours"] else 0
+        pct = int(logged / target * 100) if target > 0 else 0
+        bar_filled = int(pct / 10)
+        bar = "\u2588" * bar_filled + "\u2591" * (10 - bar_filled)
+        console.print(
+            f"[green]Logged {hours}h for {skill_name}.[/green] "
+            f"Total: {logged}/{target} hrs  {bar}  {pct}%"
+        )
+    else:
+        console.print(
+            f"[red]'{skill_name}' not in study plan. "
+            f"Run 'skills plan' first.[/red]"
+        )
+    conn.close()
+
+
+@skills.command("focus")
+def skills_focus():
+    """Show this week's top 3 study priorities."""
+    from src.db import models
+
+    conn = models.get_connection()
+    plan = models.get_study_plan(conn)
+    conn.close()
+
+    if not plan:
+        console.print("[dim]No active study plan. Run 'skills plan' to generate one.[/dim]")
+        return
+
+    console.print("\n[bold]This Week's Focus:[/bold]")
+    for p in plan[:3]:
+        target = p.get("target_hours") or 0
+        logged = p.get("study_hours_logged") or 0
+        pct = int(logged / target * 100) if target > 0 else 0
+        bar_filled = int(pct / 10)
+        bar = "\u2588" * bar_filled + "\u2591" * (10 - bar_filled)
+
+        demand = ""
+        console.print(
+            f"  {p.get('priority_rank', '?')}. [bold]{p['skill_name']}[/bold] "
+            f"({logged}/{target} hrs)  {bar}  {pct}%"
+        )
+    console.print()
+
+
+@skills.command("match")
+@click.argument("application_id", type=int)
+def skills_match(application_id):
+    """Show skill match analysis for a specific application."""
+    from src.db import models
+
+    conn = models.get_connection()
+    app = conn.execute(
+        "SELECT title, company FROM applications WHERE id = ?", (application_id,)
+    ).fetchone()
+    if not app:
+        console.print(f"[red]Application #{application_id} not found.[/red]")
+        conn.close()
+        return
+
+    app_skills = models.get_skills_for_application(conn, application_id)
+    conn.close()
+
+    if not app_skills:
+        console.print(
+            f"[dim]No skill data for '{app['title']}' at {app['company']}. "
+            f"Run 'skills scan' first.[/dim]"
+        )
+        return
+
+    console.print(f"\n[bold]Skill Match: {app['title']} at {app['company']}[/bold]\n")
+
+    table = Table()
+    table.add_column("Skill", style="bold")
+    table.add_column("Required?")
+    table.add_column("Match")
+    table.add_column("Demand")
+
+    for s in app_skills:
+        level = s.get("requirement_level", "mentioned")
+        match = s.get("match_level") or "unknown"
+        seen = s.get("times_seen") or 0
+
+        if match == "strong":
+            match_str = "[green]Strong[/green]"
+        elif match == "partial":
+            match_str = "[yellow]Partial[/yellow]"
+        elif match == "gap":
+            match_str = "[red]Gap[/red]"
+        else:
+            match_str = "[dim]?[/dim]"
+
+        table.add_row(
+            s["skill_name"],
+            level,
+            match_str,
+            f"{seen} jobs" if seen else "",
+        )
+
+    console.print(table)
+
+
+@skills.command("report")
+def skills_report():
+    """Full skill gap report with demand, gaps, and study progress."""
+    from src.db import models
+
+    conn = models.get_connection()
+    demands = models.get_skill_demand(conn)
+    plan = models.get_study_plan(conn)
+
+    if not demands:
+        console.print("[dim]No skill data. Run 'skills scan' first.[/dim]")
+        conn.close()
+        return
+
+    gaps = [d for d in demands if d.get("match_level") == "gap"]
+    partials = [d for d in demands if d.get("match_level") == "partial"]
+    strongs = [d for d in demands if d.get("match_level") == "strong"]
+
+    console.print(Panel(
+        f"[bold]{len(demands)}[/bold] skills tracked across job applications\n"
+        f"[red]{len(gaps)}[/red] gaps | "
+        f"[yellow]{len(partials)}[/yellow] partial | "
+        f"[green]{len(strongs)}[/green] strong",
+        title="Skill Gap Report",
+    ))
+
+    # Top gaps
+    if gaps:
+        console.print("\n[bold]Top Gaps to Address:[/bold]")
+        for d in gaps[:5]:
+            console.print(
+                f"  [red]{d['skill_name']}[/red] -- "
+                f"{d['times_seen']} jobs, {d['required_count']} required"
+            )
+
+    # Study progress
+    if plan:
+        console.print("\n[bold]Study Progress:[/bold]")
+        for p in plan[:5]:
+            target = p.get("target_hours") or 0
+            logged = p.get("study_hours_logged") or 0
+            pct = int(logged / target * 100) if target > 0 else 0
+            bar_filled = int(pct / 10)
+            bar = "\u2588" * bar_filled + "\u2591" * (10 - bar_filled)
+            console.print(
+                f"  {p['skill_name']}: {logged}/{target} hrs  {bar}  {pct}%"
+            )
+
+    # Strengths
+    if strongs:
+        console.print("\n[bold]Competitive Advantages:[/bold]")
+        names = ", ".join(d["skill_name"] for d in strongs[:8])
+        console.print(f"  [green]{names}[/green]")
+
+    console.print()
+    conn.close()
+
+
 @cli.command()
 @click.option("--hours", default=15, help="Available study hours per week (default 15).")
 def roadmap(hours):
@@ -2343,6 +2705,75 @@ def morning():
     except Exception:
         pass
 
+    # --- Contact follow-ups ---
+    try:
+        conn = models.get_connection()
+        followups = models.get_followup_due(conn)
+        stale = models.get_stale_contacts(conn)
+        active_warm = models.list_contacts(conn, status="active") + models.list_contacts(conn, status="warm")
+        conn.close()
+
+        if followups or active_warm:
+            console.print()
+            console.print("[bold]Contact Follow-ups:[/bold]")
+
+            # Due follow-ups first
+            for r in followups:
+                company_str = f" ({r['company']})" if r.get("company") else ""
+                console.print(
+                    f"  [cyan]📅[/cyan] {r['name']}{company_str} "
+                    f"— scheduled follow-up"
+                )
+
+            # Then stale contacts
+            stale_ids = {r["id"] for r in stale}
+            shown_ids = {r["id"] for r in followups}
+            for r in sorted(active_warm, key=lambda x: x.get("last_contact") or ""):
+                if r["id"] in shown_ids:
+                    continue
+                shown_ids.add(r["id"])
+                company_str = f" ({r['company']})" if r.get("company") else ""
+                if r["id"] in stale_ids:
+                    days_ago = (datetime.now() - datetime.fromisoformat(r["last_contact"])).days
+                    console.print(
+                        f"  [yellow]⚠[/yellow] {r['name']}{company_str} "
+                        f"— last contact {days_ago} days ago"
+                    )
+                elif r.get("last_contact"):
+                    days_ago = (datetime.now() - datetime.fromisoformat(r["last_contact"])).days
+                    console.print(
+                        f"  [green]✅[/green] {r['name']}{company_str} "
+                        f"— contacted {days_ago} days ago"
+                    )
+                else:
+                    console.print(
+                        f"  [dim]●[/dim] {r['name']}{company_str} — no contact logged"
+                    )
+    except Exception:
+        pass
+
+    # --- Skill study focus ---
+    try:
+        conn = models.get_connection()
+        plan = models.get_study_plan(conn)
+        conn.close()
+
+        if plan:
+            console.print()
+            console.print("[bold]Skill Focus This Week:[/bold]")
+            for p in plan[:3]:
+                target = p.get("target_hours") or 0
+                logged = p.get("study_hours_logged") or 0
+                pct = int(logged / target * 100) if target > 0 else 0
+                bar_filled = int(pct / 10)
+                bar = "\u2588" * bar_filled + "\u2591" * (10 - bar_filled)
+                console.print(
+                    f"  {p.get('priority_rank', '?')}. {p['skill_name']} "
+                    f"({logged}/{target} hrs)  {bar}  {pct}%"
+                )
+    except Exception:
+        pass
+
     # Record scan timestamp
     try:
         conn = models.get_connection()
@@ -2355,6 +2786,451 @@ def morning():
     console.print(
         f"[bold]Summary:[/bold] {email_count} emails, {job_count} jobs found."
     )
+
+
+# ═══════════════════════════════════════════════════════════════
+# Contacts
+# ═══════════════════════════════════════════════════════════════
+
+
+CONTACT_TYPES = [
+    "recruiter", "hiring_manager", "networking", "reference",
+    "colleague", "mentor", "school_contact", "other",
+]
+
+CONTACT_SOURCES = [
+    "staffing_agency", "linkedin", "meetup", "referral",
+    "conference", "cold_outreach", "job_application", "other",
+]
+
+CONTACT_METHODS = ["email", "phone", "linkedin", "in_person", "text"]
+
+
+def _contacts_table(all_contacts, title="Contacts"):
+    """Build a Rich table for contacts list."""
+    from datetime import datetime
+
+    table = Table(title=title)
+    table.add_column("ID", style="dim", width=4)
+    table.add_column("Name", style="bold")
+    table.add_column("Company")
+    table.add_column("Type")
+    table.add_column("Specialization")
+    table.add_column("Last Contact")
+    table.add_column("Status")
+    table.add_column("Tags")
+
+    now = datetime.now()
+    for r in all_contacts:
+        status = r.get("relationship_status", "new")
+        style = "dim"
+        if status in ("active", "warm"):
+            if r.get("last_contact"):
+                days = (now - datetime.fromisoformat(r["last_contact"])).days
+                if days >= 14:
+                    style = "red"
+                elif days >= 7:
+                    style = "yellow"
+                else:
+                    style = "green"
+            else:
+                style = "green"
+        elif status == "do_not_contact":
+            style = "dim red"
+
+        last_contact = r.get("last_contact", "")
+        if last_contact:
+            last_contact = last_contact[:10]
+
+        table.add_row(
+            str(r["id"]),
+            f"[{style}]{r['name']}[/{style}]",
+            r.get("company", "") or "",
+            r.get("contact_type", "") or "",
+            r.get("specialization", "") or "",
+            last_contact,
+            f"[{style}]{status}[/{style}]",
+            r.get("tags", "") or "",
+        )
+
+    return table
+
+
+@cli.group(invoke_without_command=True)
+@click.pass_context
+def contacts(ctx):
+    """Professional contacts manager."""
+    if ctx.invoked_subcommand is not None:
+        return
+
+    from src.db import models
+
+    conn = models.get_connection()
+    all_contacts = models.list_contacts(conn)
+    conn.close()
+
+    if not all_contacts:
+        console.print("[dim]No contacts tracked yet. Use 'contacts add' to add one.[/dim]")
+        return
+
+    console.print(_contacts_table(all_contacts))
+
+
+@contacts.command("add")
+def contacts_add():
+    """Add a new contact (interactive wizard)."""
+    from src.db import models
+
+    console.print("[bold]Add Contact[/bold]")
+    console.print()
+
+    name = click.prompt("  Name")
+
+    console.print("  Contact type:")
+    for i, t in enumerate(CONTACT_TYPES, 1):
+        console.print(f"    {i}. {t}")
+    type_choice = click.prompt("  Type", type=int, default=1)
+    contact_type = CONTACT_TYPES[min(type_choice, len(CONTACT_TYPES)) - 1]
+
+    company = click.prompt("  Company", default="", show_default=False) or None
+    title = click.prompt("  Their title", default="", show_default=False) or None
+    email = click.prompt("  Email", default="", show_default=False) or None
+    phone = click.prompt("  Phone", default="", show_default=False) or None
+    linkedin = click.prompt("  LinkedIn URL", default="", show_default=False) or None
+
+    console.print("  Source — where you met them:")
+    for i, s in enumerate(CONTACT_SOURCES, 1):
+        console.print(f"    {i}. {s}")
+    source_choice = click.prompt("  Source", type=int, default=1)
+    source = CONTACT_SOURCES[min(source_choice, len(CONTACT_SOURCES)) - 1]
+
+    default_spec = "Infrastructure" if contact_type == "recruiter" else ""
+    spec = click.prompt("  Specialization", default=default_spec, show_default=bool(default_spec)) or None
+    tags = click.prompt("  Tags (comma-separated)", default="", show_default=False) or None
+    notes = click.prompt("  Notes", default="", show_default=False) or None
+
+    conn = models.get_connection()
+    cid = models.add_contact(
+        conn, name, contact_type,
+        company=company, title=title, email=email, phone=phone,
+        linkedin_url=linkedin, source=source, specialization=spec,
+        tags=tags, notes=notes,
+    )
+    conn.close()
+
+    company_str = f" ({company})" if company else ""
+    console.print(f"\n  [green]Added contact #{cid}: {name}{company_str} [{contact_type}][/green]")
+
+
+@contacts.command("show")
+@click.argument("contact_id", type=int)
+def contacts_show(contact_id):
+    """Show detailed contact info with interaction history."""
+    from src.db import models
+
+    conn = models.get_connection()
+    c = models.get_contact(conn, contact_id)
+    if not c:
+        console.print(f"[red]Contact #{contact_id} not found.[/red]")
+        conn.close()
+        return
+
+    # Build detail panel
+    lines = [f"[bold]{c['name']}[/bold]"]
+    if c.get("company"):
+        lines.append(f"Company: {c['company']}")
+    if c.get("title"):
+        lines.append(f"Title: {c['title']}")
+    lines.append(f"Type: {c['contact_type']}")
+    lines.append(f"Status: {c['relationship_status']}")
+    if c.get("email"):
+        lines.append(f"Email: {c['email']}")
+    if c.get("phone"):
+        lines.append(f"Phone: {c['phone']}")
+    if c.get("linkedin_url"):
+        lines.append(f"LinkedIn: {c['linkedin_url']}")
+    if c.get("specialization"):
+        lines.append(f"Specialization: {c['specialization']}")
+    if c.get("source"):
+        lines.append(f"Source: {c['source']}")
+    if c.get("tags"):
+        lines.append(f"Tags: {c['tags']}")
+    if c.get("last_contact"):
+        lines.append(f"Last Contact: {c['last_contact'][:10]} via {c.get('contact_method', 'N/A')}")
+    if c.get("next_followup"):
+        lines.append(f"Next Follow-up: {c['next_followup']}")
+    if c.get("notes"):
+        lines.append(f"\nNotes:\n{c['notes']}")
+
+    console.print(Panel("\n".join(lines), title=f"Contact #{contact_id}"))
+
+    # Interaction history
+    interactions = models.get_contact_interactions(conn, contact_id)
+    if interactions:
+        console.print(f"\n[bold]Recent Interactions ({len(interactions)}):[/bold]")
+        for i in interactions[:10]:
+            direction = "->" if i.get("direction") == "outbound" else "<-"
+            console.print(
+                f"  {i['created_at'][:10]} {direction} {i['interaction_type']}: "
+                f"{i.get('subject', 'N/A')}"
+            )
+            if i.get("summary"):
+                console.print(f"    {i['summary'][:80]}")
+
+    # Submitted roles
+    roles = models.get_submitted_roles(conn, contact_id=contact_id)
+    if roles:
+        console.print(f"\n[bold]Submitted Roles ({len(roles)}):[/bold]")
+        for role in roles:
+            console.print(
+                f"  {role['role_title']} at {role['company']} [{role['status']}]"
+            )
+            if role.get("pay_rate"):
+                console.print(f"    Pay: {role['pay_rate']}")
+
+    conn.close()
+
+
+@contacts.command("edit")
+@click.argument("contact_id", type=int)
+def contacts_edit(contact_id):
+    """Update contact fields interactively."""
+    from src.db import models
+
+    conn = models.get_connection()
+    c = models.get_contact(conn, contact_id)
+    if not c:
+        console.print(f"[red]Contact #{contact_id} not found.[/red]")
+        conn.close()
+        return
+
+    console.print(f"[bold]Edit {c['name']}[/bold] (press Enter to keep current value)")
+
+    updates = {}
+    for field in ["name", "company", "title", "email", "phone", "linkedin_url",
+                   "specialization", "tags", "notes"]:
+        current = c.get(field, "") or ""
+        val = click.prompt(f"  {field}", default=current, show_default=True)
+        if val != current:
+            updates[field] = val if val else None
+
+    # Status
+    current_status = c.get("relationship_status", "new")
+    statuses = ["new", "active", "warm", "cold", "do_not_contact"]
+    console.print(f"  Status (current: {current_status}):")
+    for i, s in enumerate(statuses, 1):
+        console.print(f"    {i}. {s}")
+    status_choice = click.prompt("  Status", default="", show_default=False)
+    if status_choice and status_choice.isdigit():
+        idx = int(status_choice) - 1
+        if 0 <= idx < len(statuses) and statuses[idx] != current_status:
+            updates["relationship_status"] = statuses[idx]
+
+    if updates:
+        models.update_contact(conn, contact_id, **updates)
+        console.print(f"  [green]Updated {', '.join(updates.keys())}.[/green]")
+    else:
+        console.print("  [dim]No changes made.[/dim]")
+
+    conn.close()
+
+
+@contacts.command("log")
+@click.argument("contact_id", type=int)
+def contacts_log(contact_id):
+    """Log an interaction with a contact."""
+    from src.db import models
+
+    conn = models.get_connection()
+    c = models.get_contact(conn, contact_id)
+    if not c:
+        console.print(f"[red]Contact #{contact_id} not found.[/red]")
+        conn.close()
+        return
+
+    company_str = f" ({c['company']})" if c.get("company") else ""
+    console.print(f"[bold]Log contact with {c['name']}{company_str}[/bold]")
+    method = click.prompt(
+        "  Contact method",
+        type=click.Choice(CONTACT_METHODS),
+    )
+    note = click.prompt("  Note (optional)", default="", show_default=False)
+    followup = click.prompt(
+        "  Next follow-up date (YYYY-MM-DD, optional)",
+        default="", show_default=False,
+    ) or None
+
+    models.log_contact_interaction(conn, contact_id, method, note)
+    if followup:
+        models.update_contact(conn, contact_id, next_followup=followup)
+
+    conn.close()
+    console.print(f"  [green]Contact logged for {c['name']}.[/green]")
+
+
+@contacts.command("search")
+@click.argument("query")
+def contacts_search(query):
+    """Search contacts by name, company, email, or notes."""
+    from src.db import models
+
+    conn = models.get_connection()
+    results = models.search_contacts(conn, query)
+    conn.close()
+
+    if not results:
+        console.print(f"[dim]No contacts matching '{query}'.[/dim]")
+        return
+
+    console.print(_contacts_table(results, title=f"Search: '{query}'"))
+
+
+@contacts.command("stale")
+def contacts_stale():
+    """Show contacts not contacted in 14+ days (active/warm only)."""
+    from datetime import datetime
+
+    from src.db import models
+
+    conn = models.get_connection()
+    stale = models.get_stale_contacts(conn)
+    conn.close()
+
+    if not stale:
+        console.print("[green]No stale contacts. All follow-ups are current.[/green]")
+        return
+
+    table = Table(title="Stale Contacts (14+ days)")
+    table.add_column("ID", style="dim", width=4)
+    table.add_column("Name", style="bold red")
+    table.add_column("Company")
+    table.add_column("Type")
+    table.add_column("Last Contact", style="yellow")
+    table.add_column("Days Ago", style="red")
+    table.add_column("Status")
+
+    now = datetime.now()
+    for r in stale:
+        days = (now - datetime.fromisoformat(r["last_contact"])).days
+        table.add_row(
+            str(r["id"]),
+            r["name"],
+            r.get("company", "") or "",
+            r.get("contact_type", "") or "",
+            r["last_contact"][:10],
+            str(days),
+            r.get("relationship_status", ""),
+        )
+
+    console.print(table)
+
+
+@contacts.command("followups")
+def contacts_followups():
+    """Show contacts with follow-ups due today or overdue."""
+    from src.db import models
+
+    conn = models.get_connection()
+    due = models.get_followup_due(conn)
+    conn.close()
+
+    if not due:
+        console.print("[green]No follow-ups due.[/green]")
+        return
+
+    table = Table(title="Follow-ups Due")
+    table.add_column("ID", style="dim", width=4)
+    table.add_column("Name", style="bold")
+    table.add_column("Company")
+    table.add_column("Due Date", style="yellow")
+    table.add_column("Status")
+
+    for r in due:
+        table.add_row(
+            str(r["id"]),
+            r["name"],
+            r.get("company", "") or "",
+            r.get("next_followup", "") or "",
+            r.get("relationship_status", ""),
+        )
+
+    console.print(table)
+
+
+@contacts.command("tag")
+@click.argument("contact_id", type=int)
+@click.argument("tag")
+def contacts_tag(contact_id, tag):
+    """Add a tag to a contact."""
+    from src.db import models
+
+    conn = models.get_connection()
+    if not models.get_contact(conn, contact_id):
+        console.print(f"[red]Contact #{contact_id} not found.[/red]")
+        conn.close()
+        return
+
+    models.add_tag(conn, contact_id, tag)
+    conn.close()
+    console.print(f"  [green]Tag '{tag}' added to contact #{contact_id}.[/green]")
+
+
+@contacts.command("untag")
+@click.argument("contact_id", type=int)
+@click.argument("tag")
+def contacts_untag(contact_id, tag):
+    """Remove a tag from a contact."""
+    from src.db import models
+
+    conn = models.get_connection()
+    if not models.get_contact(conn, contact_id):
+        console.print(f"[red]Contact #{contact_id} not found.[/red]")
+        conn.close()
+        return
+
+    models.remove_tag(conn, contact_id, tag)
+    conn.close()
+    console.print(f"  [green]Tag '{tag}' removed from contact #{contact_id}.[/green]")
+
+
+@contacts.command("by-type")
+@click.argument("contact_type")
+def contacts_by_type(contact_type):
+    """Filter contacts by type (recruiter, hiring_manager, etc.)."""
+    from src.db import models
+
+    conn = models.get_connection()
+    results = models.list_contacts(conn, contact_type=contact_type)
+    conn.close()
+
+    if not results:
+        console.print(f"[dim]No contacts of type '{contact_type}'.[/dim]")
+        return
+
+    console.print(_contacts_table(results, title=f"Contacts: {contact_type}"))
+
+
+# --- Backward-compat: 'recruiters' alias ---
+
+
+@cli.group(invoke_without_command=True)
+@click.pass_context
+def recruiters(ctx):
+    """Recruiter contacts (alias for 'contacts' filtered by type=recruiter)."""
+    if ctx.invoked_subcommand is not None:
+        return
+
+    from src.db import models
+
+    conn = models.get_connection()
+    result = models.list_contacts(conn, contact_type="recruiter")
+    conn.close()
+
+    if not result:
+        console.print("[dim]No recruiters tracked yet. Use 'contacts add' to add one.[/dim]")
+        return
+
+    console.print(_contacts_table(result, title="Recruiter Contacts"))
 
 
 @cli.command()
@@ -4188,50 +5064,311 @@ def agencies_summary():
 @agencies.command("seed")
 def agencies_seed():
     """Seed tracker with David Perez / TEKsystems data (idempotent)."""
-    from src.agencies.recruiter_tracker import RecruiterTracker
+    from src.db import models
 
-    tracker = RecruiterTracker()
+    conn = models.get_connection()
 
-    existing = tracker.find_recruiter_by_email("dperez@teksystems.com")
+    existing = models.find_contact_by_email(conn, "dperez@teksystems.com")
     if existing:
-        console.print(f"[yellow]Recruiter already exists (#{existing['id']}). Skipping seed.[/yellow]")
-        tracker.close()
+        console.print(f"[yellow]Contact already exists (#{existing['id']}). Skipping seed.[/yellow]")
+        conn.close()
         return
 
-    rid = tracker.add_recruiter(
-        name="David Perez",
-        agency="TEKsystems",
+    rid = models.add_contact(
+        conn, "David Perez", "recruiter",
+        company="TEKsystems",
         email="dperez@teksystems.com",
         phone="317-810-7562",
         title="Sr. Information Technology Recruiter (Risk & Security)",
         notes="Active relationship. Indy office: 9265 Counselors Row.",
+        source="staffing_agency",
     )
-    console.print(f"[green]Added recruiter #{rid}: David Perez at TEKsystems[/green]")
+    console.print(f"[green]Added contact #{rid}: David Perez at TEKsystems[/green]")
 
-    r1 = tracker.add_submitted_role(
-        rid, "MISO Energy", "Systems Administrator",
-        status="submitted", location="Indianapolis, IN", role_type="contract",
+    r1 = models.add_submitted_role(
+        conn, rid, "MISO Energy", "Systems Administrator",
+        location="Indianapolis, IN", role_type="contract",
     )
-    r2 = tracker.add_submitted_role(
-        rid, "Corteva", "Domain Migration Support Specialist",
-        status="submitted", location="Indianapolis, IN", role_type="contract",
+    r2 = models.add_submitted_role(
+        conn, rid, "Corteva", "Domain Migration Support Specialist",
+        location="Indianapolis, IN", role_type="contract",
     )
-    r3 = tracker.add_submitted_role(
-        rid, "Delta", "Desktop Support Technician",
-        status="submitted", location="Indianapolis, IN", role_type="contract",
+    r3 = models.add_submitted_role(
+        conn, rid, "Delta", "Desktop Support Technician",
+        location="Indianapolis, IN", role_type="contract",
     )
     console.print(f"[green]Added 3 submitted roles (#{r1}, #{r2}, #{r3})[/green]")
 
-    iid = tracker.log_interaction(
-        rid, "email", "inbound",
+    iid = models.add_contact_interaction(
+        conn, rid, "email", "inbound",
         subject="Miso - Systems Admin",
         summary="Presented to MISO Energy for sys admin role. Asked for consent to represent.",
         roles_discussed="MISO - Systems Admin, Corteva - Domain Migration, Delta - Desktop Support",
     )
     console.print(f"[green]Logged interaction #{iid}[/green]")
 
-    tracker.close()
+    conn.close()
     console.print("[bold green]Seed complete.[/bold green]")
+
+
+# ── Intel ─────────────────────────────────────────────────────────────────────
+
+
+def _display_brief(brief, company):
+    """Render a company intel brief as Rich panels."""
+    from rich.markdown import Markdown
+    from rich.text import Text
+
+    console.print()
+    console.print(
+        Panel(
+            f"[bold white]{company}[/bold white]",
+            title="Company Intelligence",
+            border_style="bright_cyan",
+            expand=True,
+        )
+    )
+
+    # --- Overview ---
+    overview = brief.get("company_overview", {})
+    lines = []
+    if overview.get("description"):
+        lines.append(overview["description"])
+    if overview.get("headquarters"):
+        lines.append(f"HQ: {overview['headquarters']}")
+    parts = []
+    if overview.get("size"):
+        parts.append(overview["size"])
+    if overview.get("revenue_or_funding"):
+        parts.append(overview["revenue_or_funding"])
+    if parts:
+        lines.append(" | ".join(parts))
+    if overview.get("key_products"):
+        lines.append(f"Key products: {', '.join(overview['key_products'])}")
+    if overview.get("recent_news"):
+        lines.append("")
+        lines.append("[bold]Recent News:[/bold]")
+        for item in overview["recent_news"][:5]:
+            date = item.get("date", "")
+            headline = item.get("headline", "")
+            lines.append(f"  [{date}] {headline}")
+    console.print(Panel("\n".join(lines), title="OVERVIEW", border_style="blue"))
+
+    # --- Culture ---
+    culture = brief.get("culture", {})
+    lines = []
+    if culture.get("glassdoor_rating"):
+        lines.append(f"Glassdoor: {culture['glassdoor_rating']}")
+    if culture.get("sentiment_summary"):
+        lines.append(culture["sentiment_summary"])
+    if culture.get("remote_policy"):
+        lines.append(f"Remote policy: {culture['remote_policy']}")
+    if culture.get("work_life_balance"):
+        lines.append(f"Work-life balance: {culture['work_life_balance']}")
+    if culture.get("pros"):
+        lines.append(f"[green]Pros:[/green] {', '.join(culture['pros'])}")
+    if culture.get("cons"):
+        lines.append(f"[red]Cons:[/red] {', '.join(culture['cons'])}")
+    console.print(Panel("\n".join(lines), title="CULTURE & ENVIRONMENT", border_style="yellow"))
+
+    # --- IT Intelligence ---
+    it_intel = brief.get("it_intelligence", {})
+    lines = []
+    if it_intel.get("tech_stack"):
+        lines.append(f"Stack: {', '.join(it_intel['tech_stack'])}")
+    if it_intel.get("cloud_provider"):
+        lines.append(f"Cloud: {it_intel['cloud_provider']}")
+    if it_intel.get("infrastructure_scale"):
+        lines.append(f"Scale: {it_intel['infrastructure_scale']}")
+    if it_intel.get("recent_it_postings"):
+        lines.append("")
+        lines.append("[bold]Recent IT Hiring:[/bold]")
+        for p in it_intel["recent_it_postings"][:5]:
+            lines.append(f"  {p.get('title', '')} — {p.get('signal', '')}")
+    if it_intel.get("it_challenges"):
+        lines.append(f"Challenges: {', '.join(it_intel['it_challenges'])}")
+    console.print(Panel("\n".join(lines), title="IT & TECHNOLOGY", border_style="green"))
+
+    # --- Role Analysis (conditional) ---
+    role = brief.get("role_analysis")
+    if role:
+        lines = []
+        if role.get("org_fit"):
+            lines.append(f"Org fit: {role['org_fit']}")
+        if role.get("day_to_day"):
+            lines.append(f"Day-to-day: {role['day_to_day']}")
+        if role.get("growth_potential"):
+            lines.append(f"Growth: {role['growth_potential']}")
+        if role.get("red_flags"):
+            lines.append(f"[red]Red flags:[/red] {', '.join(role['red_flags'])}")
+        if role.get("questions_to_ask"):
+            lines.append("")
+            lines.append("[bold]Questions to ask:[/bold]")
+            for q in role["questions_to_ask"]:
+                lines.append(f"  - {q}")
+        console.print(Panel("\n".join(lines), title="ROLE ANALYSIS", border_style="magenta"))
+
+    # --- Interviewer Prep (conditional) ---
+    prep = brief.get("interviewer_prep")
+    if prep:
+        lines = []
+        if prep.get("linkedin_summary"):
+            lines.append(prep["linkedin_summary"])
+        if prep.get("likely_interview_style"):
+            lines.append(f"Interview style: {prep['likely_interview_style']}")
+        if prep.get("rapport_topics"):
+            lines.append(f"Rapport topics: {', '.join(prep['rapport_topics'])}")
+        console.print(Panel("\n".join(lines), title="INTERVIEWER PREP", border_style="cyan"))
+
+    # --- Sources ---
+    sources = brief.get("sources", [])
+    if sources:
+        console.print(Panel("\n".join(sources), title="SOURCES", border_style="dim"))
+
+    generated = brief.get("generated_at", "")
+    if generated:
+        console.print(f"[dim]Generated: {generated}[/dim]")
+    console.print()
+
+
+@cli.group()
+def intel():
+    """Company intelligence — research briefs for target companies."""
+
+
+@intel.command("research")
+@click.argument("company")
+@click.option("--role", default=None, help="Role title for role analysis section.")
+@click.option("--contact", default=None, help="Interviewer name for prep section.")
+@click.option("--url", default=None, help="Job posting URL for context.")
+def intel_research(company, role, contact, url):
+    """Generate a fresh company intelligence brief."""
+    from src.db import models
+    from src.intel.company_intel import CompanyIntelEngine
+
+    console.print(f"[bold cyan]Researching {company}...[/bold cyan]")
+    console.print("[dim]This may take 30-60 seconds (web search + analysis).[/dim]")
+
+    engine = CompanyIntelEngine()
+    brief = engine.generate_brief(
+        company, role_title=role, contact_name=contact, job_url=url,
+    )
+
+    if brief is None:
+        console.print("[red]Failed to generate intel brief. Check logs.[/red]")
+        return
+
+    # Cache the brief
+    conn = models.get_connection()
+    try:
+        models.cache_brief(conn, company, role, brief)
+    finally:
+        conn.close()
+
+    _display_brief(brief, company)
+
+
+@intel.command("show")
+@click.argument("company")
+def intel_show(company):
+    """Show cached company intel brief (no API call)."""
+    from src.db import models
+
+    conn = models.get_connection()
+    try:
+        brief, row = models.get_cached_brief(conn, company)
+    finally:
+        conn.close()
+
+    if brief is None:
+        console.print(f"[yellow]No cached brief for '{company}'. Run: python cli.py intel research {company}[/yellow]")
+        return
+
+    _display_brief(brief, company)
+
+
+@intel.command("refresh")
+@click.argument("company")
+@click.option("--role", default=None, help="Role title for role analysis section.")
+@click.option("--contact", default=None, help="Interviewer name for prep section.")
+@click.option("--url", default=None, help="Job posting URL for context.")
+def intel_refresh(company, role, contact, url):
+    """Force regenerate a company intel brief (ignores cache)."""
+    from src.db import models
+    from src.intel.company_intel import CompanyIntelEngine
+
+    console.print(f"[bold cyan]Refreshing intel for {company}...[/bold cyan]")
+
+    engine = CompanyIntelEngine()
+    brief = engine.generate_brief(
+        company, role_title=role, contact_name=contact, job_url=url,
+    )
+
+    if brief is None:
+        console.print("[red]Failed to generate intel brief. Check logs.[/red]")
+        return
+
+    conn = models.get_connection()
+    try:
+        models.cache_brief(conn, company, role, brief)
+    finally:
+        conn.close()
+
+    _display_brief(brief, company)
+
+
+@intel.command("prep")
+@click.argument("application_id", type=int)
+def intel_prep(application_id):
+    """Generate/show intel brief for a tracked application."""
+    from src.db import models
+
+    conn = models.get_connection()
+    try:
+        app = conn.execute(
+            "SELECT * FROM applications WHERE id = ?", (application_id,)
+        ).fetchone()
+        if not app:
+            console.print(f"[red]Application #{application_id} not found.[/red]")
+            return
+        app = dict(app)
+
+        company = app["company"]
+        role_title = app["title"]
+
+        # Check for existing linked brief
+        existing = models.get_brief_for_application(conn, application_id)
+        if existing:
+            console.print(f"[dim]Using cached brief for application #{application_id}[/dim]")
+            _display_brief(existing, company)
+            return
+
+        # Check for any cached brief for this company
+        cached, row = models.get_cached_brief(conn, company)
+        if cached:
+            # Link it to the application
+            models.link_brief_to_application(conn, row["id"], application_id)
+            console.print(f"[dim]Found existing brief for {company}, linked to application #{application_id}[/dim]")
+            _display_brief(cached, company)
+            return
+
+        # Generate fresh
+        from src.intel.company_intel import CompanyIntelEngine
+
+        console.print(f"[bold cyan]Researching {company} for application #{application_id}...[/bold cyan]")
+        console.print("[dim]This may take 30-60 seconds.[/dim]")
+
+        engine = CompanyIntelEngine()
+        brief = engine.generate_brief(company, role_title=role_title)
+
+        if brief is None:
+            console.print("[red]Failed to generate intel brief. Check logs.[/red]")
+            return
+
+        brief_id = models.cache_brief(conn, company, role_title, brief, application_id=application_id)
+        _display_brief(brief, company)
+    finally:
+        conn.close()
 
 
 if __name__ == "__main__":

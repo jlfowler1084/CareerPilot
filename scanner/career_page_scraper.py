@@ -9,9 +9,12 @@ deduplication, change detection, and morning scan integration.
 Usage:
     python career_page_scraper.py scan              # Run full scan
     python career_page_scraper.py scan --company lilly  # Scan one company
+    python career_page_scraper.py scan --force      # Bypass 24hr cache
+    python career_page_scraper.py scan --cache-ttl 12  # Custom cache TTL
     python career_page_scraper.py list              # Show all stored jobs
     python career_page_scraper.py new               # Show jobs found in last scan
-    python career_page_scraper.py stats             # Show scan statistics
+    python career_page_scraper.py stats             # Show scan statistics + cache hit rate
+    python career_page_scraper.py cache-status      # Show cache freshness per company
     python career_page_scraper.py export            # Export JSON for dashboard
 """
 from __future__ import annotations
@@ -256,6 +259,19 @@ def init_db():
             cached_at TEXT NOT NULL
         )
     """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS scan_log (
+            company_id TEXT NOT NULL,
+            scanned_at TEXT NOT NULL,
+            job_count INTEGER DEFAULT 0,
+            cached INTEGER DEFAULT 0,
+            PRIMARY KEY (company_id, scanned_at)
+        )
+    """)
+    conn.execute("""
+        CREATE INDEX IF NOT EXISTS idx_scan_log_company
+        ON scan_log(company_id, scanned_at DESC)
+    """)
     conn.commit()
     return conn
 
@@ -323,11 +339,58 @@ def upsert_job(conn, job: dict, scan_id: str) -> bool:
 # Anthropic API + Web Search
 # ═══════════════════════════════════════════════════════════════
 
-def search_company(company: dict) -> list[dict]:
-    """Search a company's career pages for relevant IT jobs."""
+def search_company(company: dict, conn=None, force: bool = False, cache_ttl: int = 24) -> tuple:
+    """Search a company's career pages for relevant IT jobs.
+
+    Returns (jobs, was_cached) tuple. When conn is provided and a fresh scan
+    exists in scan_log (within cache_ttl hours), returns cached jobs from the
+    jobs table without making an API call.
+    """
+    # Cache check — skip API call if a fresh scan exists
+    if conn is not None and not force:
+        row = conn.execute(
+            "SELECT scanned_at, job_count FROM scan_log "
+            "WHERE company_id = ? AND cached = 0 "
+            "ORDER BY scanned_at DESC LIMIT 1",
+            (company["id"],)
+        ).fetchone()
+        if row:
+            scanned_at = datetime.fromisoformat(row["scanned_at"])
+            age = datetime.now(timezone.utc) - scanned_at
+            if age < timedelta(hours=cache_ttl):
+                hours = age.total_seconds() / 3600
+                print(f"  ⏩ {company['name']}: cached (scanned {hours:.0f}h ago, {row['job_count']} jobs)")
+                # Return existing jobs for this company from the jobs table
+                cached_rows = conn.execute(
+                    "SELECT title, company_id, company_name, location, url, "
+                    "salary, job_type, posted_date, description_snippet "
+                    "FROM jobs WHERE company_id = ? AND is_relevant = 1",
+                    (company["id"],)
+                ).fetchall()
+                jobs = [{
+                    "title": r["title"],
+                    "company_id": r["company_id"],
+                    "company_name": r["company_name"],
+                    "location": r["location"],
+                    "url": r["url"],
+                    "salary": r["salary"],
+                    "job_type": r["job_type"],
+                    "posted_date": r["posted_date"],
+                    "description_snippet": r["description_snippet"],
+                } for r in cached_rows]
+                # Log the cache hit
+                conn.execute(
+                    "INSERT INTO scan_log (company_id, scanned_at, job_count, cached) "
+                    "VALUES (?, ?, ?, 1)",
+                    (company["id"], datetime.now(timezone.utc).isoformat(), len(jobs))
+                )
+                conn.commit()
+                return jobs, True
+
     if not ANTHROPIC_API_KEY:
         print(f"  ⚠ No ANTHROPIC_API_KEY set — skipping API search for {company['name']}")
-        return []
+        return [], False
+>>>>>>> feature/scrum-154-scraper-cache
 
     role_list = ", ".join(ROLE_KEYWORDS[:10])
     queries_list = "\n".join(f"  - {q}" for q in company["search_queries"])
@@ -382,17 +445,27 @@ Return ONLY the JSON array, no other text."""
 
         # Parse JSON from response
         jobs = _parse_jobs_json(full_text, company)
-        return jobs
+
+        # Log the fresh scan
+        if conn is not None:
+            conn.execute(
+                "INSERT INTO scan_log (company_id, scanned_at, job_count, cached) "
+                "VALUES (?, ?, ?, 0)",
+                (company["id"], datetime.now(timezone.utc).isoformat(), len(jobs))
+            )
+            conn.commit()
+
+        return jobs, False
 
     except requests.exceptions.Timeout:
         print(f"  ⚠ Timeout searching {company['name']}")
-        return []
+        return [], False
     except requests.exceptions.RequestException as e:
         print(f"  ⚠ API error for {company['name']}: {e}")
-        return []
+        return [], False
     except Exception as e:
         print(f"  ⚠ Unexpected error for {company['name']}: {e}")
-        return []
+        return [], False
 
 
 def _parse_jobs_json(text: str, company: dict) -> list[dict]:
@@ -505,27 +578,26 @@ def cmd_scan(args):
 
     cache_hits = 0
     cache_misses = 0
+    force = getattr(args, "force", False) or getattr(args, "force_refresh", False)
+    cache_ttl = getattr(args, "cache_ttl", 24)
 
     for company in companies:
         print(f"  🔍 {company['name']} ({company['careers_url']})")
 
-        # Check cache unless --force-refresh
-        cached = None if args.force_refresh else get_cached_response(conn, company["id"])
-        if cached is not None:
-            jobs = cached
+        jobs, was_cached = search_company(
+            company, conn=conn, force=force, cache_ttl=cache_ttl
+        )
+        if was_cached:
             cache_hits += 1
-            print(f"     📦 Cache hit ({len(jobs)} jobs)")
         else:
-            jobs = search_company(company)
-            set_cached_response(conn, company["id"], jobs)
             cache_misses += 1
 
         new_count = 0
-
         for job in jobs:
-            is_new = upsert_job(conn, job, scan_id)
-            if is_new:
-                new_count += 1
+            if not was_cached:
+                is_new = upsert_job(conn, job, scan_id)
+                if is_new:
+                    new_count += 1
 
         total_found += len(jobs)
         total_new += new_count
@@ -673,6 +745,33 @@ def cmd_stats(args):
             dt = scan["started_at"][:16].replace("T", " ")
             print(f"    {dt} — {scan['jobs_found']} found, {scan['new_jobs']} new")
 
+    # Cache statistics (last 7 days)
+    seven_days_ago = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+    cache_stats = conn.execute(
+        "SELECT COUNT(*) as total, "
+        "SUM(CASE WHEN cached = 0 THEN 1 ELSE 0 END) as fresh, "
+        "SUM(CASE WHEN cached = 1 THEN 1 ELSE 0 END) as hits "
+        "FROM scan_log WHERE scanned_at >= ?",
+        (seven_days_ago,)
+    ).fetchone()
+
+    total_scans = cache_stats["total"] or 0
+    fresh_scans = cache_stats["fresh"] or 0
+    cache_hit_count = cache_stats["hits"] or 0
+
+    if total_scans > 0:
+        hit_rate = (cache_hit_count / total_scans) * 100
+        # Each fresh scan costs ~$0.54 per company (Sonnet + web_search tokens)
+        cost_per_scan = 0.54
+        savings = cache_hit_count * cost_per_scan
+
+        print(f"\n  Cache Statistics (last 7 days):")
+        print(f"    Total scans:      {total_scans}")
+        print(f"    API calls (fresh): {fresh_scans}")
+        print(f"    Cache hits:       {cache_hit_count}")
+        print(f"    Cache hit rate:   {hit_rate:.1f}%")
+        print(f"    Estimated savings: ${savings:.2f}")
+
     print()
     conn.close()
 
@@ -714,6 +813,53 @@ def cmd_export(args):
     conn.close()
 
 
+def cmd_cache_status(args):
+    """Show cache freshness for all companies."""
+    conn = init_db()
+    now = datetime.now(timezone.utc)
+
+    print(f"\n{'═' * 70}")
+    print(f"  Cache Status — {now.strftime('%Y-%m-%d %H:%M')} UTC")
+    print(f"{'═' * 70}")
+    print(f"  {'Company':<25} {'Last Scan':<20} {'Age':<10} {'Jobs':<6} {'Status'}")
+    print(f"  {'─' * 65}")
+
+    for company in COMPANIES:
+        row = conn.execute(
+            "SELECT scanned_at, job_count FROM scan_log "
+            "WHERE company_id = ? AND cached = 0 "
+            "ORDER BY scanned_at DESC LIMIT 1",
+            (company["id"],)
+        ).fetchone()
+
+        if not row:
+            print(f"  {company['name']:<25} {'(never scanned)':<20} {'—':<10} {'—':<6} ⚠️  Never")
+            continue
+
+        scanned_at = datetime.fromisoformat(row["scanned_at"])
+        age = now - scanned_at
+        hours = age.total_seconds() / 3600
+
+        if hours < 1:
+            age_str = f"{int(age.total_seconds() / 60)}m ago"
+        else:
+            age_str = f"{hours:.0f}h ago"
+
+        scan_time_str = scanned_at.strftime("%Y-%m-%d %H:%M")
+        job_count = row["job_count"]
+
+        cache_ttl = getattr(args, "cache_ttl", 24)
+        if hours < cache_ttl:
+            status = "✅ Fresh"
+        else:
+            status = "🔄 Stale"
+
+        print(f"  {company['name']:<25} {scan_time_str:<20} {age_str:<10} {job_count:<6} {status}")
+
+    print()
+    conn.close()
+
+
 # ═══════════════════════════════════════════════════════════════
 # Main
 # ═══════════════════════════════════════════════════════════════
@@ -726,8 +872,10 @@ def main():
 
     scan_parser = subparsers.add_parser("scan", help="Run career page scan")
     scan_parser.add_argument("--company", help="Scan a single company by ID")
-    scan_parser.add_argument("--force-refresh", action="store_true",
-                             help="Bypass 24-hour cache and make fresh API calls")
+    scan_parser.add_argument("--force", "--force-refresh", action="store_true",
+                             help="Bypass 24hr cache and force fresh scan")
+    scan_parser.add_argument("--cache-ttl", type=int, default=24,
+                             help="Cache TTL in hours (default: 24)")
     scan_parser.set_defaults(func=cmd_scan)
 
     list_parser = subparsers.add_parser("list", help="List all tracked jobs")
@@ -742,6 +890,11 @@ def main():
     export_parser = subparsers.add_parser("export", help="Export jobs as JSON")
     export_parser.add_argument("--output", "-o", help="Output file path")
     export_parser.set_defaults(func=cmd_export)
+
+    cache_parser = subparsers.add_parser("cache-status", help="Show cache freshness")
+    cache_parser.add_argument("--cache-ttl", type=int, default=24,
+                              help="Cache TTL in hours (default: 24)")
+    cache_parser.set_defaults(func=cmd_cache_status)
 
     args = parser.parse_args()
     if not args.command:

@@ -236,6 +236,14 @@ class GmailScanner:
         Returns:
             Dict with category, company, role, urgency, summary.
             Defaults to category "irrelevant" on failure.
+
+        Future integration (SCRUM-98):
+            Auto-classify emails from staffing agency domains as
+            'recruiter_outreach': @teksystems.com, @roberthalf.com,
+            @kforce.com, @insightglobal.com, @randstadusa.com,
+            @apexsystems.com. This would bypass the Claude API call
+            for known recruiter domains and feed into the recruiter
+            relationship tracker.
         """
         default_result = {
             "category": "irrelevant",

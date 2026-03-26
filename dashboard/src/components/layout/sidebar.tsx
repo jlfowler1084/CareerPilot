@@ -1,8 +1,9 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
+import { createClient } from "@/lib/supabase/client"
 import { LayoutDashboard, Search, Briefcase, BarChart3, ChevronRight, Mail } from "lucide-react"
 
 const NAV_ITEMS = [
@@ -13,9 +14,39 @@ const NAV_ITEMS = [
   { id: "analytics", href: "/analytics", label: "Analytics", icon: BarChart3 },
 ]
 
+const ACTIVE_STATUSES = ["interested", "applied", "phone_screen", "interview"]
+
+function useActiveAppCount() {
+  const [count, setCount] = useState<number | null>(null)
+  useEffect(() => {
+    const supabase = createClient()
+    const fetchCount = async () => {
+      const { count: c } = await supabase
+        .from("applications")
+        .select("*", { count: "exact", head: true })
+        .in("status", ACTIVE_STATUSES)
+      setCount(c ?? 0)
+    }
+    fetchCount()
+
+    const channel = supabase
+      .channel("sidebar-count")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "applications" },
+        () => fetchCount()
+      )
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
+  }, [])
+  return count
+}
+
 export function Sidebar() {
   const [open, setOpen] = useState(true)
   const pathname = usePathname()
+  const activeCount = useActiveAppCount()
 
   return (
     <aside
@@ -50,7 +81,16 @@ export function Sidebar() {
               }`}
             >
               <Icon size={18} className="flex-shrink-0" />
-              {open && <span>{item.label}</span>}
+              {open && (
+                <span className="flex-1 flex items-center justify-between">
+                  {item.label}
+                  {item.id === "applications" && activeCount !== null && activeCount > 0 && (
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-500 text-zinc-900 leading-none">
+                      {activeCount}
+                    </span>
+                  )}
+                </span>
+              )}
             </Link>
           )
         })}
