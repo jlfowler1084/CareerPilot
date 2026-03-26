@@ -6,6 +6,8 @@ import { useApplications } from "@/hooks/use-applications"
 import { ProfileChips } from "@/components/search/profile-chips"
 import { SearchControls } from "@/components/search/search-controls"
 import { JobCard } from "@/components/shared/job-card"
+import { TailorModal } from "@/components/applications/tailor-modal"
+import { CoverLetterModal } from "@/components/applications/cover-letter-modal"
 import { AlertCircle } from "lucide-react"
 import type { Job } from "@/types"
 
@@ -23,6 +25,7 @@ export default function SearchPage() {
     searchComplete,
     errors,
     isNew,
+    lastSearchTime,
   } = useSearch()
 
   const { applications, addApplication } = useApplications()
@@ -40,10 +43,19 @@ export default function SearchPage() {
     )
   }
 
+  // Modal state for tailor/cover letter from search
+  const [tailorJob, setTailorJob] = useState<Job | null>(null)
+  const [coverLetterJob, setCoverLetterJob] = useState<Job | null>(null)
+
   async function handleTrack(job: Job) {
     const key = `${job.title}|||${job.company}`.toLowerCase()
     setSessionTracked((prev) => new Set(prev).add(key))
     await addApplication(job, "search")
+  }
+
+  async function handleTrackAndTailor(job: Job) {
+    await handleTrack(job)
+    setTailorJob(job)
   }
 
   return (
@@ -94,8 +106,15 @@ export default function SearchPage() {
       {/* Results */}
       {searchResults.length > 0 && (
         <div className="space-y-3">
-          <div className="text-xs font-medium text-zinc-500 uppercase tracking-wider">
-            Results
+          <div className="flex items-center justify-between">
+            <div className="text-xs font-medium text-zinc-500 uppercase tracking-wider">
+              Results
+            </div>
+            {lastSearchTime && (
+              <span className="text-[10px] text-zinc-400">
+                Last search: {lastSearchTime.toLocaleString()}
+              </span>
+            )}
           </div>
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
             {searchResults.map((job, index) => (
@@ -103,6 +122,9 @@ export default function SearchPage() {
                 key={`${job.title}-${job.company}-${index}`}
                 job={job}
                 onTrack={handleTrack}
+                onTailor={(j) => setTailorJob(j)}
+                onCoverLetter={(j) => setCoverLetterJob(j)}
+                onTrackAndTailor={handleTrackAndTailor}
                 tracked={isTracked(job)}
                 isNew={isNew(job)}
               />
@@ -118,6 +140,25 @@ export default function SearchPage() {
             No results found. Try selecting different profiles.
           </p>
         </div>
+      )}
+
+      {/* Tailor Modal */}
+      {tailorJob && (
+        <TailorModal
+          application={{ title: tailorJob.title, company: tailorJob.company, url: tailorJob.url, tailored_resume: null }}
+          open={!!tailorJob}
+          onOpenChange={(open) => !open && setTailorJob(null)}
+          onSave={async () => { setTailorJob(null) }}
+        />
+      )}
+
+      {/* Cover Letter Modal */}
+      {coverLetterJob && (
+        <CoverLetterModal
+          application={{ title: coverLetterJob.title, company: coverLetterJob.company, url: coverLetterJob.url }}
+          open={!!coverLetterJob}
+          onOpenChange={(open) => !open && setCoverLetterJob(null)}
+        />
       )}
     </div>
   )

@@ -6,24 +6,35 @@ import { ConversationSection } from "@/components/conversations/conversation-sec
 import { CommunicationsSection } from "@/components/applications/communications-section"
 import { InterviewPrepSection } from "@/components/applications/interview-prep-section"
 import { CoachingSection } from "@/components/coaching/coaching-section"
+import { TailorModal } from "@/components/applications/tailor-modal"
+import { ScheduleModal } from "@/components/applications/schedule-modal"
 import { STATUSES } from "@/lib/constants"
-import { ExternalLink, Trash2, Save } from "lucide-react"
+import { ExternalLink, Trash2, Save, Mail, Sparkles, FileCheck, CalendarDays, CalendarCheck } from "lucide-react"
 import type { Application, ApplicationStatus } from "@/types"
+
+const SCHEDULABLE_STATUSES: ApplicationStatus[] = ["applied", "phone_screen", "interview", "offer"]
 
 interface ApplicationRowProps {
   application: Application
   onUpdate: (id: string, updates: Partial<Application>) => Promise<unknown>
   onDelete: (id: string) => Promise<void>
+  onClick?: () => void
+  autoUpdatedViaEmail?: boolean
 }
 
 export function ApplicationRow({
   application,
   onUpdate,
   onDelete,
+  onClick,
+  autoUpdatedViaEmail,
 }: ApplicationRowProps) {
   const [editingNotes, setEditingNotes] = useState(false)
   const [notes, setNotes] = useState(application.notes || "")
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [tailorOpen, setTailorOpen] = useState(false)
+  const [tailorViewMode, setTailorViewMode] = useState(false)
+  const [scheduleOpen, setScheduleOpen] = useState(false)
 
   async function handleStatusChange(e: React.ChangeEvent<HTMLSelectElement>) {
     await onUpdate(application.id, {
@@ -50,7 +61,18 @@ export function ApplicationRow({
     : ""
 
   return (
-    <div className="bg-white rounded-xl border border-zinc-200 p-4 hover:shadow-md transition-shadow">
+    <div
+      className="bg-white rounded-xl border border-zinc-200 p-4 hover:shadow-md transition-shadow cursor-pointer"
+      onClick={onClick}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault()
+          onClick?.()
+        }
+      }}
+    >
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
@@ -75,6 +97,12 @@ export function ApplicationRow({
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <StatusBadge status={application.status} />
+            {autoUpdatedViaEmail && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-violet-50 text-violet-600 border border-violet-200">
+                <Mail size={9} />
+                via email
+              </span>
+            )}
             {application.source && (
               <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-zinc-100 text-zinc-600">
                 {application.source}
@@ -93,7 +121,7 @@ export function ApplicationRow({
           </div>
         </div>
 
-        <div className="flex flex-col items-end gap-2 flex-shrink-0">
+        <div className="flex flex-col items-end gap-2 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
           {/* Status dropdown */}
           <select
             value={application.status}
@@ -106,6 +134,61 @@ export function ApplicationRow({
               </option>
             ))}
           </select>
+
+          {/* Tailor Resume */}
+          {application.url && application.tailored_resume ? (
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => {
+                  setTailorViewMode(true)
+                  setTailorOpen(true)
+                }}
+                className="text-[10px] font-semibold px-2 py-1 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200 transition-colors flex items-center gap-1 hover:bg-emerald-100"
+                title="View saved tailored resume"
+              >
+                <FileCheck size={10} />
+                Tailored
+              </button>
+              <button
+                onClick={() => {
+                  setTailorViewMode(false)
+                  setTailorOpen(true)
+                }}
+                className="text-[10px] font-semibold px-2 py-1 rounded-md text-zinc-400 hover:text-amber-600 transition-colors flex items-center gap-1"
+                title="Generate a new tailored resume"
+              >
+                <Sparkles size={10} />
+              </button>
+            </div>
+          ) : application.url ? (
+            <button
+              onClick={() => {
+                setTailorViewMode(false)
+                setTailorOpen(true)
+              }}
+              className="text-[10px] font-semibold px-2 py-1 rounded-md text-zinc-400 hover:text-amber-600 transition-colors flex items-center gap-1"
+              title="Tailor resume for this job"
+            >
+              <Sparkles size={10} />
+              Tailor
+            </button>
+          ) : null}
+
+          {/* Schedule */}
+          {SCHEDULABLE_STATUSES.includes(application.status) && (
+            <button
+              onClick={() => setScheduleOpen(true)}
+              className={`text-[10px] font-semibold px-2 py-1 rounded-md transition-colors flex items-center gap-1 ${
+                application.calendar_event_id
+                  ? "bg-blue-50 text-blue-700 border border-blue-200"
+                  : "text-zinc-400 hover:text-blue-600"
+              }`}
+              title={application.calendar_event_id ? "Calendar events exist — click to add more" : "Schedule calendar events"}
+            >
+              {application.calendar_event_id ? <CalendarCheck size={10} /> : <CalendarDays size={10} />}
+              {application.calendar_event_id ? "Scheduled" : "Schedule"}
+            </button>
+          )}
 
           {/* Delete */}
           <button
@@ -122,8 +205,27 @@ export function ApplicationRow({
         </div>
       </div>
 
+      <TailorModal
+        application={application}
+        open={tailorOpen}
+        onOpenChange={setTailorOpen}
+        viewMode={tailorViewMode}
+        onSave={async (tailoredResume) => {
+          await onUpdate(application.id, { tailored_resume: tailoredResume })
+        }}
+      />
+
+      <ScheduleModal
+        application={application}
+        open={scheduleOpen}
+        onOpenChange={setScheduleOpen}
+        onSave={async (updates) => {
+          await onUpdate(application.id, updates)
+        }}
+      />
+
       {/* Notes section */}
-      <div className="mt-3 pt-3 border-t border-zinc-100">
+      <div className="mt-3 pt-3 border-t border-zinc-100" onClick={(e) => e.stopPropagation()}>
         {editingNotes ? (
           <div className="flex gap-2">
             <textarea

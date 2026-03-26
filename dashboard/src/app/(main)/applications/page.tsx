@@ -1,24 +1,55 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import { useApplications } from "@/hooks/use-applications"
 import { computeStats } from "@/hooks/use-stats"
 import { KanbanSummary } from "@/components/applications/kanban-summary"
 import { AddForm } from "@/components/applications/add-form"
 import { ApplicationRow } from "@/components/applications/application-row"
+import { DetailPanel } from "@/components/applications/detail-panel"
 import { Search } from "lucide-react"
-import type { ApplicationStatus } from "@/types"
+import { createClient } from "@/lib/supabase/client"
+import type { Application, ApplicationStatus } from "@/types"
 
 type SortKey = "date_found" | "company" | "title" | "status"
 
 export default function ApplicationsPage() {
-  const { applications, loading, addApplication, updateApplication, deleteApplication } =
-    useApplications()
+  const {
+    applications,
+    loading,
+    addApplication,
+    updateApplication,
+    deleteApplication,
+    updateContact,
+    updateNotes,
+    updateJobDescription,
+  } = useApplications()
   const stats = computeStats(applications)
+
+  const [autoStatusAppIds, setAutoStatusAppIds] = useState<Set<string>>(new Set())
+
+  useEffect(() => {
+    const supabase = createClient()
+    supabase
+      .from("email_application_links")
+      .select("application_id")
+      .eq("linked_by", "auto_status")
+      .then(({ data }) => {
+        if (data) {
+          setAutoStatusAppIds(new Set(data.map((l) => l.application_id)))
+        }
+      })
+  }, [applications])
 
   const [statusFilter, setStatusFilter] = useState<ApplicationStatus | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
   const [sortKey, setSortKey] = useState<SortKey>("date_found")
+  const [selectedApplication, setSelectedApplication] = useState<Application | null>(null)
+
+  // Keep selectedApplication in sync with real-time updates
+  const currentSelected = selectedApplication
+    ? applications.find((a) => a.id === selectedApplication.id) || null
+    : null
 
   const filtered = useMemo(() => {
     let list = [...applications]
@@ -136,6 +167,8 @@ export default function ApplicationsPage() {
               application={app}
               onUpdate={updateApplication}
               onDelete={deleteApplication}
+              onClick={() => setSelectedApplication(app)}
+              autoUpdatedViaEmail={autoStatusAppIds.has(app.id)}
             />
           ))}
         </div>
@@ -147,6 +180,19 @@ export default function ApplicationsPage() {
               : "No applications match your filters."}
           </p>
         </div>
+      )}
+
+      {/* Detail Panel */}
+      {currentSelected && (
+        <DetailPanel
+          application={currentSelected}
+          open={!!currentSelected}
+          onClose={() => setSelectedApplication(null)}
+          onUpdate={updateApplication}
+          onUpdateContact={updateContact}
+          onUpdateNotes={updateNotes}
+          onUpdateJobDescription={updateJobDescription}
+        />
       )}
     </div>
   )

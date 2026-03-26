@@ -42,7 +42,7 @@ export interface EmailApplicationLink {
   email_id: string
   application_id: string
   user_id: string
-  linked_by: "manual" | "confirmed_suggestion"
+  linked_by: "manual" | "confirmed_suggestion" | "auto_status"
   linked_at: string
 }
 

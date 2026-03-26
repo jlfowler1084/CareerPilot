@@ -4,13 +4,33 @@ import { useEffect, useState, useCallback, useRef } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { extractDomain, extractPreview } from "@/lib/gmail/parse"
 import { findDomainMatch } from "@/lib/gmail/suggestions"
-import type { Email, EmailApplicationLink, ClassificationResult, Application } from "@/types"
+import type { Email, EmailApplicationLink, ClassificationResult, Application, ApplicationStatus } from "@/types"
 
 const supabase = createClient()
 const SCAN_COOLDOWN_MS = 15 * 60 * 1000 // 15 minutes
 const BATCH_SIZE = 10
 const BATCH_DELAY_MS = 1000
 const MAX_CLASSIFY_ATTEMPTS = 3
+const STATUS_UPDATE_WINDOW_DAYS = 90
+
+const CATEGORY_TO_STATUS: Record<string, ApplicationStatus> = {
+  rejection: "rejected",
+  interview_request: "interview",
+  offer: "offer",
+}
+
+const COMPANY_NOISE = /\b(inc\.?|llc|ltd\.?|corp\.?|corporation|company|co\.?|group|holdings|technologies|technology|solutions|services|enterprises?)\b/gi
+
+function normalizeCompany(name: string): string {
+  return name.replace(COMPANY_NOISE, "").replace(/[.,\-]/g, " ").replace(/\s+/g, " ").trim().toLowerCase()
+}
+
+function fuzzyCompanyMatch(emailCompany: string, appCompany: string): boolean {
+  const a = normalizeCompany(emailCompany)
+  const b = normalizeCompany(appCompany)
+  if (!a || !b) return false
+  return a.includes(b) || b.includes(a)
+}
 
 interface ScanState {
   scanning: boolean
@@ -158,6 +178,81 @@ export function useEmails() {
     }
   }, [emails, scanState.lastScan])
 
+  // ── Auto-update application statuses from email signals ───────
+  const autoUpdateApplicationStatuses = useCallback(async (classifiedEmails: Email[]) => {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+
+    const cutoff = new Date(Date.now() - STATUS_UPDATE_WINDOW_DAYS * 24 * 60 * 60 * 1000)
+
+    // Fetch full applications with dates for matching
+    const { data: fullApps } = await supabase
+      .from("applications")
+      .select("id, title, company, status, date_applied, date_found")
+      .eq("user_id", user.id)
+
+    if (!fullApps || fullApps.length === 0) return
+
+    const eligibleApps = fullApps.filter((app) => {
+      const refDate = app.date_applied || app.date_found
+      return refDate && new Date(refDate) >= cutoff
+    })
+
+    for (const email of classifiedEmails) {
+      const targetStatus = CATEGORY_TO_STATUS[email.category]
+      if (!targetStatus) continue
+
+      const companyFromEmail = email.classification_json?.company
+      if (!companyFromEmail) continue
+
+      // Find matching applications by fuzzy company name
+      const matches = eligibleApps.filter((app) => fuzzyCompanyMatch(companyFromEmail, app.company))
+
+      if (matches.length === 1) {
+        const match = matches[0]
+
+        // Don't downgrade status (e.g., don't set "rejected" if already "offer")
+        const statusOrder = ["found", "interested", "applied", "phone_screen", "interview", "offer", "rejected", "withdrawn", "ghosted"]
+        const currentIdx = statusOrder.indexOf(match.status)
+        const targetIdx = statusOrder.indexOf(targetStatus)
+        if (targetStatus !== "rejected" && targetIdx <= currentIdx) continue
+
+        await supabase
+          .from("applications")
+          .update({ status: targetStatus, date_response: new Date().toISOString() })
+          .eq("id", match.id)
+
+        // Create email_application_link
+        await supabase
+          .from("email_application_links")
+          .upsert(
+            { email_id: email.id, application_id: match.id, user_id: user.id, linked_by: "auto_status" },
+            { onConflict: "email_id,application_id" }
+          )
+
+        // Update local state
+        setLinks((prev) => [
+          ...prev.filter((l) => !(l.email_id === email.id && l.application_id === match.id)),
+          { email_id: email.id, application_id: match.id, user_id: user.id, linked_by: "auto_status", linked_at: new Date().toISOString() },
+        ])
+        setApplications((prev) => prev.map((a) =>
+          a.id === match.id ? { ...a, status: targetStatus } : a
+        ))
+
+        console.log(`[auto-status] ${match.company}: ${match.status} → ${targetStatus} (via ${email.category} email)`)
+      } else if (matches.length > 1) {
+        // Ambiguous — just set suggestion, don't auto-update
+        const mostRecent = matches.sort((a, b) =>
+          new Date(b.date_applied || b.date_found).getTime() - new Date(a.date_applied || a.date_found).getTime()
+        )[0]
+        await supabase
+          .from("emails")
+          .update({ suggested_application_id: mostRecent.id })
+          .eq("id", email.id)
+      }
+    }
+  }, [])
+
   // ── Classify emails in batches ─────────────────────────────────
   const classifyEmails = useCallback(async (toClassify: Email[]) => {
     setScanState((prev) => ({
@@ -186,6 +281,9 @@ export function useEmails() {
         eligible.push(email)
       }
     }
+
+    // Track successfully classified emails for auto-status-update
+    const classifiedResults: Email[] = []
 
     // Process in batches of BATCH_SIZE
     for (let batchStart = 0; batchStart < eligible.length; batchStart += BATCH_SIZE) {
@@ -243,9 +341,11 @@ export function useEmails() {
           }
 
           await supabase.from("emails").update(updates).eq("id", email.id)
+          const updatedEmail = { ...email, ...updates } as Email
           setEmails((prev) => prev.map((e) =>
-            e.id === email.id ? { ...e, ...updates } : e
+            e.id === email.id ? updatedEmail : e
           ))
+          classifiedResults.push(updatedEmail)
           setScanState((prev) => ({ ...prev, classified: prev.classified + 1 }))
         }
       } catch (error) {
@@ -260,8 +360,14 @@ export function useEmails() {
       }
     }
 
+    // Auto-update application statuses based on status-signal emails
+    const statusEmails = classifiedResults.filter((e) => e.category in CATEGORY_TO_STATUS)
+    if (statusEmails.length > 0) {
+      await autoUpdateApplicationStatuses(statusEmails)
+    }
+
     setScanState((prev) => ({ ...prev, classifying: false }))
-  }, [applications])
+  }, [applications, autoUpdateApplicationStatuses])
 
   // ── Suggestion computation ─────────────────────────────────────
   const computeSuggestion = async (

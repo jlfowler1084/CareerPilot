@@ -33,8 +33,9 @@ async function callSearchApi(
   keyword: string,
   location: string,
   source: string
-): Promise<Job[]> {
+): Promise<{ jobs: Job[]; warnings: SearchError[] }> {
   const results: Job[] = []
+  const warnings: SearchError[] = []
   const profile = SEARCH_PROFILES.find((p) => p.id === profileId)
   const profileLabel = profile?.label || profileId
 
@@ -63,8 +64,13 @@ async function callSearchApi(
           }))
         )
       }
-    } catch {
-      // Indeed failure is non-fatal, continue
+      if (data.error) {
+        warnings.push({ profileId, message: `Indeed: ${data.error}` })
+      } else if (!data.jobs || data.jobs.length === 0) {
+        warnings.push({ profileId, message: "Indeed returned no results" })
+      }
+    } catch (err) {
+      warnings.push({ profileId, message: `Indeed: ${err instanceof Error ? err.message : "request failed"}` })
     }
   }
 
@@ -86,12 +92,12 @@ async function callSearchApi(
           }))
         )
       }
-    } catch {
-      // Dice failure is non-fatal, continue
+    } catch (err) {
+      warnings.push({ profileId, message: `Dice: ${err instanceof Error ? err.message : "request failed"}` })
     }
   }
 
-  return results
+  return { jobs: results, warnings }
 }
 
 export function useSearch() {
@@ -108,29 +114,52 @@ export function useSearch() {
   const [errors, setErrors] = useState<SearchError[]>([])
   const [cachedJobs, setCachedJobs] = useState<Pick<Job, "title" | "company">[]>([])
   const [newFlags, setNewFlags] = useState<Set<string>>(new Set())
+  const [lastSearchTime, setLastSearchTime] = useState<Date | null>(null)
 
   const abortRef = useRef(false)
 
-  // Load previous search_cache on init
+  // Load previous search_cache on init — restore recent results + build dedup cache
   useEffect(() => {
     async function loadCache() {
       const { data } = await supabase
         .from("search_cache")
-        .select("results")
+        .select("results, searched_at")
         .order("searched_at", { ascending: false })
         .limit(50)
 
-      if (data) {
-        const allCached: Pick<Job, "title" | "company">[] = []
-        for (const entry of data) {
+      if (!data || data.length === 0) return
+
+      // Restore recent results (last 24h) as initial display
+      const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+      const recentEntries = data.filter(
+        (e: { searched_at: string }) => e.searched_at >= cutoff
+      )
+      if (recentEntries.length > 0) {
+        const restored: Job[] = []
+        for (const entry of recentEntries) {
           if (entry.results && Array.isArray(entry.results)) {
-            for (const job of entry.results as Job[]) {
-              allCached.push({ title: job.title, company: job.company })
-            }
+            restored.push(...(entry.results as Job[]))
           }
         }
-        setCachedJobs(allCached)
+        const deduped = deduplicateJobs(restored)
+        const filtered = filterIrrelevant(deduped)
+        if (filtered.length > 0) {
+          setSearchResults(filtered)
+          setLastSearchTime(new Date(data[0].searched_at))
+          setSearchComplete(true)
+        }
       }
+
+      // Build dedup cache from all entries
+      const allCached: Pick<Job, "title" | "company">[] = []
+      for (const entry of data) {
+        if (entry.results && Array.isArray(entry.results)) {
+          for (const job of entry.results as Job[]) {
+            allCached.push({ title: job.title, company: job.company })
+          }
+        }
+      }
+      setCachedJobs(allCached)
     }
     loadCache()
   }, [])
@@ -168,6 +197,7 @@ export function useSearch() {
     setLoading(true)
     setSearchComplete(false)
     setErrors([])
+    setLastSearchTime(null)
     abortRef.current = false
 
     const total = profiles.length
@@ -184,13 +214,14 @@ export function useSearch() {
       setProgress({ current: i + 1, total })
 
       try {
-        const jobs = await callSearchApi(
+        const { jobs, warnings: apiWarnings } = await callSearchApi(
           profile.id,
           profile.keyword,
           profile.location,
           profile.source
         )
         allResults = [...allResults, ...jobs]
+        searchErrors.push(...apiWarnings)
 
         // Write to search_cache
         const {
@@ -265,5 +296,6 @@ export function useSearch() {
     searchComplete,
     errors,
     isNew,
+    lastSearchTime,
   }
 }

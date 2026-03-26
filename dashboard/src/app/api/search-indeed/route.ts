@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
         "anthropic-beta": "mcp-client-2025-04-04",
       },
       body: JSON.stringify({
-        model: process.env.MODEL_HAIKU || "claude-haiku-4-5-20251001",
+        model: process.env.MODEL_SONNET || "claude-sonnet-4-20250514",
         max_tokens: 4000,
         system:
           "You are a job search assistant. Use the Indeed MCP tool to search for jobs. Return the raw results exactly as the tool provides them. Do not add commentary.",

@@ -102,7 +102,15 @@ export interface Application {
   notes: string
   profile_id: string
   updated_at: string
+  tailored_resume: string | null
   interview_date: string | null
+  follow_up_date: string | null
+  calendar_event_id: string | null
+  contact_name: string | null
+  contact_email: string | null
+  contact_phone: string | null
+  contact_role: string | null
+  job_description: string | null
   interview_prep?: InterviewPrep
 }
 
@@ -116,6 +124,25 @@ export type ApplicationStatus =
   | "rejected"
   | "withdrawn"
   | "ghosted"
+
+export type ApplicationEventType =
+  | "status_change"
+  | "note_added"
+  | "resume_tailored"
+  | "calendar_scheduled"
+  | "contact_added"
+  | "follow_up"
+
+export interface ApplicationEvent {
+  id: string
+  application_id: string
+  user_id: string
+  event_type: ApplicationEventType
+  previous_value: string | null
+  new_value: string | null
+  description: string
+  created_at: string
+}
 
 export interface ActivityEntry {
   id: string

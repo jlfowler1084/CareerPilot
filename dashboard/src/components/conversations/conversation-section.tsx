@@ -63,35 +63,34 @@ export function ConversationSection({ application }: ConversationSectionProps) {
       )}
 
       {/* Collapsible header */}
-      <button
-        onClick={() => setOpen(!open)}
-        className="flex items-center gap-2 w-full text-left group"
-      >
-        {open ? (
-          <ChevronDown size={12} className="text-zinc-400" />
-        ) : (
-          <ChevronRight size={12} className="text-zinc-400" />
-        )}
-        <MessageSquare size={12} className="text-zinc-400" />
-        <span className="text-xs font-semibold text-zinc-500 group-hover:text-zinc-700">
-          Conversations
-        </span>
-        {conversations.length > 0 && (
-          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-zinc-100 text-zinc-500">
-            {conversations.length}
-          </span>
-        )}
-        <span className="flex-1" />
+      <div className="flex items-center gap-2 w-full group">
         <button
-          onClick={(e) => {
-            e.stopPropagation()
-            setFormOpen(true)
-          }}
+          type="button"
+          onClick={() => setOpen(!open)}
+          className="flex items-center gap-2 flex-1 min-w-0 text-left"
+        >
+          {open ? (
+            <ChevronDown size={12} className="text-zinc-400" />
+          ) : (
+            <ChevronRight size={12} className="text-zinc-400" />
+          )}
+          <MessageSquare size={12} className="text-zinc-400" />
+          <span className="text-xs font-semibold text-zinc-500 group-hover:text-zinc-700">
+            Conversations
+          </span>
+          {conversations.length > 0 && (
+            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-zinc-100 text-zinc-500">
+              {conversations.length}
+            </span>
+          )}
+        </button>
+        <button
+          onClick={() => setFormOpen(true)}
           className="text-[10px] font-semibold text-amber-600 hover:text-amber-800 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
         >
           <Plus size={10} /> Add
         </button>
-      </button>
+      </div>
 
       {/* Content */}
       {open && (

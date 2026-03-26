@@ -224,54 +224,50 @@ export function InterviewPrepSection({ application }: InterviewPrepSectionProps)
   return (
     <div className="border-t border-zinc-100 mt-3 pt-3">
       {/* Collapsible header */}
-      <button
-        onClick={() => setOpen(!open)}
-        className="flex items-center gap-2 w-full text-left group"
-      >
-        {open ? (
-          <ChevronDown size={12} className="text-zinc-400" />
-        ) : (
-          <ChevronRight size={12} className="text-zinc-400" />
-        )}
-        <Sparkles size={12} className="text-amber-500" />
-        <span className="text-xs font-semibold text-zinc-500 group-hover:text-zinc-700">
-          Interview Prep
-        </span>
-        {currentStagePrep?.content && (
-          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-600">
-            {formatSectionName(stage)}
+      <div className="flex items-center gap-2 w-full group">
+        <button
+          type="button"
+          onClick={() => setOpen(!open)}
+          className="flex items-center gap-2 flex-1 min-w-0 text-left"
+        >
+          {open ? (
+            <ChevronDown size={12} className="text-zinc-400" />
+          ) : (
+            <ChevronRight size={12} className="text-zinc-400" />
+          )}
+          <Sparkles size={12} className="text-amber-500" />
+          <span className="text-xs font-semibold text-zinc-500 group-hover:text-zinc-700">
+            Interview Prep
           </span>
-        )}
-        <span className="flex-1" />
+          {currentStagePrep?.content && (
+            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-600">
+              {formatSectionName(stage)}
+            </span>
+          )}
+        </button>
 
         {/* Action buttons — visible on hover */}
         {currentStagePrep?.content && (
           <span className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
             <button
-              onClick={(e) => {
-                e.stopPropagation()
-                handleRefresh()
-              }}
+              type="button"
+              onClick={handleRefresh}
               className="text-[10px] font-semibold text-amber-600 hover:text-amber-800 flex items-center gap-0.5"
               title="Refresh prep"
             >
               <RefreshCw size={10} />
             </button>
             <button
-              onClick={(e) => {
-                e.stopPropagation()
-                handleCopy()
-              }}
+              type="button"
+              onClick={handleCopy}
               className="text-[10px] font-semibold text-amber-600 hover:text-amber-800 flex items-center gap-0.5"
               title="Copy as markdown"
             >
               {copied ? <ClipboardCheck size={10} /> : <Copy size={10} />}
             </button>
             <button
-              onClick={(e) => {
-                e.stopPropagation()
-                setDebriefOpen(true)
-              }}
+              type="button"
+              onClick={() => setDebriefOpen(true)}
               className="text-[10px] font-semibold text-amber-600 hover:text-amber-800 flex items-center gap-0.5"
               title="Log debrief"
             >
@@ -279,7 +275,7 @@ export function InterviewPrepSection({ application }: InterviewPrepSectionProps)
             </button>
           </span>
         )}
-      </button>
+      </div>
 
       <DebriefForm
         open={debriefOpen}
