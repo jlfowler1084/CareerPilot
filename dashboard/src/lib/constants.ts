@@ -1,16 +1,21 @@
 import type { ApplicationStatus } from "@/types"
 
 export const STATUSES = [
-  { id: "found" as const, label: "Found", color: "#6b7280" },
-  { id: "interested" as const, label: "Interested", color: "#3b82f6" },
-  { id: "applied" as const, label: "Applied", color: "#6366f1" },
-  { id: "phone_screen" as const, label: "Phone Screen", color: "#8b5cf6" },
-  { id: "interview" as const, label: "Interview", color: "#7c3aed" },
-  { id: "offer" as const, label: "Offer", color: "#10b981" },
-  { id: "rejected" as const, label: "Rejected", color: "#ef4444" },
-  { id: "withdrawn" as const, label: "Withdrawn", color: "#f97316" },
-  { id: "ghosted" as const, label: "Ghosted", color: "#94a3b8" },
+  { id: "found" as const, label: "Found", color: "#6b7280", bg: "#f3f4f6" },
+  { id: "interested" as const, label: "Interested", color: "#3b82f6", bg: "#eff6ff" },
+  { id: "applied" as const, label: "Applied", color: "#6366f1", bg: "#eef2ff" },
+  { id: "phone_screen" as const, label: "Phone Screen", color: "#a855f7", bg: "#faf5ff" },
+  { id: "interview" as const, label: "Interview", color: "#8b5cf6", bg: "#f5f3ff" },
+  { id: "offer" as const, label: "Offer", color: "#22c55e", bg: "#f0fdf4" },
+  { id: "rejected" as const, label: "Rejected", color: "#ef4444", bg: "#fef2f2" },
+  { id: "withdrawn" as const, label: "Withdrawn", color: "#f97316", bg: "#fff7ed" },
+  { id: "ghosted" as const, label: "Ghosted", color: "#64748b", bg: "#f8fafc" },
 ] as const
+
+/** Lookup helper — STATUS_CONFIG["applied"].color etc. */
+export const STATUS_CONFIG = Object.fromEntries(
+  STATUSES.map((s) => [s.id, s])
+) as Record<(typeof STATUSES)[number]["id"], (typeof STATUSES)[number]>
 
 export const RESPONSE_STATUSES: ApplicationStatus[] = [
   "phone_screen",

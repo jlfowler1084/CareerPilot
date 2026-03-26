@@ -74,7 +74,7 @@ export function Sidebar() {
             <Link
               key={item.id}
               href={item.href}
-              className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-all ${
+              className={`w-full flex items-center gap-3 px-4 py-3 text-sm transition-all min-h-[44px] ${
                 active
                   ? "bg-zinc-800 text-amber-400 font-bold border-r-2 border-amber-400"
                   : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50"
@@ -98,7 +98,7 @@ export function Sidebar() {
 
       <button
         onClick={() => setOpen(!open)}
-        className="p-3 border-t border-zinc-800 text-zinc-500 hover:text-zinc-300 transition-colors flex items-center justify-center"
+        className="p-3 border-t border-zinc-800 text-zinc-500 hover:text-zinc-300 transition-colors flex items-center justify-center min-h-[44px]"
       >
         <ChevronRight
           size={16}

@@ -1,6 +1,7 @@
 "use client"
 
-import { formatDistanceToNow } from "date-fns"
+import { formatDistanceToNow, format } from "date-fns"
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
 
 interface RelativeTimeProps {
   date: string | Date
@@ -10,11 +11,16 @@ interface RelativeTimeProps {
 export function RelativeTime({ date, className }: RelativeTimeProps) {
   const d = typeof date === "string" ? new Date(date) : date
   const relative = formatDistanceToNow(d, { addSuffix: true })
-  const full = d.toLocaleString()
+  const full = format(d, "MMM d, yyyy 'at' h:mm a")
 
   return (
-    <time dateTime={d.toISOString()} title={full} className={className}>
-      {relative}
-    </time>
+    <Tooltip>
+      <TooltipTrigger
+        render={<time dateTime={d.toISOString()} className={className} />}
+      >
+        {relative}
+      </TooltipTrigger>
+      <TooltipContent>{full}</TooltipContent>
+    </Tooltip>
   )
 }

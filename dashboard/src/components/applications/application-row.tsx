@@ -10,6 +10,7 @@ import { TailorModal } from "@/components/applications/tailor-modal"
 import { CoverLetterModal } from "@/components/applications/cover-letter-modal"
 import { ScheduleModal } from "@/components/applications/schedule-modal"
 import { STATUSES } from "@/lib/constants"
+import { RelativeTime } from "@/components/ui/relative-time"
 import { ExternalLink, Trash2, Save, Mail, Sparkles, FileCheck, CalendarDays, CalendarCheck, FileText } from "lucide-react"
 import type { Application, ApplicationStatus } from "@/types"
 
@@ -37,11 +38,17 @@ export function ApplicationRow({
   const [tailorViewMode, setTailorViewMode] = useState(false)
   const [coverLetterOpen, setCoverLetterOpen] = useState(false)
   const [scheduleOpen, setScheduleOpen] = useState(false)
+  const [statusUpdating, setStatusUpdating] = useState(false)
 
   async function handleStatusChange(e: React.ChangeEvent<HTMLSelectElement>) {
-    await onUpdate(application.id, {
-      status: e.target.value as ApplicationStatus,
-    })
+    setStatusUpdating(true)
+    try {
+      await onUpdate(application.id, {
+        status: e.target.value as ApplicationStatus,
+      })
+    } finally {
+      setStatusUpdating(false)
+    }
   }
 
   async function handleSaveNotes() {
@@ -58,9 +65,7 @@ export function ApplicationRow({
     await onDelete(application.id)
   }
 
-  const dateStr = application.date_found
-    ? new Date(application.date_found).toLocaleDateString()
-    : ""
+  const hasDate = !!application.date_found
 
   return (
     <div
@@ -92,10 +97,15 @@ export function ApplicationRow({
               </a>
             )}
           </div>
-          <div className="text-xs text-zinc-500 mb-2">
-            {application.company}
-            {application.location ? ` · ${application.location}` : ""}
-            {dateStr ? ` · ${dateStr}` : ""}
+          <div className="text-xs text-zinc-500 mb-2 flex items-center gap-1 flex-wrap">
+            <span>{application.company}</span>
+            {application.location && <span>· {application.location}</span>}
+            {hasDate && (
+              <>
+                <span>·</span>
+                <RelativeTime date={application.date_found} className="text-xs text-zinc-400" />
+              </>
+            )}
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <StatusBadge status={application.status} />
@@ -128,7 +138,8 @@ export function ApplicationRow({
           <select
             value={application.status}
             onChange={handleStatusChange}
-            className="text-[11px] px-2 py-1 rounded-md border border-zinc-200 bg-white text-zinc-700 cursor-pointer focus:outline-none focus:ring-1 focus:ring-amber-300"
+            disabled={statusUpdating}
+            className="text-[11px] px-2 py-1.5 rounded-md border border-zinc-200 bg-white text-zinc-700 cursor-pointer focus:outline-none focus:ring-1 focus:ring-amber-300 disabled:opacity-50 min-h-[28px]"
           >
             {STATUSES.map((s) => (
               <option key={s.id} value={s.id}>
@@ -206,8 +217,9 @@ export function ApplicationRow({
 
           {/* Delete */}
           <button
+            type="button"
             onClick={handleDelete}
-            className={`text-[10px] font-semibold px-2 py-1 rounded-md transition-colors flex items-center gap-1 ${
+            className={`text-[10px] font-semibold px-2.5 py-1.5 rounded-md transition-colors flex items-center gap-1 min-h-[28px] ${
               confirmDelete
                 ? "bg-red-100 text-red-700 border border-red-300"
                 : "text-zinc-400 hover:text-red-500"

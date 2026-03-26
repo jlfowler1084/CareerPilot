@@ -136,7 +136,12 @@ export function useApplications() {
         .select()
         .single()
 
+      if (error) {
+        toast.error("Failed to track application")
+      }
+
       if (!error && data) {
+        toast.success(`Application tracked: ${data.title}`)
         await logActivity(`Tracked: ${data.title} at ${data.company}`)
 
         if (data.tailored_resume) {
@@ -167,6 +172,13 @@ export function useApplications() {
         Object.assign(updates, dateUpdates)
       }
 
+      // Optimistic update — apply immediately, revert on failure
+      if (current) {
+        setApplications((prev) =>
+          prev.map((a) => (a.id === id ? { ...a, ...updates } : a))
+        )
+      }
+
       const { data, error } = await supabase
         .from("applications")
         .update(updates)
@@ -175,6 +187,12 @@ export function useApplications() {
         .single()
 
       if (error) {
+        // Revert optimistic update
+        if (current) {
+          setApplications((prev) =>
+            prev.map((a) => (a.id === id ? current : a))
+          )
+        }
         toast.error("Failed to update application")
       }
 

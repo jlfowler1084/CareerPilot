@@ -7,6 +7,7 @@ import { SourceChart } from "@/components/analytics/source-chart"
 import { PipelineFunnel } from "@/components/analytics/pipeline-funnel"
 import { TimelineChart } from "@/components/analytics/timeline-chart"
 import { EmptyState } from "@/components/shared/empty-state"
+import { ErrorBoundary } from "@/components/error-boundary"
 import {
   Briefcase,
   Send,
@@ -21,13 +22,21 @@ export default function AnalyticsPage() {
 
   if (loading) {
     return (
-      <div className="p-6">
-        <h2 className="text-lg font-bold mb-6">Analytics</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 animate-pulse">
+      <div className="p-6 space-y-6 animate-pulse">
+        <h2 className="text-lg font-bold mb-2">Analytics</h2>
+        {/* KPI row skeleton */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {Array.from({ length: 4 }).map((_, i) => (
             <div key={i} className="h-28 bg-zinc-100 rounded-xl" />
           ))}
         </div>
+        {/* Charts skeleton */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="h-64 bg-zinc-100 rounded-xl" />
+          <div className="h-64 bg-zinc-100 rounded-xl" />
+        </div>
+        {/* Timeline skeleton */}
+        <div className="h-48 bg-zinc-100 rounded-xl" />
       </div>
     )
   }
@@ -90,12 +99,18 @@ export default function AnalyticsPage() {
 
       {/* Charts Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <SourceChart data={stats.source_distribution} />
-        <PipelineFunnel byStatus={stats.by_status} />
+        <ErrorBoundary>
+          <SourceChart data={stats.source_distribution} />
+        </ErrorBoundary>
+        <ErrorBoundary>
+          <PipelineFunnel byStatus={stats.by_status} />
+        </ErrorBoundary>
       </div>
 
       {/* Timeline */}
-      <TimelineChart data={stats.timeline} />
+      <ErrorBoundary>
+        <TimelineChart data={stats.timeline} />
+      </ErrorBoundary>
     </div>
   )
 }

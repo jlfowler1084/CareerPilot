@@ -1,11 +1,12 @@
 "use client"
 
 import { useState, useCallback, useMemo } from "react"
-import { RefreshCw } from "lucide-react"
+import { RefreshCw, Mail, ArrowLeft } from "lucide-react"
 import { useEmails } from "@/hooks/use-emails"
 import { FilterChips, ALL_FILTER_IDS } from "@/components/inbox/filter-chips"
 import { EmailList } from "@/components/inbox/email-list"
 import { EmailDetail } from "@/components/inbox/email-detail"
+import { EmptyState } from "@/components/shared/empty-state"
 
 const CONVERSATIONS_EXCLUDED = new Set(["alerts", "irrelevant"])
 
@@ -82,9 +83,26 @@ export default function InboxPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-full text-zinc-400">
-        <div className="animate-spin w-5 h-5 border-2 border-zinc-300 border-t-amber-500 rounded-full mr-3" />
-        Loading inbox...
+      <div className="flex flex-col h-full animate-pulse">
+        <div className="px-6 py-4 border-b border-zinc-200">
+          <div className="h-6 w-16 bg-zinc-100 rounded mb-2" />
+          <div className="h-3 w-40 bg-zinc-100 rounded" />
+        </div>
+        <div className="flex flex-1">
+          <div className="w-[420px] border-r border-zinc-200 p-3 space-y-2">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="h-16 bg-zinc-100 rounded-lg" />
+            ))}
+          </div>
+          <div className="flex-1 p-6">
+            <div className="h-6 w-48 bg-zinc-100 rounded mb-4" />
+            <div className="space-y-2">
+              <div className="h-4 bg-zinc-100 rounded w-full" />
+              <div className="h-4 bg-zinc-100 rounded w-3/4" />
+              <div className="h-4 bg-zinc-100 rounded w-1/2" />
+            </div>
+          </div>
+        </div>
       </div>
     )
   }
@@ -96,6 +114,30 @@ export default function InboxPage() {
     : scanState.lastScan
     ? `Last scanned ${new Date(scanState.lastScan).toLocaleTimeString()}`
     : "Not yet scanned"
+
+  if (emails.length === 0 && !scanState.scanning && !scanState.classifying) {
+    return (
+      <div className="p-6 space-y-6">
+        <div className="flex items-center justify-between">
+          <h1 className="text-lg font-bold">Inbox</h1>
+          <button
+            type="button"
+            onClick={refresh}
+            className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-md border border-zinc-300 text-zinc-600 hover:bg-zinc-100 transition-colors"
+          >
+            <RefreshCw size={13} />
+            Scan Gmail
+          </button>
+        </div>
+        <EmptyState
+          icon={Mail}
+          title="No emails found"
+          description="Scan your Gmail inbox to find recruiter emails, or check back after connecting Gmail."
+          actions={[{ label: "Scan Now", onClick: refresh }]}
+        />
+      </div>
+    )
+  }
 
   return (
     <div className="flex flex-col h-full">
@@ -147,7 +189,7 @@ export default function InboxPage() {
       {/* Two-panel layout */}
       <div className="flex flex-1 overflow-hidden">
         {/* Left: email list */}
-        <div className="w-[420px] flex-shrink-0 border-r border-zinc-200 dark:border-zinc-800 overflow-hidden">
+        <div className={`w-full md:w-[420px] flex-shrink-0 border-r border-zinc-200 dark:border-zinc-800 overflow-hidden ${selectedId ? "hidden md:block" : ""}`}>
           <EmailList
             emails={emails}
             links={links}
@@ -167,18 +209,30 @@ export default function InboxPage() {
         </div>
 
         {/* Right: detail panel */}
-        <div className="flex-1 overflow-hidden">
+        <div className={`flex-1 overflow-hidden ${!selectedId ? "hidden md:block" : ""}`}>
           {selectedEmail ? (
-            <EmailDetail
-              email={selectedEmail}
-              links={links}
-              applications={applications}
-              onLink={linkEmail}
-              onUnlink={unlinkEmail}
-              onDismiss={dismissEmail}
-              onUndismiss={undismissEmail}
-              onEmailReplied={markReplied}
-            />
+            <div className="h-full flex flex-col">
+              <button
+                type="button"
+                onClick={() => setSelectedId(null)}
+                className="md:hidden flex items-center gap-1.5 px-4 py-3 text-xs font-medium text-zinc-600 border-b border-zinc-200 min-h-[44px]"
+              >
+                <ArrowLeft size={14} />
+                Back to list
+              </button>
+              <div className="flex-1 overflow-hidden">
+                <EmailDetail
+                  email={selectedEmail}
+                  links={links}
+                  applications={applications}
+                  onLink={linkEmail}
+                  onUnlink={unlinkEmail}
+                  onDismiss={dismissEmail}
+                  onUndismiss={undismissEmail}
+                  onEmailReplied={markReplied}
+                />
+              </div>
+            </div>
           ) : (
             <div className="flex flex-col items-center justify-center h-full text-zinc-400 dark:text-zinc-500">
               <span className="text-3xl mb-2">Select an email</span>

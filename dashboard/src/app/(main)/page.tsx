@@ -18,11 +18,16 @@ import {
   Rocket,
   Search,
   Plus,
-  Calendar,
+  Mail,
   AlertTriangle,
   CheckCircle2,
   CalendarDays,
   ArrowRight,
+  Briefcase,
+  Send,
+  MessageSquare,
+  TrendingUp,
+  Sparkles,
 } from "lucide-react"
 import type { Application, ApplicationEvent, ApplicationStatus } from "@/types"
 
@@ -30,8 +35,9 @@ const supabase = createClient()
 
 // --- Event type icons ---
 const EVENT_ICONS: Record<string, string> = {
+  tracked: "\uD83D\uDCCB",
   status_change: "\uD83D\uDD04",
-  note_added: "\uD83D\uDCDD",
+  note_added: "\u270F\uFE0F",
   resume_tailored: "\u2728",
   calendar_scheduled: "\uD83D\uDCC5",
   contact_added: "\uD83D\uDC64",
@@ -105,6 +111,15 @@ function computeAlerts(applications: Application[]): Alert[] {
   return alerts
 }
 
+// --- KPI trends (this week vs last week) ---
+function computeTrend(thisWeek: number, lastWeek: number) {
+  const delta = thisWeek - lastWeek
+  return {
+    direction: delta > 0 ? "up" as const : delta < 0 ? "down" as const : "flat" as const,
+    delta: Math.abs(delta),
+  }
+}
+
 // --- Weekly stats ---
 function computeWeeklyStats(applications: Application[]) {
   const now = new Date()
@@ -112,12 +127,28 @@ function computeWeeklyStats(applications: Application[]) {
   startOfWeek.setDate(now.getDate() - now.getDay())
   startOfWeek.setHours(0, 0, 0, 0)
 
+  const startOfLastWeek = new Date(startOfWeek)
+  startOfLastWeek.setDate(startOfLastWeek.getDate() - 7)
+
   const appliedThisWeek = applications.filter(
     (a) => a.date_applied && new Date(a.date_applied) >= startOfWeek
   ).length
 
+  const appliedLastWeek = applications.filter(
+    (a) =>
+      a.date_applied &&
+      new Date(a.date_applied) >= startOfLastWeek &&
+      new Date(a.date_applied) < startOfWeek
+  ).length
+
   const foundThisWeek = applications.filter(
     (a) => new Date(a.date_found) >= startOfWeek
+  ).length
+
+  const foundLastWeek = applications.filter(
+    (a) =>
+      new Date(a.date_found) >= startOfLastWeek &&
+      new Date(a.date_found) < startOfWeek
   ).length
 
   const totalApplied = applications.filter((a) => a.date_applied).length
@@ -135,9 +166,25 @@ function computeWeeklyStats(applications: Application[]) {
   }
   const total = applications.length || 1
 
+  // Count active pipeline this week vs last week
+  const activeStatuses = new Set(["interested", "applied", "phone_screen", "interview"])
+  const activeThisWeek = applications.filter(
+    (a) => activeStatuses.has(a.status) && new Date(a.date_found) >= startOfWeek
+  ).length
+  const activeLastWeek = applications.filter(
+    (a) =>
+      activeStatuses.has(a.status) &&
+      new Date(a.date_found) >= startOfLastWeek &&
+      new Date(a.date_found) < startOfWeek
+  ).length
+
   return {
     appliedThisWeek,
+    appliedLastWeek,
     foundThisWeek,
+    foundLastWeek,
+    activeThisWeek,
+    activeLastWeek,
     responseRate,
     sourceCounts,
     total,
@@ -152,6 +199,7 @@ export default function OverviewPage() {
 
   // Fetch recent application events for activity feed
   const [events, setEvents] = useState<ApplicationEvent[]>([])
+  const [newMatchCount, setNewMatchCount] = useState(0)
   useEffect(() => {
     const fetchEvents = async () => {
       const { data } = await supabase
@@ -162,6 +210,17 @@ export default function OverviewPage() {
       setEvents(data || [])
     }
     fetchEvents()
+
+    // Count new search_cache entries from last 24h not already tracked
+    const fetchNewMatches = async () => {
+      const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+      const { count } = await supabase
+        .from("search_cache")
+        .select("*", { count: "exact", head: true })
+        .gte("cached_at", since)
+      setNewMatchCount(count || 0)
+    }
+    fetchNewMatches()
   }, [])
 
   // Upcoming calendar events from applications
@@ -195,12 +254,30 @@ export default function OverviewPage() {
 
   if (loading) {
     return (
-      <div className="p-6">
-        <h2 className="text-lg font-bold mb-6">Overview</h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 animate-pulse">
+      <div className="p-6 space-y-6 animate-pulse">
+        <h2 className="text-lg font-bold mb-2">Overview</h2>
+        {/* Quick actions skeleton */}
+        <div className="flex gap-3">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="h-9 w-32 bg-zinc-100 rounded-lg" />
+          ))}
+        </div>
+        {/* KPI cards skeleton */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {Array.from({ length: 4 }).map((_, i) => (
             <div key={i} className="h-28 bg-zinc-100 rounded-xl" />
           ))}
+        </div>
+        {/* Status grid skeleton */}
+        <div className="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-9 gap-2">
+          {Array.from({ length: 9 }).map((_, i) => (
+            <div key={i} className="h-16 bg-zinc-100 rounded-xl" />
+          ))}
+        </div>
+        {/* Alerts + events skeleton */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="h-48 bg-zinc-100 rounded-xl" />
+          <div className="h-48 bg-zinc-100 rounded-xl" />
         </div>
       </div>
     )
@@ -238,27 +315,64 @@ export default function OverviewPage() {
       <div className="flex items-center gap-3 flex-wrap">
         <Link
           href="/search"
-          className="inline-flex items-center gap-2 text-xs font-semibold px-4 py-2 rounded-lg bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-200 transition-colors"
+          className="inline-flex items-center gap-2 text-xs font-semibold px-4 py-2.5 rounded-lg bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-200 transition-colors min-h-[44px]"
         >
           <Search size={14} />
           Run Job Search
         </Link>
         <Link
           href="/applications"
-          className="inline-flex items-center gap-2 text-xs font-semibold px-4 py-2 rounded-lg bg-zinc-50 text-zinc-700 hover:bg-zinc-100 border border-zinc-200 transition-colors"
+          className="inline-flex items-center gap-2 text-xs font-semibold px-4 py-2.5 rounded-lg bg-zinc-50 text-zinc-700 hover:bg-zinc-100 border border-zinc-200 transition-colors min-h-[44px]"
         >
           <Plus size={14} />
           Add Application
         </Link>
-        <a
-          href="https://calendar.google.com"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-2 text-xs font-semibold px-4 py-2 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 transition-colors"
+        <Link
+          href="/inbox"
+          className="inline-flex items-center gap-2 text-xs font-semibold px-4 py-2.5 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 transition-colors min-h-[44px]"
         >
-          <Calendar size={14} />
-          View Calendar
-        </a>
+          <Mail size={14} />
+          View Inbox
+        </Link>
+      </div>
+
+      {/* Aggregate KPI Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <KpiCard
+          icon={Briefcase}
+          label="Total Tracked"
+          value={stats.total}
+          sub="all applications"
+          color="#f59e0b"
+          href="/applications"
+          trend={computeTrend(weekly.foundThisWeek, weekly.foundLastWeek)}
+        />
+        <KpiCard
+          icon={TrendingUp}
+          label="Active Pipeline"
+          value={activeCount}
+          sub="in progress"
+          color="#8b5cf6"
+          href="/applications?status=applied,phone_screen,interview"
+          trend={computeTrend(weekly.activeThisWeek, weekly.activeLastWeek)}
+        />
+        <KpiCard
+          icon={MessageSquare}
+          label="Response Rate"
+          value={`${weekly.responseRate}%`}
+          sub={`${stats.responded_count || 0} responses`}
+          color="#10b981"
+          href="/applications?status=phone_screen,interview,offer,rejected"
+        />
+        <KpiCard
+          icon={Send}
+          label="Applied"
+          value={weekly.appliedThisWeek}
+          sub="this week"
+          color="#3b82f6"
+          href="/search"
+          trend={computeTrend(weekly.appliedThisWeek, weekly.appliedLastWeek)}
+        />
       </div>
 
       {/* KPI Status Cards */}
@@ -308,8 +422,25 @@ export default function OverviewPage() {
           <h3 className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-4">
             Attention Needed
           </h3>
-          {alerts.length > 0 ? (
+          {(alerts.length > 0 || newMatchCount > 0) ? (
             <div className="space-y-2">
+              {newMatchCount > 0 && (
+                <Link
+                  href="/search"
+                  className="flex items-start gap-3 p-2.5 rounded-lg hover:bg-zinc-50 transition-colors"
+                >
+                  <Sparkles size={14} className="text-emerald-500 mt-0.5" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium text-zinc-800 truncate">
+                      New job matches
+                    </p>
+                    <p className="text-[10px] text-zinc-500">
+                      {newMatchCount} new {newMatchCount === 1 ? "job" : "jobs"} found since yesterday
+                    </p>
+                  </div>
+                  <ArrowRight size={12} className="text-zinc-300 mt-1 flex-shrink-0" />
+                </Link>
+              )}
               {alerts.slice(0, 5).map((alert) => (
                 <Link
                   key={alert.id}
@@ -336,12 +467,12 @@ export default function OverviewPage() {
                 </Link>
               ))}
             </div>
-          ) : (
+          ) : alerts.length === 0 && newMatchCount === 0 ? (
             <div className="flex items-center gap-2 text-sm text-emerald-600 py-4">
               <CheckCircle2 size={16} />
               <span>All caught up!</span>
             </div>
-          )}
+          ) : null}
         </div>
 
         {/* Upcoming Events */}
@@ -395,9 +526,10 @@ export default function OverviewPage() {
           </h3>
           {events.length > 0 ? (
             <div className="space-y-1">
-              {events.map((event) => (
-                <div
+              {events.slice(0, 5).map((event) => (
+                <Link
                   key={event.id}
+                  href={`/applications?id=${event.application_id}`}
                   className="flex items-start gap-3 py-2 px-2 rounded-lg hover:bg-zinc-50 transition-colors"
                 >
                   <span className="mt-0.5 text-sm leading-none">
@@ -412,14 +544,17 @@ export default function OverviewPage() {
                       className="text-[10px] text-zinc-400 mt-0.5 block"
                     />
                   </div>
-                </div>
+                  <ArrowRight size={12} className="text-zinc-300 mt-1 flex-shrink-0" />
+                </Link>
               ))}
-              <Link
-                href="/applications"
-                className="text-[10px] font-semibold text-amber-600 hover:text-amber-800 transition-colors block text-center pt-2"
-              >
-                View all applications
-              </Link>
+              {events.length > 5 && (
+                <Link
+                  href="/applications"
+                  className="text-[10px] font-semibold text-amber-600 hover:text-amber-800 transition-colors block text-center pt-2"
+                >
+                  View all activity
+                </Link>
+              )}
             </div>
           ) : (
             <div className="text-sm text-zinc-400 text-center py-6">

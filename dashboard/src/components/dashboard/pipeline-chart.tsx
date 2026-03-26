@@ -1,5 +1,6 @@
 "use client"
 
+import { useRouter } from "next/navigation"
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts"
 import { STATUSES } from "@/lib/constants"
 import type { ApplicationStatus } from "@/types"
@@ -9,10 +10,12 @@ interface PipelineChartProps {
 }
 
 export function PipelineChart({ byStatus }: PipelineChartProps) {
+  const router = useRouter()
   const data = STATUSES.map((s) => ({
     name: s.label,
     value: byStatus[s.id] || 0,
     color: s.color,
+    statusId: s.id,
   })).filter((d) => d.value > 0)
 
   if (data.length === 0) {
@@ -50,7 +53,12 @@ export function PipelineChart({ byStatus }: PipelineChartProps) {
                 stroke="none"
               >
                 {data.map((entry, index) => (
-                  <Cell key={index} fill={entry.color} />
+                  <Cell
+                    key={index}
+                    fill={entry.color}
+                    className="cursor-pointer outline-none"
+                    onClick={() => router.push(`/applications?status=${entry.statusId}`)}
+                  />
                 ))}
               </Pie>
               <Tooltip
@@ -59,6 +67,10 @@ export function PipelineChart({ byStatus }: PipelineChartProps) {
                   border: "1px solid #e4e4e7",
                   fontSize: "12px",
                 }}
+                formatter={(value, name) => [
+                  `${value} (${total > 0 ? Math.round((Number(value) / total) * 100) : 0}%)`,
+                  String(name),
+                ]}
               />
               <text
                 x="50%"
@@ -83,14 +95,19 @@ export function PipelineChart({ byStatus }: PipelineChartProps) {
         </div>
         <div className="flex-1 grid grid-cols-2 gap-x-4 gap-y-1.5">
           {data.map((d) => (
-            <div key={d.name} className="flex items-center gap-2 text-xs">
+            <button
+              type="button"
+              key={d.name}
+              onClick={() => router.push(`/applications?status=${d.statusId}`)}
+              className="flex items-center gap-2 text-xs hover:bg-zinc-50 rounded-md px-1.5 py-1 -mx-1.5 transition-colors cursor-pointer"
+            >
               <span
                 className="w-2.5 h-2.5 rounded-full flex-shrink-0"
                 style={{ background: d.color }}
               />
               <span className="text-zinc-600 truncate">{d.name}</span>
               <span className="font-bold text-zinc-900 ml-auto">{d.value}</span>
-            </div>
+            </button>
           ))}
         </div>
       </div>
