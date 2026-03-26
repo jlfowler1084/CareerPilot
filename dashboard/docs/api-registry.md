@@ -9,7 +9,7 @@ This file documents every outbound API call in the project. Updated by Claude Co
 | Route / Function | Service | Model | Purpose | Trigger | Cost/Call | Justification |
 |---|---|---|---|---|---|---|
 | `/api/search-indeed` | Anthropic + Indeed MCP | Haiku (env var) | Search Indeed job listings via Claude MCP relay | User clicks Run Search | ~$0.01-0.02 | Indeed MCP requires Claude proxy (`/claude/` path). Downgraded to Haiku (SCRUM-154). Auth added (SCRUM-156) |
-| `/api/search-dice` | Anthropic + Dice MCP | Haiku (env var) | Search Dice job listings via Claude MCP relay | User clicks Run Search | ~$0.01-0.02 | Dice MCP endpoint is standard HTTP but building a full MCP client isn't worth $3.60/mo savings. Downgraded to Haiku (SCRUM-154). Auth added (SCRUM-156) |
+| `/api/search-dice` | Dice MCP (direct) | — | Search Dice job listings via direct MCP Streamable HTTP | User clicks Run Search | $0.00 | SCRUM-154 P2: removed Claude relay, calls mcp.dice.com directly via @modelcontextprotocol/sdk. Auth preserved (SCRUM-156) |
 | `/api/gmail/classify` | Anthropic | Haiku (env var) | Categorize email into 7 categories + extract metadata | Email scan pipeline (auto on inbox load) | ~$0.001 | Downgraded to Haiku (SCRUM-154 P3) — simple classification |
 | `/api/conversations` POST | Anthropic | Haiku (env var) | Extract 3-7 topic tags from conversation notes | User logs a conversation | ~$0.0008 | Downgraded to Haiku (SCRUM-154 P3) — simple extraction |
 | `/api/conversations/[id]` PATCH | Anthropic | Haiku (env var) | Re-extract topic tags when notes change | User edits conversation | ~$0.0008 | Downgraded to Haiku (SCRUM-154 P3) — same as above |
@@ -24,17 +24,17 @@ This file documents every outbound API call in the project. Updated by Claude Co
 
 | Route / Function | Service | Model | Purpose | Trigger | Cost/Call | Justification |
 |---|---|---|---|---|---|---|
-| `src/gmail/scanner.py:257` | Anthropic SDK | Sonnet (hardcoded) | Classify inbox email into categories | `cli.py scan` — per email | ~$0.004 | **Downgrade to Haiku** — simple classification |
+| `src/gmail/scanner.py:257` | Anthropic SDK | Haiku (env var) | Classify inbox email into categories | `cli.py scan` — per email | ~$0.0004 | Downgraded to Haiku (SCRUM-154 P3) — simple classification |
 | `src/gmail/responder.py:117` | Anthropic SDK | Sonnet (hardcoded) | Draft personalized email response | User selects response mode | ~$0.01 | Justified: quality matters for outgoing email |
 | `src/gmail/thread_actions.py:99` | Anthropic SDK | Sonnet (hardcoded) | Draft contextual reply within thread | User selects reply mode | ~$0.01 | Justified: nuanced generation |
 | `src/gmail/thread_actions.py:224` | Anthropic SDK | Sonnet (hardcoded) | Draft scheduling reply with availability | User selects scheduling mode | ~$0.01 | Justified: needs calendar context weaving |
 | `src/jobs/analyzer.py:80` | Anthropic SDK | Sonnet (hardcoded) | Score job description fit against resume | Manual CLI | ~$0.03 | Justified: multi-factor analysis |
-| `src/jobs/searcher.py:116` | Anthropic SDK + Dice MCP | Sonnet (hardcoded) | Search Dice via Claude MCP relay | `cli.py search` | ~$0.05 | **VIOLATION: Claude as MCP relay** |
+| `src/jobs/searcher.py` | Dice MCP (direct HTTP) | — | Search Dice via direct Streamable HTTP | `cli.py search` | $0.00 | SCRUM-154 P2: removed Claude relay, calls mcp.dice.com directly via requests + JSON-RPC |
 | `src/documents/resume_generator.py:195` | Anthropic SDK | Sonnet (hardcoded) | Tailor resume for specific job | Manual CLI | ~$0.06 | Justified: creative rewriting |
 | `src/documents/cover_letter_generator.py:128` | Anthropic SDK | Sonnet (hardcoded) | Generate tailored cover letter | Manual CLI | ~$0.04 | Justified: creative writing |
-| `src/journal/entries.py:92` | Anthropic SDK | Sonnet (hardcoded) | Auto-tag journal entry (3-5 tags) | Creating new journal entry | ~$0.003 | **Downgrade to Haiku** — simple extraction |
+| `src/journal/entries.py:92` | Anthropic SDK | Haiku (env var) | Auto-tag journal entry (3-5 tags) | Creating new journal entry | ~$0.0003 | Downgraded to Haiku (SCRUM-154 P3) — simple extraction |
 | `src/journal/insights.py:62` | Anthropic SDK | Sonnet (hardcoded) | Weekly journal summary with action items | `cli.py journal insights` | ~$0.02 | Justified: cross-entry synthesis |
-| `src/journal/insights.py:96` | Anthropic SDK | Sonnet (hardcoded) | Momentum check (4-category assessment) | `cli.py journal insights` | ~$0.005 | **Downgrade to Haiku** — simple classification |
+| `src/journal/insights.py:96` | Anthropic SDK | Haiku (env var) | Momentum check (4-category assessment) | `cli.py journal insights` | ~$0.0005 | Downgraded to Haiku (SCRUM-154 P3) — simple classification |
 | `src/skills/roadmap.py:68` | Anthropic SDK | Sonnet (hardcoded) | Generate week-by-week study plan | `cli.py roadmap` | ~$0.06 | Justified: complex planning |
 | `src/interviews/coach.py:174` | Anthropic SDK | Sonnet (hardcoded) | Analyze full interview transcript | `cli.py interview analyze` | ~$0.08 | Justified: deep analysis |
 | `src/interviews/coach.py:236` | Anthropic SDK | Sonnet (hardcoded) | Compare multiple interview analyses | `cli.py interview compare` | ~$0.04 | Justified: cross-interview synthesis |

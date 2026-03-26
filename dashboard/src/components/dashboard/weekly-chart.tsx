@@ -18,7 +18,7 @@ export function WeeklyChart({ data }: WeeklyChartProps) {
   const maxCount = Math.max(...data.map((d) => d.count), 1)
 
   return (
-    <div className="bg-white rounded-xl border border-zinc-200 p-5">
+    <div className="bg-white rounded-xl border border-zinc-200 p-5 min-w-0">
       <h3 className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-4">
         Weekly Activity
       </h3>
@@ -28,7 +28,7 @@ export function WeeklyChart({ data }: WeeklyChartProps) {
         </div>
       ) : (
         <div className="h-48">
-          <ResponsiveContainer width="100%" height="100%">
+          <ResponsiveContainer width="100%" height="100%" minWidth={0}>
             <AreaChart data={data}>
               <defs>
                 <linearGradient id="weeklyGrad" x1="0" y1="0" x2="0" y2="1">

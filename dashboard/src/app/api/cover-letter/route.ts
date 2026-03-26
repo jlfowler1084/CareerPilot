@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { BASE_RESUME } from "@/lib/base-resume"
 
 const COVER_LETTER_SYSTEM_PROMPT = `You are a cover letter writing expert. You will receive a candidate's resume (or summary), a job title, a company name, and optionally a job description. Write a professional 3-4 paragraph cover letter that:
@@ -20,6 +21,12 @@ If no specific job description is available (e.g. generic careers page), infer t
 
 export async function POST(req: NextRequest) {
   try {
+    const supabase = await createServerSupabaseClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
     const { title, company, url, jobDescription, resumeText } = await req.json()
 
     if (!title || !company) {

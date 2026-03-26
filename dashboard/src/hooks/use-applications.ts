@@ -130,12 +130,22 @@ export function useApplications() {
                 ? job.profile_id
                 : "",
           notes: "",
+          tailored_resume: "tailored_resume" in job ? (job as Partial<Application>).tailored_resume ?? null : null,
+          cover_letter: "cover_letter" in job ? (job as Partial<Application>).cover_letter ?? null : null,
         })
         .select()
         .single()
 
       if (!error && data) {
         await logActivity(`Tracked: ${data.title} at ${data.company}`)
+
+        if (data.tailored_resume) {
+          await insertApplicationEvent(
+            data.id,
+            "resume_tailored",
+            `Resume tailored for ${data.title} at ${data.company}`
+          )
+        }
       }
 
       return { data, error }

@@ -31,13 +31,13 @@ export function PipelineChart({ byStatus }: PipelineChartProps) {
   const total = data.reduce((sum, d) => sum + d.value, 0)
 
   return (
-    <div className="bg-white rounded-xl border border-zinc-200 p-5">
+    <div className="bg-white rounded-xl border border-zinc-200 p-5 min-w-0">
       <h3 className="text-xs font-medium text-zinc-500 uppercase tracking-wider mb-4">
         Pipeline
       </h3>
       <div className="flex items-center gap-4">
-        <div className="w-48 h-48">
-          <ResponsiveContainer width="100%" height="100%">
+        <div className="w-48 h-48 flex-shrink-0">
+          <ResponsiveContainer width="100%" height="100%" minWidth={0}>
             <PieChart>
               <Pie
                 data={data}

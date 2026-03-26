@@ -103,6 +103,7 @@ export interface Application {
   profile_id: string
   updated_at: string
   tailored_resume: string | null
+  cover_letter: string | null
   interview_date: string | null
   follow_up_date: string | null
   calendar_event_id: string | null

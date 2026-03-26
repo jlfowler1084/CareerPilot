@@ -262,7 +262,7 @@ class GmailScanner:
         try:
             client = self._get_claude_client()
             response = client.messages.create(
-                model="claude-sonnet-4-6",
+                model=settings.MODEL_HAIKU,
                 max_tokens=256,
                 system=CLASSIFICATION_SYSTEM_PROMPT,
                 messages=[{"role": "user", "content": user_content}],

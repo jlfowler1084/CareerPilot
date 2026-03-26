@@ -7,9 +7,10 @@ import { CommunicationsSection } from "@/components/applications/communications-
 import { InterviewPrepSection } from "@/components/applications/interview-prep-section"
 import { CoachingSection } from "@/components/coaching/coaching-section"
 import { TailorModal } from "@/components/applications/tailor-modal"
+import { CoverLetterModal } from "@/components/applications/cover-letter-modal"
 import { ScheduleModal } from "@/components/applications/schedule-modal"
 import { STATUSES } from "@/lib/constants"
-import { ExternalLink, Trash2, Save, Mail, Sparkles, FileCheck, CalendarDays, CalendarCheck } from "lucide-react"
+import { ExternalLink, Trash2, Save, Mail, Sparkles, FileCheck, CalendarDays, CalendarCheck, FileText } from "lucide-react"
 import type { Application, ApplicationStatus } from "@/types"
 
 const SCHEDULABLE_STATUSES: ApplicationStatus[] = ["applied", "phone_screen", "interview", "offer"]
@@ -34,6 +35,7 @@ export function ApplicationRow({
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [tailorOpen, setTailorOpen] = useState(false)
   const [tailorViewMode, setTailorViewMode] = useState(false)
+  const [coverLetterOpen, setCoverLetterOpen] = useState(false)
   const [scheduleOpen, setScheduleOpen] = useState(false)
 
   async function handleStatusChange(e: React.ChangeEvent<HTMLSelectElement>) {
@@ -174,6 +176,18 @@ export function ApplicationRow({
             </button>
           ) : null}
 
+          {/* Cover Letter */}
+          {application.url && (
+            <button
+              onClick={() => setCoverLetterOpen(true)}
+              className="text-[10px] font-semibold px-2 py-1 rounded-md text-zinc-400 hover:text-blue-600 transition-colors flex items-center gap-1"
+              title="Generate cover letter for this job"
+            >
+              <FileText size={10} />
+              Cover Letter
+            </button>
+          )}
+
           {/* Schedule */}
           {SCHEDULABLE_STATUSES.includes(application.status) && (
             <button
@@ -213,6 +227,12 @@ export function ApplicationRow({
         onSave={async (tailoredResume) => {
           await onUpdate(application.id, { tailored_resume: tailoredResume })
         }}
+      />
+
+      <CoverLetterModal
+        application={application}
+        open={coverLetterOpen}
+        onOpenChange={setCoverLetterOpen}
       />
 
       <ScheduleModal

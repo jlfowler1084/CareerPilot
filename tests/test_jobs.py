@@ -10,13 +10,16 @@ import pytest
 from src.jobs.searcher import JobSearcher, _is_irrelevant, _parse_json_response
 
 
-def _mock_beta_response(text):
-    """Create a mock beta messages response."""
-    mock_response = MagicMock()
-    mock_block = MagicMock()
-    mock_block.text = text
-    mock_response.content = [mock_block]
-    return mock_response
+def _mock_dice_mcp_result(jobs):
+    """Create a mock Dice MCP result dict matching the direct HTTP response shape."""
+    return {
+        "structuredContent": {
+            "data": jobs,
+            "meta": {"currentPage": 1, "pageCount": 1, "pageSize": 10, "totalResults": len(jobs)},
+        },
+        "content": [{"type": "text", "text": json.dumps({"data": jobs})}],
+        "isError": False,
+    }
 
 
 # --- Search Profile Tests ---
@@ -75,47 +78,36 @@ class TestSearchIndeed:
 class TestSearchDice:
     def test_returns_parsed_results(self):
         """Parses Dice MCP response into structured results."""
-        results_json = json.dumps([
-            {"title": "DevOps Engineer", "company": "Cloud Corp",
-             "location": "Indianapolis, IN", "salary": "$120k",
-             "url": "https://dice.com/job/1", "posted_date": "3 days ago",
-             "job_type": "Full-time", "easy_apply": True},
-        ])
+        dice_jobs = [
+            {"title": "DevOps Engineer", "companyName": "Cloud Corp",
+             "jobLocation": {"displayName": "Indianapolis, IN"}, "salary": "$120k",
+             "detailsPageUrl": "https://dice.com/job/1", "postedDate": "2026-03-20T00:00:00Z",
+             "employmentType": "Full-time", "easyApply": True, "isRemote": False},
+        ]
 
         searcher = JobSearcher(anthropic_api_key="fake-key")
-        with patch.object(searcher, "_get_client") as mock_fn:
-            mock_client = MagicMock()
-            mock_client.beta.messages.create.return_value = _mock_beta_response(results_json)
-            mock_fn.return_value = mock_client
-
+        with patch("src.jobs.searcher._search_dice_direct", return_value=_mock_dice_mcp_result(dice_jobs)):
             results = searcher.search_dice("DevOps engineer", "Indianapolis, IN")
 
         assert len(results) == 1
         assert results[0]["source"] == "dice"
         assert results[0]["easy_apply"] is True
+        assert results[0]["company"] == "Cloud Corp"
 
     def test_contract_only_flag(self):
-        """Passes contract_only in the prompt."""
+        """Passes contract_only to the direct MCP call."""
         searcher = JobSearcher(anthropic_api_key="fake-key")
-        with patch.object(searcher, "_get_client") as mock_fn:
-            mock_client = MagicMock()
-            mock_client.beta.messages.create.return_value = _mock_beta_response("[]")
-            mock_fn.return_value = mock_client
-
+        with patch("src.jobs.searcher._search_dice_direct", return_value=_mock_dice_mcp_result([])) as mock_fn:
             searcher.search_dice("infra engineer", "Indianapolis, IN", contract_only=True)
 
-            call_args = mock_client.beta.messages.create.call_args
-            user_msg = call_args[1]["messages"][0]["content"]
-            assert "contract" in user_msg.lower()
+            mock_fn.assert_called_once()
+            call_kwargs = mock_fn.call_args
+            assert call_kwargs[1]["contract_only"] is True
 
     def test_mcp_failure_returns_empty(self):
         """Returns empty list on MCP failure."""
         searcher = JobSearcher(anthropic_api_key="fake-key")
-        with patch.object(searcher, "_get_client") as mock_fn:
-            mock_client = MagicMock()
-            mock_client.beta.messages.create.side_effect = Exception("MCP error")
-            mock_fn.return_value = mock_client
-
+        with patch("src.jobs.searcher._search_dice_direct", side_effect=Exception("MCP error")):
             results = searcher.search_dice("test", "test")
 
         assert results == []
@@ -185,16 +177,14 @@ class TestRunProfiles:
         """Runs only selected profiles."""
         searcher = JobSearcher(anthropic_api_key="fake-key")
 
-        results_json = json.dumps([
-            {"title": "SysAdmin", "company": "Corp", "location": "Indy",
-             "salary": "", "url": "", "posted_date": "", "job_type": ""},
-        ])
+        dice_jobs = [
+            {"title": "SysAdmin", "companyName": "Corp",
+             "jobLocation": {"displayName": "Indy"},
+             "salary": "", "detailsPageUrl": "", "postedDate": "",
+             "employmentType": "", "easyApply": False, "isRemote": False},
+        ]
 
-        with patch.object(searcher, "_get_client") as mock_fn:
-            mock_client = MagicMock()
-            mock_client.beta.messages.create.return_value = _mock_beta_response(results_json)
-            mock_fn.return_value = mock_client
-
+        with patch("src.jobs.searcher._search_dice_direct", return_value=_mock_dice_mcp_result(dice_jobs)):
             results = searcher.run_profiles(["sysadmin_local"])
 
         assert len(results) >= 1
@@ -210,18 +200,18 @@ class TestRunProfiles:
         """Irrelevant results are filtered during run_profiles."""
         searcher = JobSearcher(anthropic_api_key="fake-key")
 
-        results_json = json.dumps([
-            {"title": "Systems Admin", "company": "Good Corp", "location": "Indy",
-             "salary": "", "url": "", "posted_date": "", "job_type": ""},
-            {"title": "HVAC Technician", "company": "Bad Corp", "location": "Indy",
-             "salary": "", "url": "", "posted_date": "", "job_type": ""},
-        ])
+        dice_jobs = [
+            {"title": "Systems Admin", "companyName": "Good Corp",
+             "jobLocation": {"displayName": "Indy"},
+             "salary": "", "detailsPageUrl": "", "postedDate": "",
+             "employmentType": "", "easyApply": False, "isRemote": False},
+            {"title": "HVAC Technician", "companyName": "Bad Corp",
+             "jobLocation": {"displayName": "Indy"},
+             "salary": "", "detailsPageUrl": "", "postedDate": "",
+             "employmentType": "", "easyApply": False, "isRemote": False},
+        ]
 
-        with patch.object(searcher, "_get_client") as mock_fn:
-            mock_client = MagicMock()
-            mock_client.beta.messages.create.return_value = _mock_beta_response(results_json)
-            mock_fn.return_value = mock_client
-
+        with patch("src.jobs.searcher._search_dice_direct", return_value=_mock_dice_mcp_result(dice_jobs)):
             results = searcher.run_profiles(["sysadmin_local"])
 
         titles = [r["title"] for r in results]
