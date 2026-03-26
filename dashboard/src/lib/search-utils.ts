@@ -5,14 +5,38 @@ function jobKey(job: Pick<Job, "title" | "company">): string {
   return `${job.title}|||${job.company}`.toLowerCase()
 }
 
+function normalizeTitle(title: string): string {
+  return title.toLowerCase().replace(/[\s\-—]+/g, " ").trim()
+}
+
 export function deduplicateJobs(jobs: Job[]): Job[] {
   const seen = new Set<string>()
-  return jobs.filter((job) => {
+  const seenByTitle = new Map<string, number>() // normalized title -> index in result
+  const result: Job[] = []
+
+  for (const job of jobs) {
     const key = jobKey(job)
-    if (seen.has(key)) return false
+    if (seen.has(key)) continue
     seen.add(key)
-    return true
-  })
+
+    const normTitle = normalizeTitle(job.title)
+    const existingIdx = seenByTitle.get(normTitle)
+
+    if (existingIdx !== undefined) {
+      const existing = result[existingIdx]
+      // Keep the one with a real company name
+      if (existing.company.toLowerCase() === "unknown" && job.company.toLowerCase() !== "unknown") {
+        result[existingIdx] = job
+      }
+      // Either way, skip the duplicate title
+      continue
+    }
+
+    seenByTitle.set(normTitle, result.length)
+    result.push(job)
+  }
+
+  return result
 }
 
 export function filterIrrelevant(jobs: Job[]): Job[] {

@@ -11,24 +11,27 @@ import {
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
-import { Loader2, Copy, Check, FileText } from "lucide-react"
+import { Loader2, Copy, Check, FileText, Save } from "lucide-react"
 import type { Application } from "@/types"
 
 interface CoverLetterModalProps {
   application: Pick<Application, "title" | "company" | "url">
   open: boolean
   onOpenChange: (open: boolean) => void
+  onSave?: (coverLetter: string) => Promise<void>
 }
 
 export function CoverLetterModal({
   application,
   open,
   onOpenChange,
+  onSave,
 }: CoverLetterModalProps) {
   const [loading, setLoading] = useState(false)
   const [coverLetter, setCoverLetter] = useState("")
   const [error, setError] = useState("")
   const [copied, setCopied] = useState(false)
+  const [saving, setSaving] = useState(false)
 
   async function handleGenerate() {
     setLoading(true)
@@ -66,6 +69,20 @@ export function CoverLetterModal({
     setCopied(true)
     toast.success("Copied to clipboard")
     setTimeout(() => setCopied(false), 2000)
+  }
+
+  async function handleSave() {
+    if (!onSave) return
+    setSaving(true)
+    try {
+      await onSave(coverLetter)
+      toast.success(`Cover letter saved for ${application.company}`)
+      onOpenChange(false)
+    } catch {
+      toast.error("Failed to save cover letter")
+    } finally {
+      setSaving(false)
+    }
   }
 
   function handleOpenChange(next: boolean) {
@@ -142,6 +159,16 @@ export function CoverLetterModal({
               <Button variant="outline" onClick={handleGenerate}>
                 Regenerate
               </Button>
+              {onSave && (
+                <Button onClick={handleSave} disabled={saving}>
+                  {saving ? (
+                    <Loader2 className="size-3.5 mr-1.5 animate-spin" />
+                  ) : (
+                    <Save className="size-3.5 mr-1.5" />
+                  )}
+                  Save
+                </Button>
+              )}
             </DialogFooter>
           </div>
         )}

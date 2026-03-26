@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { BASE_RESUME } from "@/lib/base-resume"
 
 const TAILOR_SYSTEM_PROMPT = `You are a resume tailoring expert. You will receive a candidate's resume and a job description. Respond with ONLY a valid JSON object containing exactly two keys: fitSummary (2-3 sentences analyzing how the candidate fits this role) and tailoredResume (the complete rewritten resume with bullets reordered to emphasize relevant experience). Rules: Never fabricate experience. Only reorder, re-emphasize, and naturally add keywords from the job description. Keep all sections: Professional Summary, Core Skills, Professional Experience, Education, Technical Knowledge.
@@ -7,6 +8,12 @@ CRITICAL: ALWAYS produce a complete tailored resume. Never respond saying you ne
 
 export async function POST(req: NextRequest) {
   try {
+    const supabase = await createServerSupabaseClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
     const { title, company, url, jobDescription, baseResume } = await req.json()
 
     if (!title || !company) {

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useRef } from "react"
 import { useSearch } from "@/hooks/use-search"
 import { useApplications } from "@/hooks/use-applications"
 import { ProfileChips } from "@/components/search/profile-chips"
@@ -28,7 +28,7 @@ export default function SearchPage() {
     lastSearchTime,
   } = useSearch()
 
-  const { applications, addApplication } = useApplications()
+  const { applications, addApplication, updateApplication } = useApplications()
 
   // Track which jobs have been tracked in this session
   const [sessionTracked, setSessionTracked] = useState<Set<string>>(new Set())
@@ -47,14 +47,43 @@ export default function SearchPage() {
   const [tailorJob, setTailorJob] = useState<Job | null>(null)
   const [coverLetterJob, setCoverLetterJob] = useState<Job | null>(null)
 
+  // Pre-generated content maps (Tailor/CoverLetter → Track flow)
+  const tailoredResumesRef = useRef<Map<string, string>>(new Map())
+  const coverLettersRef = useRef<Map<string, string>>(new Map())
+
+  // App ID for Track+Tailor flow
+  const [pendingTailorAppId, setPendingTailorAppId] = useState<string | null>(null)
+
+  function jobKey(job: { title: string; company: string }) {
+    return `${job.title}|||${job.company}`.toLowerCase()
+  }
+
   async function handleTrack(job: Job) {
-    const key = `${job.title}|||${job.company}`.toLowerCase()
+    const key = jobKey(job)
     setSessionTracked((prev) => new Set(prev).add(key))
-    await addApplication(job, "search")
+    const result = await addApplication(job, "search")
+    // Attach pre-generated content if user tailored/wrote cover letter before tracking
+    if (result?.data?.id) {
+      const savedResume = tailoredResumesRef.current.get(key)
+      const savedLetter = coverLettersRef.current.get(key)
+      if (savedResume || savedLetter) {
+        await updateApplication(result.data.id, {
+          ...(savedResume ? { tailored_resume: savedResume } : {}),
+          ...(savedLetter ? { cover_letter: savedLetter } : {}),
+        })
+        tailoredResumesRef.current.delete(key)
+        coverLettersRef.current.delete(key)
+      }
+    }
   }
 
   async function handleTrackAndTailor(job: Job) {
-    await handleTrack(job)
+    const key = jobKey(job)
+    setSessionTracked((prev) => new Set(prev).add(key))
+    const result = await addApplication(job, "search")
+    if (result?.data?.id) {
+      setPendingTailorAppId(result.data.id)
+    }
     setTailorJob(job)
   }
 
@@ -147,8 +176,23 @@ export default function SearchPage() {
         <TailorModal
           application={{ title: tailorJob.title, company: tailorJob.company, url: tailorJob.url, tailored_resume: null }}
           open={!!tailorJob}
-          onOpenChange={(open) => !open && setTailorJob(null)}
-          onSave={async () => { setTailorJob(null) }}
+          onOpenChange={(open) => {
+            if (!open) {
+              setTailorJob(null)
+              setPendingTailorAppId(null)
+            }
+          }}
+          onSave={async (resume) => {
+            if (pendingTailorAppId) {
+              // Track+Tailor flow: persist to the application record
+              await updateApplication(pendingTailorAppId, { tailored_resume: resume })
+              setPendingTailorAppId(null)
+            } else {
+              // Standalone Tailor: stash for when Track is clicked later
+              tailoredResumesRef.current.set(jobKey(tailorJob), resume)
+            }
+            setTailorJob(null)
+          }}
         />
       )}
 
@@ -158,6 +202,10 @@ export default function SearchPage() {
           application={{ title: coverLetterJob.title, company: coverLetterJob.company, url: coverLetterJob.url }}
           open={!!coverLetterJob}
           onOpenChange={(open) => !open && setCoverLetterJob(null)}
+          onSave={async (letter) => {
+            coverLettersRef.current.set(jobKey(coverLetterJob), letter)
+            setCoverLetterJob(null)
+          }}
         />
       )}
     </div>
