@@ -89,7 +89,7 @@ class JournalManager:
         try:
             client = self._get_claude_client()
             response = client.messages.create(
-                model="claude-sonnet-4-6",
+                model=settings.MODEL_HAIKU,
                 max_tokens=128,
                 system=TAG_SYSTEM_PROMPT,
                 messages=[{"role": "user", "content": content[:2000]}],
