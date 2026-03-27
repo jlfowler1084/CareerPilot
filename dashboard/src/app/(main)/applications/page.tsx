@@ -148,7 +148,11 @@ function ApplicationsContent() {
       />
 
       {/* URL Import */}
-      <UrlImport onSave={createFromExtraction} onUpdate={updateApplication} />
+      <UrlImport
+        onSave={createFromExtraction}
+        onUpdate={updateApplication}
+        existingUrls={applications.filter((a) => a.url).map((a) => a.url!)}
+      />
 
       {/* Add Form */}
       <AddForm onAdd={addApplication} />

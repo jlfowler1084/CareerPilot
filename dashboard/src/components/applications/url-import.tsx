@@ -9,6 +9,20 @@ import type { ExtractedJob, Application } from "@/types"
 interface UrlImportProps {
   onSave: (extracted: ExtractedJob, url: string) => Promise<{ data: Application | null; error: unknown }>
   onUpdate: (id: string, updates: Partial<Application>) => Promise<unknown>
+  existingUrls?: string[]
+}
+
+const RESUME_SKILLS = [
+  "powershell", "windows server", "active directory", "vmware", "vsphere",
+  "powercli", "microsoft 365", "m365", "azure", "azure ad", "entra id",
+  "splunk", "solarwinds", "sccm", "group policy", "dns", "dhcp", "vlan",
+  "vpn", "github", "git", "python", "itil", "security+", "exchange",
+  "cisco", "documentation", "runbooks", "nimble", "sql", "linux",
+]
+
+function isResumeMatch(skill: string): boolean {
+  const lower = skill.toLowerCase()
+  return RESUME_SKILLS.some((rs) => lower.includes(rs) || rs.includes(lower))
 }
 
 const SOURCE_OPTIONS = [
@@ -22,7 +36,7 @@ const SOURCE_OPTIONS = [
   "Company Site",
 ]
 
-export function UrlImport({ onSave, onUpdate }: UrlImportProps) {
+export function UrlImport({ onSave, onUpdate, existingUrls = [] }: UrlImportProps) {
   const [url, setUrl] = useState("")
   const [loading, setLoading] = useState(false)
   const [extracted, setExtracted] = useState<ExtractedJob | null>(null)
@@ -53,9 +67,34 @@ export function UrlImport({ onSave, onUpdate }: UrlImportProps) {
     }
   }
 
+  function handlePaste(e: React.ClipboardEvent<HTMLInputElement>) {
+    const pasted = e.clipboardData.getData("text").trim()
+    try {
+      const parsed = new URL(pasted)
+      if (["http:", "https:"].includes(parsed.protocol)) {
+        // Auto-extract after a short delay to let the input update
+        setTimeout(() => {
+          setUrl(pasted)
+          extractUrl(pasted)
+        }, 100)
+      }
+    } catch {
+      // Not a URL, ignore
+    }
+  }
+
   async function handleExtract() {
-    const trimmed = url.trim()
+    extractUrl(url.trim())
+  }
+
+  async function extractUrl(rawUrl: string) {
+    const trimmed = rawUrl.trim()
     if (!trimmed) return
+
+    // Duplicate check
+    if (existingUrls.some((u) => u === trimmed)) {
+      toast.warning("You're already tracking a job at this URL")
+    }
 
     setLoading(true)
     setExtracted(null)
@@ -178,7 +217,8 @@ export function UrlImport({ onSave, onUpdate }: UrlImportProps) {
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="Paste job URL..."
+                onPaste={handlePaste}
+                placeholder="Paste job URL to auto-extract..."
                 disabled={loading}
                 className="w-full text-sm border border-zinc-200 rounded-lg pl-9 pr-3 py-2.5 focus:outline-none focus:ring-1 focus:ring-amber-300 disabled:opacity-50"
               />
@@ -363,14 +403,22 @@ export function UrlImport({ onSave, onUpdate }: UrlImportProps) {
                     Key Requirements
                   </label>
                   <div className="flex flex-wrap gap-1.5">
-                    {extracted.key_requirements.map((req, i) => (
-                      <span
-                        key={i}
-                        className="inline-block text-[10px] px-2 py-1 bg-zinc-100 text-zinc-700 rounded-full"
-                      >
-                        {req}
-                      </span>
-                    ))}
+                    {extracted.key_requirements.map((req, i) => {
+                      const match = isResumeMatch(req)
+                      return (
+                        <span
+                          key={i}
+                          className={`inline-block text-[10px] px-2 py-1 rounded-full ${
+                            match
+                              ? "bg-emerald-100 text-emerald-700"
+                              : "bg-amber-100 text-amber-700"
+                          }`}
+                          title={match ? "Matches your resume" : "Gap — not on resume"}
+                        >
+                          {req}
+                        </span>
+                      )
+                    })}
                   </div>
                 </div>
               )}
