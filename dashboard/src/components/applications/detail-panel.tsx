@@ -14,6 +14,7 @@ import { STATUSES } from "@/lib/constants"
 import { useApplicationEvents } from "@/hooks/use-application-events"
 import { TailorModal } from "@/components/applications/tailor-modal"
 import { ScheduleModal } from "@/components/applications/schedule-modal"
+import { CommunicationsSection } from "@/components/applications/communications-section"
 import { formatDistanceToNow } from "date-fns"
 import {
   ExternalLink,
@@ -505,7 +506,10 @@ export function DetailPanel({
               )}
             </Section>
 
-            {/* ===== Section 6: Notes ===== */}
+            {/* ===== Section 6: Communications ===== */}
+            <CommunicationsSection application={application} />
+
+            {/* ===== Section 7: Notes ===== */}
             <Section title="Notes" defaultOpen={!!application.notes}>
               <div className="space-y-2">
                 <textarea
