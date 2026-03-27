@@ -1,10 +1,12 @@
 "use client"
 
-import { useState, useRef } from "react"
+import { useState, useRef, useCallback } from "react"
 import { useSearch } from "@/hooks/use-search"
+import { useSearchHistory } from "@/hooks/use-search-history"
 import { useApplications } from "@/hooks/use-applications"
 import { ProfileChips } from "@/components/search/profile-chips"
 import { SearchControls } from "@/components/search/search-controls"
+import { SearchHistory } from "@/components/search/search-history"
 import { JobCard } from "@/components/shared/job-card"
 import { TailorModal } from "@/components/applications/tailor-modal"
 import { CoverLetterModal } from "@/components/applications/cover-letter-modal"
@@ -16,8 +18,11 @@ import { AlertCircle, SearchX } from "lucide-react"
 import type { Job } from "@/types"
 
 export default function SearchPage() {
+  const history = useSearchHistory()
+
   const {
     searchResults,
+    setSearchResults,
     selectedProfiles,
     toggleProfile,
     selectAll,
@@ -30,9 +35,42 @@ export default function SearchPage() {
     errors,
     isNew,
     lastSearchTime,
-  } = useSearch()
+  } = useSearch({
+    onRunCreated: (runId) => {
+      history.loadHistory()
+      history.setActiveRunId(runId)
+    },
+  })
 
   const { applications, addApplication, updateApplication } = useApplications()
+
+  const handleSelectRun = useCallback(
+    async (runId: string) => {
+      history.setActiveRunId(runId)
+      const results = await history.loadRunResults(runId)
+      setSearchResults(results)
+    },
+    [history, setSearchResults]
+  )
+
+  const handleDeleteRun = useCallback(
+    async (runId: string) => {
+      const wasActive = history.activeRunId === runId
+      await history.deleteRun(runId)
+      if (wasActive && history.runs.length > 1) {
+        const remaining = history.runs.filter((r) => r.id !== runId)
+        if (remaining.length > 0) {
+          await handleSelectRun(remaining[0].id)
+        }
+      }
+    },
+    [history, handleSelectRun]
+  )
+
+  const handleClearAll = useCallback(async () => {
+    await history.clearAll()
+    setSearchResults([])
+  }, [history, setSearchResults])
 
   // Sort state
   const [sortBy, setSortBy] = useState<"newest" | "salary" | "company">("newest")
@@ -206,6 +244,16 @@ export default function SearchPage() {
           </ul>
         </div>
       )}
+
+      {/* Search History */}
+      <SearchHistory
+        runs={history.runs}
+        activeRunId={history.activeRunId}
+        onSelectRun={handleSelectRun}
+        onDeleteRun={handleDeleteRun}
+        onClearAll={handleClearAll}
+        loading={history.loading}
+      />
 
       {/* Results */}
       {searchResults.length > 0 && (
