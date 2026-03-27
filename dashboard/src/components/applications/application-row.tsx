@@ -69,19 +69,15 @@ export function ApplicationRow({
 
   return (
     <div
-      className="bg-white rounded-xl border border-zinc-200 p-4 hover:shadow-md transition-shadow cursor-pointer"
-      onClick={onClick}
-      role="button"
-      tabIndex={0}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault()
-          onClick?.()
-        }
-      }}
+      className="bg-white rounded-xl border border-zinc-200 p-4 hover:shadow-md transition-shadow"
     >
       <div className="flex items-start justify-between gap-3">
-        <div className="flex-1 min-w-0">
+        <div
+          className="flex-1 min-w-0 cursor-pointer"
+          onClick={onClick}
+          tabIndex={0}
+          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick?.() } }}
+        >
           <div className="flex items-center gap-2 mb-1">
             <span className="font-bold text-sm text-zinc-900 leading-tight truncate">
               {application.title}
@@ -286,17 +282,20 @@ export function ApplicationRow({
         )}
       </div>
 
-      {/* Communications (linked emails) */}
-      <CommunicationsSection application={application} />
+      {/* Expandable sections — stop propagation so clicking inside does not open the detail panel */}
+      <div onClick={(e) => e.stopPropagation()}>
+        {/* Communications (linked emails) */}
+        <CommunicationsSection application={application} />
 
-      {/* Conversations */}
-      <ConversationSection application={application} />
+        {/* Conversations */}
+        <ConversationSection application={application} />
 
-      {/* Interview Prep */}
-      <InterviewPrepSection application={application} />
+        {/* Interview Prep */}
+        <InterviewPrepSection application={application} />
 
-      {/* Performance Coach */}
-      <CoachingSection application={application} />
+        {/* Performance Coach */}
+        <CoachingSection application={application} />
+      </div>
     </div>
   )
 }

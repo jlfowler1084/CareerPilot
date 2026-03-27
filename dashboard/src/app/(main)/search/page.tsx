@@ -9,7 +9,9 @@ import { JobCard } from "@/components/shared/job-card"
 import { TailorModal } from "@/components/applications/tailor-modal"
 import { CoverLetterModal } from "@/components/applications/cover-letter-modal"
 import { JobDetailPane } from "@/components/search/job-detail-pane"
+import { ApplyFlow } from "@/components/search/apply-flow"
 import { EmptyState } from "@/components/shared/empty-state"
+import { logActivity } from "@/hooks/use-activity-log"
 import { AlertCircle, SearchX } from "lucide-react"
 import type { Job } from "@/types"
 
@@ -48,6 +50,9 @@ export default function SearchPage() {
 
   // Job detail pane state
   const [detailJob, setDetailJob] = useState<Job | null>(null)
+
+  // Apply flow state
+  const [applyJob, setApplyJob] = useState<Job | null>(null)
 
   // Pre-generated content maps (Tailor/CoverLetter → Track flow)
   const tailoredResumesRef = useRef<Map<string, string>>(new Map())
@@ -99,6 +104,62 @@ export default function SearchPage() {
     setTailorJob(job)
     setTrackedAppId(result?.data?.id ?? null)
     setTailorOpen(true)
+  }
+
+  function handleApply(job: Job) {
+    setApplyJob(job)
+  }
+
+  async function handleApplied(job: Job) {
+    const key = jobKey(job)
+    const existing = applications.find(
+      (a) =>
+        a.title.toLowerCase() === job.title.toLowerCase() &&
+        a.company.toLowerCase() === job.company.toLowerCase()
+    )
+
+    if (existing) {
+      // Update status to "applied" — useApplications auto-sets date_applied
+      await updateApplication(existing.id, { status: "applied" })
+    } else {
+      // Track + apply in one step, consolidate writes
+      setSessionTracked((prev) => new Set(prev).add(key))
+      const savedResume = tailoredResumesRef.current.get(key)
+      const savedLetter = coverLettersRef.current.get(key)
+      const result = await addApplication(job, "search")
+      if (result?.data?.id) {
+        // Single update: status + any pre-generated content
+        await updateApplication(result.data.id, {
+          status: "applied",
+          ...(savedResume ? { tailored_resume: savedResume } : {}),
+          ...(savedLetter ? { cover_letter: savedLetter } : {}),
+        })
+        if (savedResume) tailoredResumesRef.current.delete(key)
+        if (savedLetter) coverLettersRef.current.delete(key)
+      }
+    }
+
+    await logActivity(`Applied to ${job.title} at ${job.company}`)
+    setApplyJob(null)
+  }
+
+  function getJobContent(job: Job): { tailoredResume: string | null; coverLetter: string | null } {
+    const key = jobKey(job)
+    // Check in-memory refs first (pre-track stashed content)
+    const refResume = tailoredResumesRef.current.get(key) ?? null
+    const refLetter = coverLettersRef.current.get(key) ?? null
+
+    // Then check tracked application record
+    const app = applications.find(
+      (a) =>
+        a.title.toLowerCase() === job.title.toLowerCase() &&
+        a.company.toLowerCase() === job.company.toLowerCase()
+    )
+
+    return {
+      tailoredResume: refResume || app?.tailored_resume || null,
+      coverLetter: refLetter || app?.cover_letter || null,
+    }
   }
 
   return (
@@ -186,6 +247,7 @@ export default function SearchPage() {
                 key={`${job.title}-${job.company}-${index}`}
                 job={job}
                 onTrack={handleTrack}
+                onApply={handleApply}
                 onTailor={handleTailor}
                 onCoverLetter={(j) => setCoverLetterJob(j)}
                 onTrackAndTailor={handleTrackAndTailor}
@@ -248,10 +310,28 @@ export default function SearchPage() {
         open={!!detailJob}
         onClose={() => setDetailJob(null)}
         onTrack={handleTrack}
+        onApply={handleApply}
         onTailor={handleTailor}
         onCoverLetter={(j) => setCoverLetterJob(j)}
         tracked={detailJob ? isTracked(detailJob) : false}
       />
+
+      {/* Apply Flow Modal */}
+      {applyJob && (() => {
+        const content = getJobContent(applyJob)
+        return (
+          <ApplyFlow
+            job={applyJob}
+            isOpen={!!applyJob}
+            onClose={() => setApplyJob(null)}
+            onApplied={handleApplied}
+            tailoredResume={content.tailoredResume}
+            coverLetter={content.coverLetter}
+            onTailor={handleTailor}
+            onCoverLetter={(j) => setCoverLetterJob(j)}
+          />
+        )
+      })()}
     </div>
   )
 }

@@ -1,9 +1,10 @@
-import { Plus, Sparkles, FileText } from "lucide-react"
+import { Plus, Sparkles, FileText, Send, Zap } from "lucide-react"
 import type { Job } from "@/types"
 
 interface JobCardProps {
   job: Job
   onTrack: (job: Job) => void
+  onApply?: (job: Job) => void
   onTailor?: (job: Job) => void
   onCoverLetter?: (job: Job) => void
   onTrackAndTailor?: (job: Job) => void
@@ -12,7 +13,7 @@ interface JobCardProps {
   isNew?: boolean
 }
 
-export function JobCard({ job, onTrack, onTailor, onCoverLetter, onTrackAndTailor, onViewDetails, tracked, isNew }: JobCardProps) {
+export function JobCard({ job, onTrack, onApply, onTailor, onCoverLetter, onTrackAndTailor, onViewDetails, tracked, isNew }: JobCardProps) {
   const sourceColor = job.source === "Indeed" ? "#2557a7" : "#0c7ff2"
 
   return (
@@ -79,6 +80,21 @@ export function JobCard({ job, onTrack, onTailor, onCoverLetter, onTrackAndTailo
               >
                 <Plus size={10} /> Track
               </button>
+              {job.url && onApply && (
+                <button
+                  type="button"
+                  onClick={() => onApply(job)}
+                  className={`text-[10px] font-semibold px-2.5 py-1 rounded-md transition-colors flex items-center gap-1 ${
+                    job.easyApply
+                      ? "bg-green-50 text-green-700 hover:bg-green-100 border border-green-200"
+                      : "bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200"
+                  }`}
+                  title="Start apply flow"
+                >
+                  {job.easyApply ? <Zap size={10} /> : <Send size={10} />}
+                  Apply
+                </button>
+              )}
               {job.url && onTailor && (
                 <button
                   onClick={() => onTailor(job)}
@@ -110,10 +126,27 @@ export function JobCard({ job, onTrack, onTailor, onCoverLetter, onTrackAndTailo
               )}
             </div>
           ) : (
-            <span className="text-[10px] font-bold px-2 py-1 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
-              <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 5l2.5 2.5L8 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
-              Tracking
-            </span>
+            <div className="flex flex-col items-end gap-1.5">
+              <span className="text-[10px] font-bold px-2 py-1 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
+                <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 5l2.5 2.5L8 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                Tracking
+              </span>
+              {job.url && onApply && (
+                <button
+                  type="button"
+                  onClick={() => onApply(job)}
+                  className={`text-[10px] font-semibold px-2.5 py-1 rounded-md transition-colors flex items-center gap-1 ${
+                    job.easyApply
+                      ? "bg-green-50 text-green-700 hover:bg-green-100 border border-green-200"
+                      : "bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200"
+                  }`}
+                  title="Start apply flow"
+                >
+                  {job.easyApply ? <Zap size={10} /> : <Send size={10} />}
+                  Apply
+                </button>
+              )}
+            </div>
           )}
         </div>
       </div>

@@ -15,6 +15,8 @@ import {
   Sparkles,
   FileText,
   AlertCircle,
+  Send,
+  Zap,
 } from "lucide-react"
 import type { Job } from "@/types"
 
@@ -23,6 +25,7 @@ interface JobDetailPaneProps {
   open: boolean
   onClose: () => void
   onTrack: (job: Job) => void
+  onApply?: (job: Job) => void
   onTailor?: (job: Job) => void
   onCoverLetter?: (job: Job) => void
   tracked: boolean
@@ -33,6 +36,7 @@ export function JobDetailPane({
   open,
   onClose,
   onTrack,
+  onApply,
   onTailor,
   onCoverLetter,
   tracked,
@@ -160,14 +164,29 @@ export function JobDetailPane({
                   <FileText size={12} /> Cover Letter
                 </button>
               )}
-              <a
-                href={job.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-xs font-semibold px-3 py-1.5 rounded-md text-zinc-500 hover:text-blue-600 border border-zinc-200 hover:border-blue-200 transition-colors flex items-center gap-1.5 ml-auto"
-              >
-                <ExternalLink size={12} /> View Original
-              </a>
+              {job.url && onApply ? (
+                <button
+                  type="button"
+                  onClick={() => onApply(job)}
+                  className={`text-xs font-semibold px-3 py-1.5 rounded-md transition-colors flex items-center gap-1.5 ml-auto ${
+                    job.easyApply
+                      ? "bg-green-50 text-green-700 hover:bg-green-100 border border-green-200"
+                      : "bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200"
+                  }`}
+                >
+                  {job.easyApply ? <Zap size={12} /> : <Send size={12} />}
+                  Apply
+                </button>
+              ) : (
+                <a
+                  href={job.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs font-semibold px-3 py-1.5 rounded-md text-zinc-500 hover:text-blue-600 border border-zinc-200 hover:border-blue-200 transition-colors flex items-center gap-1.5 ml-auto"
+                >
+                  <ExternalLink size={12} /> View Original
+                </a>
+              )}
             </div>
           </SheetHeader>
 
