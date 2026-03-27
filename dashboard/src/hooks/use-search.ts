@@ -100,7 +100,11 @@ async function callSearchApi(
   return { jobs: results, warnings }
 }
 
-export function useSearch() {
+interface UseSearchOptions {
+  onRunCreated?: (runId: string) => void
+}
+
+export function useSearch(options: UseSearchOptions = {}) {
   const [searchResults, setSearchResults] = useState<Job[]>([])
   const [selectedProfiles, setSelectedProfiles] = useState<Set<string>>(
     () => new Set(DEFAULT_PROFILES)
@@ -205,6 +209,9 @@ export function useSearch() {
 
     let allResults: Job[] = []
     const searchErrors: SearchError[] = []
+    const cacheIds: string[] = []
+    let indeedCount = 0
+    let diceCount = 0
 
     // Sequential iteration
     for (let i = 0; i < profiles.length; i++) {
@@ -223,17 +230,28 @@ export function useSearch() {
         allResults = [...allResults, ...jobs]
         searchErrors.push(...apiWarnings)
 
+        // Track source counts
+        for (const j of jobs) {
+          if (j.source === "Indeed") indeedCount++
+          else if (j.source === "Dice") diceCount++
+        }
+
         // Write to search_cache
         const {
           data: { user },
         } = await supabase.auth.getUser()
         if (user) {
-          await supabase.from("search_cache").insert({
-            user_id: user.id,
-            profile_id: profile.id,
-            results: jobs,
-            result_count: jobs.length,
-          })
+          const { data: cached } = await supabase
+            .from("search_cache")
+            .insert({
+              user_id: user.id,
+              profile_id: profile.id,
+              results: jobs,
+              result_count: jobs.length,
+            })
+            .select("id")
+            .single()
+          if (cached) cacheIds.push(cached.id)
         }
       } catch (err) {
         searchErrors.push({
@@ -261,6 +279,37 @@ export function useSearch() {
     )
     setNewFlags(newKeys)
 
+    // Create search run record and link cache entries
+    if (cacheIds.length > 0) {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+      if (user) {
+        const { data: run } = await supabase
+          .from("search_runs")
+          .insert({
+            user_id: user.id,
+            profiles_used: profiles.map((p) => p.label),
+            total_results: allResults.length,
+            indeed_count: indeedCount,
+            dice_count: diceCount,
+            new_count: newJobs.length,
+          })
+          .select("id")
+          .single()
+
+        if (run) {
+          // Link cached results to this run
+          await supabase
+            .from("search_cache")
+            .update({ search_run_id: run.id })
+            .in("id", cacheIds)
+
+          options.onRunCreated?.(run.id)
+        }
+      }
+    }
+
     // Show all results (new first, then seen)
     setSearchResults([...newJobs, ...seenJobs])
     setErrors(searchErrors)
@@ -272,7 +321,7 @@ export function useSearch() {
       ...prev,
       ...allResults.map((j) => ({ title: j.title, company: j.company })),
     ])
-  }, [selectedProfiles, cachedJobs])
+  }, [selectedProfiles, cachedJobs, options])
 
   const isNew = useCallback(
     (job: Job): boolean => {
@@ -285,6 +334,7 @@ export function useSearch() {
 
   return {
     searchResults,
+    setSearchResults,
     selectedProfiles,
     toggleProfile,
     selectAll,
