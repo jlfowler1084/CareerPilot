@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useCallback } from "react"
 import { createClient } from "@/lib/supabase/client"
 import type { Email } from "@/types"
 
@@ -18,6 +18,9 @@ export function useCommunications(applicationId: string) {
   const [totalEmails, setTotalEmails] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [loadCount, setLoadCount] = useState(0)
+
+  const refresh = useCallback(() => setLoadCount((c) => c + 1), [])
 
   useEffect(() => {
     if (!applicationId) {
@@ -90,7 +93,7 @@ export function useCommunications(applicationId: string) {
 
     load()
     return () => { cancelled = true }
-  }, [applicationId])
+  }, [applicationId, loadCount])
 
   const unlinkEmail = async (emailId: string) => {
     await supabase
@@ -118,5 +121,5 @@ export function useCommunications(applicationId: string) {
     setTotalEmails((prev) => Math.max(0, prev - 1))
   }
 
-  return { threads, totalEmails, loading, error, unlinkEmail }
+  return { threads, totalEmails, loading, error, unlinkEmail, refresh }
 }

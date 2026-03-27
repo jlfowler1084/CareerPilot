@@ -13,6 +13,7 @@ import {
   MessageSquare,
 } from "lucide-react"
 import { useCommunications, type GroupedThread } from "@/hooks/use-communications"
+import { LinkEmailModal } from "@/components/applications/link-email-modal"
 import { CategoryBadge } from "@/components/inbox/category-badge"
 import type { Application, Email } from "@/types"
 
@@ -23,8 +24,9 @@ interface CommunicationsSectionProps {
 const USER_EMAIL = "jlfowler1084@gmail.com"
 
 export function CommunicationsSection({ application }: CommunicationsSectionProps) {
-  const { threads, totalEmails, loading, error, unlinkEmail } = useCommunications(application.id)
+  const { threads, totalEmails, loading, error, unlinkEmail, refresh } = useCommunications(application.id)
   const [open, setOpen] = useState(totalEmails > 0)
+  const [linkModalOpen, setLinkModalOpen] = useState(false)
 
   // Re-sync open state when data loads
   const [prevTotal, setPrevTotal] = useState<number | null>(null)
@@ -74,15 +76,15 @@ export function CommunicationsSection({ application }: CommunicationsSectionProp
           )}
 
           {!loading && !error && threads.length === 0 && (
-            <div className="text-center py-4 space-y-1">
+            <div className="text-center py-4 space-y-2">
               <p className="text-xs text-zinc-400">No emails linked yet</p>
-              <p className="text-[10px] text-zinc-400">
-                Link emails from the{" "}
-                <a href="/inbox" className="text-blue-500 hover:underline">
-                  Inbox tab
-                </a>{" "}
-                to see conversations here.
-              </p>
+              <button
+                type="button"
+                onClick={() => setLinkModalOpen(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors"
+              >
+                <Mail size={12} /> Link Email from Inbox
+              </button>
             </div>
           )}
 
@@ -93,8 +95,26 @@ export function CommunicationsSection({ application }: CommunicationsSectionProp
               onUnlink={unlinkEmail}
             />
           ))}
+
+          {!loading && !error && threads.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setLinkModalOpen(true)}
+              className="w-full text-center py-1.5 text-[10px] text-blue-500 hover:text-blue-700 transition-colors"
+            >
+              + Link another email
+            </button>
+          )}
         </div>
       )}
+
+      <LinkEmailModal
+        applicationId={application.id}
+        companyName={application.company}
+        open={linkModalOpen}
+        onClose={() => setLinkModalOpen(false)}
+        onLinked={refresh}
+      />
     </div>
   )
 }
