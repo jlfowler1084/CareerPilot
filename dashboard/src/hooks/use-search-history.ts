@@ -128,10 +128,18 @@ export function useSearchHistory() {
     setActiveRunId(null)
   }, [runs])
 
-  // Load history on mount
+  // Load history on mount and set active run to most recent
+  // Future consideration: auto-delete runs older than 30 days
   useEffect(() => {
-    loadHistory()
-  }, [loadHistory])
+    loadHistory().then(() => {
+      setRuns((prev) => {
+        if (prev.length > 0 && !activeRunId) {
+          setActiveRunId(prev[0].id)
+        }
+        return prev
+      })
+    })
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   return {
     runs,
