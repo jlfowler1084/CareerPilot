@@ -52,6 +52,7 @@ export function EmailDetail({
   const [drafting, setDrafting] = useState(false)
   const [sending, setSending] = useState(false)
   const [sentConfirm, setSentConfirm] = useState(false)
+  const [tone, setTone] = useState<"professional" | "friendly" | "brief">("professional")
 
   const emailLinks = links.filter((l) => l.email_id === email.id)
   const linkedAppIds = new Set(emailLinks.map((l) => l.application_id))
@@ -133,7 +134,7 @@ export function EmailDetail({
       const resp = await fetch("/api/gmail/draft-reply", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ threadId: email.thread_id, emailId: email.gmail_id }),
+        body: JSON.stringify({ threadId: email.thread_id, emailId: email.gmail_id, tone }),
       })
       const data = await resp.json()
       if (data.error) throw new Error(data.error)
@@ -358,8 +359,18 @@ export function EmailDetail({
               <textarea
                 value={draft.body}
                 onChange={(e) => setDraft({ ...draft, body: e.target.value })}
+                onKeyDown={(e) => {
+                  if ((e.metaKey || e.ctrlKey) && e.key === "Enter" && draft.body.trim() && !sending) {
+                    e.preventDefault()
+                    handleSend()
+                  }
+                  if (e.key === "Escape") {
+                    e.preventDefault()
+                    setDraft(null)
+                  }
+                }}
                 rows={8}
-                placeholder="Reply body"
+                placeholder="Reply body (Ctrl+Enter to send, Esc to close)"
                 className="w-full text-sm px-3 py-2 rounded border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 resize-y leading-relaxed"
               />
               <div className="flex items-center gap-2">
@@ -381,6 +392,20 @@ export function EmailDetail({
                   <RefreshCw size={13} />
                   Regenerate
                 </button>
+                <select
+                  aria-label="Reply tone"
+                  value={tone}
+                  onChange={(e) => {
+                    const newTone = e.target.value as typeof tone
+                    setTone(newTone)
+                    handleDraftReply()
+                  }}
+                  className="text-xs px-2 py-1.5 rounded border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 cursor-pointer"
+                >
+                  <option value="professional">Professional</option>
+                  <option value="friendly">Friendly</option>
+                  <option value="brief">Brief</option>
+                </select>
                 <button
                   type="button"
                   onClick={() => setDraft(null)}

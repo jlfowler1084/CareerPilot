@@ -36,9 +36,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const { threadId, emailId } = await req.json()
+    const { threadId, emailId, tone = "professional" } = await req.json()
     if (!threadId) {
       return NextResponse.json({ error: "threadId is required" }, { status: 400 })
+    }
+
+    const toneGuidance: Record<string, string> = {
+      professional: "Be professional, measured, and thorough.",
+      friendly: "Be warm, conversational, and approachable while remaining professional.",
+      brief: "Be extremely concise — 2-3 sentences max. Get to the point fast.",
     }
 
     // Step 1: Fetch full thread from Gmail
@@ -89,7 +95,7 @@ export async function POST(req: NextRequest) {
       return `--- Message ${i + 1} (from: ${msg.from_email}, date: ${msg.date}) ---${isLatest ? " [LATEST - reply to this]" : ""}\n${msg.body}`
     }).join("\n\n")
 
-    const userContent = `Here is the email thread (oldest first):\n\n${threadFormatted}\n\nDraft a reply to the latest message.`
+    const userContent = `Here is the email thread (oldest first):\n\n${threadFormatted}\n\nTone: ${toneGuidance[tone] || toneGuidance.professional}\n\nDraft a reply to the latest message.`
 
     // Step 4: Call Anthropic API
     // Sonnet: requires nuanced tone-matching and professional writing
