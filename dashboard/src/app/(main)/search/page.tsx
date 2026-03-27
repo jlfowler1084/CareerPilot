@@ -112,7 +112,6 @@ export default function SearchPage() {
 
   async function handleApplied(job: Job) {
     const key = jobKey(job)
-    // Check if already tracked
     const existing = applications.find(
       (a) =>
         a.title.toLowerCase() === job.title.toLowerCase() &&
@@ -123,22 +122,20 @@ export default function SearchPage() {
       // Update status to "applied" — useApplications auto-sets date_applied
       await updateApplication(existing.id, { status: "applied" })
     } else {
-      // Track + apply in one step
+      // Track + apply in one step, consolidate writes
       setSessionTracked((prev) => new Set(prev).add(key))
+      const savedResume = tailoredResumesRef.current.get(key)
+      const savedLetter = coverLettersRef.current.get(key)
       const result = await addApplication(job, "search")
       if (result?.data?.id) {
-        await updateApplication(result.data.id, { status: "applied" })
-        // Attach pre-generated content if any
-        const savedResume = tailoredResumesRef.current.get(key)
-        const savedLetter = coverLettersRef.current.get(key)
-        if (savedResume || savedLetter) {
-          await updateApplication(result.data.id, {
-            ...(savedResume ? { tailored_resume: savedResume } : {}),
-            ...(savedLetter ? { cover_letter: savedLetter } : {}),
-          })
-          tailoredResumesRef.current.delete(key)
-          coverLettersRef.current.delete(key)
-        }
+        // Single update: status + any pre-generated content
+        await updateApplication(result.data.id, {
+          status: "applied",
+          ...(savedResume ? { tailored_resume: savedResume } : {}),
+          ...(savedLetter ? { cover_letter: savedLetter } : {}),
+        })
+        if (savedResume) tailoredResumesRef.current.delete(key)
+        if (savedLetter) coverLettersRef.current.delete(key)
       }
     }
 

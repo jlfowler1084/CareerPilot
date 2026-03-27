@@ -30,7 +30,7 @@ interface ApplyFlowProps {
   job: Job
   isOpen: boolean
   onClose: () => void
-  onApplied: (job: Job) => void
+  onApplied: (job: Job) => Promise<void>
   /** Pre-generated tailored resume text (from in-memory ref or saved application) */
   tailoredResume: string | null
   /** Pre-generated cover letter text (from in-memory ref or saved application) */
@@ -101,10 +101,14 @@ export function ApplyFlow({
     setView("confirm")
   }
 
-  function handleConfirmApplied() {
-    onApplied(job)
-    toast.success(`Applied to ${job.title} at ${job.company}`)
-    handleOpenChange(false)
+  async function handleConfirmApplied() {
+    try {
+      await onApplied(job)
+      toast.success(`Applied to ${job.title} at ${job.company}`)
+      handleOpenChange(false)
+    } catch {
+      toast.error("Failed to record application — please try again")
+    }
   }
 
   function handleNotYet() {
