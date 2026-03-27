@@ -18,7 +18,7 @@ export default function InboxPage() {
 
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set())
-  const [excludedFilters, setExcludedFilters] = useState<Set<string>>(new Set())
+  const [excludedFilters, setExcludedFilters] = useState<Set<string>>(new Set(["alerts"]))
   const [showUnlinkedOnly, setShowUnlinkedOnly] = useState(false)
   const [showDismissed, setShowDismissed] = useState(false)
 

@@ -40,11 +40,22 @@ export function FilterChips({
     excludedFilters.size === CONVERSATIONS_EXCLUDED.size &&
     [...CONVERSATIONS_EXCLUDED].every((id) => excludedFilters.has(id))
 
+  // Build excluded categories from excluded filter IDs
+  const excludedCategories = new Set<string>()
+  excludedFilters.forEach((filterId) => {
+    const filter = CATEGORY_FILTERS.find((f) => f.id === filterId)
+    if (filter) filter.categories.forEach((c) => excludedCategories.add(c))
+  })
+
   function getCategoryCount(filter: (typeof CATEGORY_FILTERS)[number]): number {
     return visible.filter((e) => filter.categories.includes(e.category)).length
   }
 
-  const allCount = visible.length
+  // "All" count reflects what's actually visible (respects excluded filters)
+  const effectiveVisible = excludedCategories.size > 0
+    ? visible.filter((e) => !excludedCategories.has(e.category))
+    : visible
+  const allCount = effectiveVisible.length
   const unlinkedCount = visible.filter((e) => !linkedEmailIds.has(e.id)).length
 
   return (
