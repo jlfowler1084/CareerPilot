@@ -39,6 +39,7 @@ const EVENT_ICONS: Record<string, string> = {
   resume_tailored: "\u2728",
   calendar_scheduled: "\uD83D\uDCC5",
   contact_added: "\uD83D\uDC64",
+  cover_letter_generated: "\uD83D\uDCE8",
   follow_up: "\uD83D\uDCDE",
 }
 

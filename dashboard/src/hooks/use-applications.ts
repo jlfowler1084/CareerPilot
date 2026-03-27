@@ -225,6 +225,15 @@ export function useApplications() {
           )
         }
 
+        // Log cover letter generated event
+        if (updates.cover_letter && !current?.cover_letter) {
+          await insertApplicationEvent(
+            id,
+            "cover_letter_generated",
+            `Cover letter generated for ${data.title} at ${data.company}`
+          )
+        }
+
         // Log calendar scheduled event
         if (updates.calendar_event_id && !current?.calendar_event_id) {
           await insertApplicationEvent(

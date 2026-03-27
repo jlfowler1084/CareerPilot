@@ -132,6 +132,7 @@ export type ApplicationEventType =
   | "resume_tailored"
   | "calendar_scheduled"
   | "contact_added"
+  | "cover_letter_generated"
   | "follow_up"
   | "tracked"
 
