@@ -76,7 +76,7 @@ export function ApplicationRow({
           className="flex-1 min-w-0 cursor-pointer"
           onClick={onClick}
           tabIndex={0}
-          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") onClick?.() }}
+          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick?.() } }}
         >
           <div className="flex items-center gap-2 mb-1">
             <span className="font-bold text-sm text-zinc-900 leading-tight truncate">
