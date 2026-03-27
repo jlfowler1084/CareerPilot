@@ -1,4 +1,4 @@
-import { ExternalLink, Plus, Sparkles, FileText } from "lucide-react"
+import { Plus, Sparkles, FileText } from "lucide-react"
 import type { Job } from "@/types"
 
 interface JobCardProps {
@@ -7,30 +7,31 @@ interface JobCardProps {
   onTailor?: (job: Job) => void
   onCoverLetter?: (job: Job) => void
   onTrackAndTailor?: (job: Job) => void
+  onViewDetails?: (job: Job) => void
   tracked: boolean
   isNew?: boolean
 }
 
-export function JobCard({ job, onTrack, onTailor, onCoverLetter, onTrackAndTailor, tracked, isNew }: JobCardProps) {
+export function JobCard({ job, onTrack, onTailor, onCoverLetter, onTrackAndTailor, onViewDetails, tracked, isNew }: JobCardProps) {
   const sourceColor = job.source === "Indeed" ? "#2557a7" : "#0c7ff2"
 
   return (
     <div
-      className="bg-white rounded-xl border border-zinc-200 p-4 hover:shadow-md transition-all hover:-translate-y-px group"
+      className="bg-white rounded-xl border border-zinc-200 p-4 hover:shadow-md transition-all hover:-translate-y-px group cursor-pointer"
       style={{ borderLeft: `4px solid ${sourceColor}` }}
+      onClick={() => onViewDetails?.(job)}
+      {...(onViewDetails ? { role: "button", tabIndex: 0, onKeyDown: (e: React.KeyboardEvent) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault()
+          onViewDetails(job)
+        }
+      }} : {})}
     >
       <div className="flex justify-between items-start gap-3">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
-            <span
-              className="font-bold text-sm text-zinc-900 leading-tight group-hover:text-blue-700 transition-colors cursor-pointer"
-              onClick={() => job.url && window.open(job.url, "_blank")}
-            >
+            <span className="font-bold text-sm text-zinc-900 leading-tight group-hover:text-blue-700 transition-colors">
               {job.title}
-              <ExternalLink
-                size={12}
-                className="inline ml-1.5 opacity-0 group-hover:opacity-60 transition-opacity"
-              />
             </span>
             {isNew && (
               <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 border border-amber-300">
@@ -60,7 +61,7 @@ export function JobCard({ job, onTrack, onTailor, onCoverLetter, onTrackAndTailo
             )}
           </div>
         </div>
-        <div className="flex flex-col items-end gap-2 flex-shrink-0">
+        <div className="flex flex-col items-end gap-2 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
           <span
             className="text-[10px] font-bold font-mono px-2 py-0.5 rounded text-white"
             style={{ background: sourceColor }}

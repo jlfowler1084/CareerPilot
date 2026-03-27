@@ -8,6 +8,7 @@ import { SearchControls } from "@/components/search/search-controls"
 import { JobCard } from "@/components/shared/job-card"
 import { TailorModal } from "@/components/applications/tailor-modal"
 import { CoverLetterModal } from "@/components/applications/cover-letter-modal"
+import { JobDetailPane } from "@/components/search/job-detail-pane"
 import { EmptyState } from "@/components/shared/empty-state"
 import { AlertCircle, SearchX } from "lucide-react"
 import type { Job } from "@/types"
@@ -44,6 +45,9 @@ export default function SearchPage() {
 
   // Cover letter modal state
   const [coverLetterJob, setCoverLetterJob] = useState<Job | null>(null)
+
+  // Job detail pane state
+  const [detailJob, setDetailJob] = useState<Job | null>(null)
 
   // Pre-generated content maps (Tailor/CoverLetter → Track flow)
   const tailoredResumesRef = useRef<Map<string, string>>(new Map())
@@ -185,6 +189,7 @@ export default function SearchPage() {
                 onTailor={handleTailor}
                 onCoverLetter={(j) => setCoverLetterJob(j)}
                 onTrackAndTailor={handleTrackAndTailor}
+                onViewDetails={setDetailJob}
                 tracked={isTracked(job)}
                 isNew={isNew(job)}
               />
@@ -236,6 +241,17 @@ export default function SearchPage() {
           }}
         />
       )}
+
+      {/* Job Detail Pane */}
+      <JobDetailPane
+        job={detailJob}
+        open={!!detailJob}
+        onClose={() => setDetailJob(null)}
+        onTrack={handleTrack}
+        onTailor={handleTailor}
+        onCoverLetter={(j) => setCoverLetterJob(j)}
+        tracked={detailJob ? isTracked(detailJob) : false}
+      />
     </div>
   )
 }
