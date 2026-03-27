@@ -45,7 +45,9 @@ export function EmailDetail({
 }: EmailDetailProps) {
   const [threadMessages, setThreadMessages] = useState<ThreadMessage[]>([])
   const [threadLoading, setThreadLoading] = useState(false)
+  const [threadError, setThreadError] = useState(false)
   const selectedRef = useRef<HTMLDivElement>(null)
+  const threadCacheRef = useRef<Map<string, ThreadMessage[]>>(new Map())
   const [draft, setDraft] = useState<DraftState | null>(null)
   const [drafting, setDrafting] = useState(false)
   const [sending, setSending] = useState(false)
@@ -57,15 +59,25 @@ export function EmailDetail({
   const suggestion = email.suggested_application_id
   const suggestedApp = suggestion ? applications.find((a) => a.id === suggestion) : null
 
-  // Fetch thread when email changes
+  // Fetch thread when email changes (with cache)
   useEffect(() => {
     if (!email.thread_id) {
       setThreadMessages([])
+      setThreadError(false)
+      return
+    }
+
+    // Return cached thread if available
+    const cached = threadCacheRef.current.get(email.thread_id)
+    if (cached) {
+      setThreadMessages(cached)
+      setThreadError(false)
       return
     }
 
     let cancelled = false
     setThreadLoading(true)
+    setThreadError(false)
 
     fetch("/api/gmail/thread", {
       method: "POST",
@@ -75,13 +87,18 @@ export function EmailDetail({
       .then((res) => res.json())
       .then((data) => {
         if (!cancelled) {
-          setThreadMessages(data.messages || [])
+          const msgs = data.messages || []
+          setThreadMessages(msgs)
+          if (msgs.length > 0 && email.thread_id) {
+            threadCacheRef.current.set(email.thread_id, msgs)
+          }
           setThreadLoading(false)
         }
       })
       .catch(() => {
         if (!cancelled) {
           setThreadMessages([])
+          setThreadError(true)
           setThreadLoading(false)
         }
       })
@@ -260,7 +277,7 @@ export function EmailDetail({
                     isSelected
                       ? "border-amber-400/50 bg-amber-50/50 dark:bg-amber-900/10 dark:border-amber-500/30"
                       : isUser
-                      ? "border-blue-200 dark:border-blue-800/50 bg-blue-50/40 dark:bg-blue-900/10 ml-6"
+                      ? "border-blue-200 dark:border-blue-800/50 bg-blue-50/40 dark:bg-blue-900/10 md:ml-6"
                       : "border-zinc-200 dark:border-zinc-700/50 bg-white dark:bg-zinc-800/30"
                   }`}
                 >
@@ -287,9 +304,16 @@ export function EmailDetail({
             })}
           </div>
         ) : (
-          <pre className="text-sm text-zinc-700 dark:text-zinc-300 whitespace-pre-wrap font-sans leading-relaxed">
-            {email.body_preview || "No preview available."}
-          </pre>
+          <>
+            {threadError && email.thread_id && (
+              <p className="text-xs text-zinc-400 dark:text-zinc-500 mb-3 italic">
+                Couldn&apos;t load full thread — showing email preview
+              </p>
+            )}
+            <pre className="text-sm text-zinc-700 dark:text-zinc-300 whitespace-pre-wrap font-sans leading-relaxed">
+              {email.body_preview || "No preview available."}
+            </pre>
+          </>
         )}
       </div>
 
