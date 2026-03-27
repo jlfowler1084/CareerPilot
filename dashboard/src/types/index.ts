@@ -161,6 +161,7 @@ export interface SearchCacheEntry {
   results: Job[]
   result_count: number
   searched_at: string
+  search_run_id?: string
 }
 
 export interface ExtractedJob {
@@ -180,12 +181,14 @@ export interface ExtractedJob {
 }
 
 export interface SearchRun {
-  profileIds: string[]
-  startedAt: string
-  completedAt: string | null
-  totalResults: number
-  newResults: number
-  aborted: boolean
+  id: string
+  user_id: string
+  profiles_used: string[]
+  total_results: number
+  indeed_count: number
+  dice_count: number
+  new_count: number
+  created_at: string
 }
 
 // Conversation types
