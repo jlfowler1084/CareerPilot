@@ -169,6 +169,22 @@
     },
     {
       "ticket": "CAR-72",
+      "name": "Query Parser",
+      "file": "src/lib/query-parser.ts",
+      "exports": ["parseQuery", "applyQueryFilter", "serializeQuery"],
+      "patterns": ["ParsedQuery", "titleTerms", "excludeTerms", "tokenize", "salaryMin"],
+      "area": "search"
+    },
+    {
+      "ticket": "CAR-72",
+      "name": "Query Mode UI",
+      "file": "src/components/search/query-mode.tsx",
+      "exports": ["QueryMode", "QueryModeToggle"],
+      "patterns": ["Query Mode", "Back to Filters", "SYNTAX_HELP", "recentQueries"],
+      "area": "search"
+    },
+    {
+      "ticket": "CAR-72",
       "name": "Search Profiles Hook",
       "file": "src/hooks/use-search-profiles.ts",
       "exports": ["useSearchProfiles"],
