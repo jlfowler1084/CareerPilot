@@ -614,6 +614,54 @@
       "exports": ["INDEED_APPLY_STEPS", "DICE_APPLY_STEPS", "getStepsForSource"],
       "patterns": ["INDEED_APPLY_STEPS", "DICE_APPLY_STEPS"],
       "area": "search"
+    },
+    {
+      "ticket": "CAR-18",
+      "name": "Auto-Apply Settings API",
+      "file": "src/app/api/auto-apply/settings/route.ts",
+      "exports": ["GET", "PUT"],
+      "patterns": ["auto_apply_settings"],
+      "area": "settings"
+    },
+    {
+      "ticket": "CAR-18",
+      "name": "Auto-Apply Stats API",
+      "file": "src/app/api/auto-apply/stats/route.ts",
+      "exports": ["GET"],
+      "patterns": ["COST_PER_APPLICATION", "dailyLimit"],
+      "area": "search"
+    },
+    {
+      "ticket": "CAR-18",
+      "name": "Auto-Apply Settings Hook",
+      "file": "src/hooks/use-auto-apply-settings.ts",
+      "exports": ["useAutoApplySettings"],
+      "patterns": ["auto_apply_settings", "AutoApplySettings"],
+      "area": "settings"
+    },
+    {
+      "ticket": "CAR-18",
+      "name": "Auto-Apply Pipeline Helper",
+      "file": "src/lib/auto-apply-pipeline.ts",
+      "exports": ["runPipeline"],
+      "patterns": ["runPipeline", "dailyLimitHit"],
+      "area": "search"
+    },
+    {
+      "ticket": "CAR-18",
+      "name": "Auto-Apply Dashboard Widget",
+      "file": "src/components/overview/auto-apply-widget.tsx",
+      "exports": ["AutoApplyWidget"],
+      "patterns": ["AutoApplyWidget", "Auto-Apply Pipeline"],
+      "area": "overview"
+    },
+    {
+      "ticket": "CAR-18",
+      "name": "Settings Page",
+      "file": "src/app/(main)/settings/page.tsx",
+      "exports": [],
+      "patterns": ["Auto-Apply Configuration", "Screening Answers", "Skills Inventory"],
+      "area": "settings"
     }
   ]
 }

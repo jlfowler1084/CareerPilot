@@ -12,6 +12,7 @@ import { PipelineChart } from "@/components/dashboard/pipeline-chart"
 import { WeeklyChart } from "@/components/dashboard/weekly-chart"
 import { ActivityFeed } from "@/components/dashboard/activity-feed"
 import { SkillGapsWidget } from "@/components/dashboard/skill-gaps-widget"
+import { AutoApplyWidget } from "@/components/overview/auto-apply-widget"
 import { EmptyState } from "@/components/shared/empty-state"
 import { RelativeTime } from "@/components/ui/relative-time"
 import { AreaChart, Area, XAxis, Tooltip, ResponsiveContainer } from "recharts"
@@ -539,6 +540,9 @@ export default function OverviewPage() {
           )}
         </div>
       </div>
+
+      {/* Auto-Apply Pipeline Widget */}
+      <AutoApplyWidget />
 
       {/* Skill Gaps */}
       <SkillGapsWidget applications={applications} />

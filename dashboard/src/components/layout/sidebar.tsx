@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
-import { LayoutDashboard, Search, Briefcase, BarChart3, ChevronRight, Mail, MessageSquare } from "lucide-react"
+import { LayoutDashboard, Search, Briefcase, BarChart3, ChevronRight, Mail, MessageSquare, Settings } from "lucide-react"
 
 const NAV_ITEMS = [
   { id: "overview", href: "/", label: "Overview", icon: LayoutDashboard },
@@ -13,6 +13,7 @@ const NAV_ITEMS = [
   { id: "applications", href: "/applications", label: "Applications", icon: Briefcase },
   { id: "conversations", href: "/conversations", label: "Conversations", icon: MessageSquare },
   { id: "analytics", href: "/analytics", label: "Analytics", icon: BarChart3 },
+  { id: "settings", href: "/settings", label: "Settings", icon: Settings },
 ]
 
 const ACTIVE_STATUSES = ["interested", "applied", "phone_screen", "interview"]
