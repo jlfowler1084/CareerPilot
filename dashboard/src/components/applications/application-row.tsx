@@ -6,12 +6,15 @@ import { ConversationSection } from "@/components/conversations/conversation-sec
 import { CommunicationsSection } from "@/components/applications/communications-section"
 import { InterviewPrepSection } from "@/components/applications/interview-prep-section"
 import { CoachingSection } from "@/components/coaching/coaching-section"
+import { IntelligenceTab } from "@/components/intelligence/intelligence-tab"
 import { TailorModal } from "@/components/applications/tailor-modal"
 import { CoverLetterModal } from "@/components/applications/cover-letter-modal"
 import { ScheduleModal } from "@/components/applications/schedule-modal"
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
+import { useIntelligence } from "@/hooks/use-intelligence"
 import { STATUSES } from "@/lib/constants"
 import { RelativeTime } from "@/components/ui/relative-time"
-import { ExternalLink, Trash2, Save, Mail, Sparkles, FileCheck, CalendarDays, CalendarCheck, FileText } from "lucide-react"
+import { ExternalLink, Trash2, Save, Mail, Sparkles, FileCheck, CalendarDays, CalendarCheck, FileText, BrainCircuit } from "lucide-react"
 import type { Application, ApplicationStatus } from "@/types"
 
 const SCHEDULABLE_STATUSES: ApplicationStatus[] = ["applied", "phone_screen", "interview", "offer"]
@@ -39,6 +42,7 @@ export function ApplicationRow({
   const [coverLetterOpen, setCoverLetterOpen] = useState(false)
   const [scheduleOpen, setScheduleOpen] = useState(false)
   const [statusUpdating, setStatusUpdating] = useState(false)
+  const { hasData: hasIntelligence } = useIntelligence(application.id)
 
   async function handleStatusChange(e: React.ChangeEvent<HTMLSelectElement>) {
     setStatusUpdating(true)
@@ -252,49 +256,73 @@ export function ApplicationRow({
         }}
       />
 
-      {/* Notes section */}
+      {/* Tab navigation */}
       <div className="mt-3 pt-3 border-t border-zinc-100" onClick={(e) => e.stopPropagation()}>
-        {editingNotes ? (
-          <div className="flex gap-2">
-            <textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Add notes..."
-              className="flex-1 text-xs border border-zinc-200 rounded-lg p-2 resize-none focus:outline-none focus:ring-1 focus:ring-amber-300"
-              rows={2}
-            />
-            <button
-              onClick={handleSaveNotes}
-              className="text-[10px] font-semibold px-2 py-1 rounded-md bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-200 transition-colors self-start flex items-center gap-1"
-            >
-              <Save size={10} /> Save
-            </button>
-          </div>
-        ) : (
-          <button
-            onClick={() => setEditingNotes(true)}
-            className="text-xs text-zinc-400 hover:text-zinc-600 transition-colors"
-          >
-            {application.notes
-              ? application.notes
-              : "Add notes..."}
-          </button>
-        )}
-      </div>
+        <Tabs defaultValue="details">
+          <TabsList variant="line" className="w-full justify-start gap-0 h-7 mb-2">
+            <TabsTrigger value="details" className="text-xs px-3 py-1 h-7">
+              Details
+            </TabsTrigger>
+            <TabsTrigger value="intelligence" className="text-xs px-3 py-1 h-7 flex items-center gap-1.5">
+              <BrainCircuit size={12} />
+              Intelligence
+              {hasIntelligence && (
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+              )}
+            </TabsTrigger>
+          </TabsList>
 
-      {/* Expandable sections — stop propagation so clicking inside does not open the detail panel */}
-      <div onClick={(e) => e.stopPropagation()}>
-        {/* Communications (linked emails) */}
-        <CommunicationsSection application={application} />
+          <TabsContent value="details">
+            {/* Notes section */}
+            <div>
+              {editingNotes ? (
+                <div className="flex gap-2">
+                  <textarea
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    placeholder="Add notes..."
+                    className="flex-1 text-xs border border-zinc-200 rounded-lg p-2 resize-none focus:outline-none focus:ring-1 focus:ring-amber-300"
+                    rows={2}
+                  />
+                  <button
+                    onClick={handleSaveNotes}
+                    className="text-[10px] font-semibold px-2 py-1 rounded-md bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-200 transition-colors self-start flex items-center gap-1"
+                  >
+                    <Save size={10} /> Save
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setEditingNotes(true)}
+                  className="text-xs text-zinc-400 hover:text-zinc-600 transition-colors"
+                >
+                  {application.notes
+                    ? application.notes
+                    : "Add notes..."}
+                </button>
+              )}
+            </div>
 
-        {/* Conversations */}
-        <ConversationSection application={application} />
+            {/* Expandable sections */}
+            <div>
+              {/* Communications (linked emails) */}
+              <CommunicationsSection application={application} />
 
-        {/* Interview Prep */}
-        <InterviewPrepSection application={application} />
+              {/* Conversations */}
+              <ConversationSection application={application} />
 
-        {/* Performance Coach */}
-        <CoachingSection application={application} />
+              {/* Interview Prep */}
+              <InterviewPrepSection application={application} />
+
+              {/* Performance Coach */}
+              <CoachingSection application={application} />
+            </div>
+          </TabsContent>
+
+          <TabsContent value="intelligence">
+            <IntelligenceTab applicationId={application.id} />
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   )
