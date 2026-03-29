@@ -52,14 +52,20 @@ export async function POST(req: NextRequest) {
       const errBody = await resp.text()
       console.error("Indeed MCP upstream error:", resp.status, errBody.slice(0, 500))
       const isAuthError = errBody.includes("Authentication error") || errBody.includes("authorization")
+      if (isAuthError) {
+        return NextResponse.json({
+          jobs: [],
+          source: "Indeed",
+          count: 0,
+          info: "Indeed search unavailable — requires Claude.ai connector authentication",
+        })
+      }
       return NextResponse.json(
         {
           jobs: [],
           source: "Indeed",
           count: 0,
-          error: isAuthError
-            ? "Indeed requires authentication — configure INDEED_MCP_TOKEN in .env"
-            : `Indeed service unavailable (${resp.status})`,
+          error: `Indeed service unavailable (${resp.status})`,
         },
         { status: 502 }
       )

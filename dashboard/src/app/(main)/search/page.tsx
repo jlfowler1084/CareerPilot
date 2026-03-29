@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef, useCallback } from "react"
+import { useState, useRef, useCallback, useEffect } from "react"
 import { useSearch } from "@/hooks/use-search"
 import { useSearchHistory } from "@/hooks/use-search-history"
 import { useApplications } from "@/hooks/use-applications"
@@ -14,7 +14,8 @@ import { JobDetailPane } from "@/components/search/job-detail-pane"
 import { ApplyFlow } from "@/components/search/apply-flow"
 import { EmptyState } from "@/components/shared/empty-state"
 import { logActivity } from "@/hooks/use-activity-log"
-import { AlertCircle, SearchX } from "lucide-react"
+import { AlertCircle, SearchX, Clock, CheckCircle2, Info, X } from "lucide-react"
+import { format, isToday, isYesterday } from "date-fns"
 import type { Job } from "@/types"
 
 export default function SearchPage() {
@@ -33,20 +34,40 @@ export default function SearchPage() {
     progress,
     searchComplete,
     errors,
+    indeedInfo,
     isNew,
     lastSearchTime,
   } = useSearch({
     onRunCreated: (runId) => {
       history.loadHistory()
       history.setActiveRunId(runId)
+      setViewingHistorical(false)
+      setSavedToHistory(true)
     },
   })
 
   const { applications, addApplication, updateApplication } = useApplications()
 
+  // Track whether user is viewing a manually-selected historical run
+  const [viewingHistorical, setViewingHistorical] = useState(false)
+  const [savedToHistory, setSavedToHistory] = useState(false)
+
+  // The active run object (for the banner date display)
+  const activeRun = history.runs.find((r) => r.id === history.activeRunId)
+
+  function formatBannerDate(dateStr: string): string {
+    const d = new Date(dateStr)
+    const time = format(d, "h:mm a")
+    if (isToday(d)) return `Today ${time}`
+    if (isYesterday(d)) return `Yesterday ${time}`
+    return format(d, "MMM d") + ` ${time}`
+  }
+
   const handleSelectRun = useCallback(
     async (runId: string) => {
       history.setActiveRunId(runId)
+      setViewingHistorical(true)
+      setSavedToHistory(false)
       const results = await history.loadRunResults(runId)
       setSearchResults(results)
     },
@@ -71,6 +92,25 @@ export default function SearchPage() {
     await history.clearAll()
     setSearchResults([])
   }, [history, setSearchResults])
+
+  // On mount: once history loads with an active run, restore its results
+  const initialLoadDone = useRef(false)
+  useEffect(() => {
+    if (initialLoadDone.current) return
+    if (history.loading) return
+    if (!history.activeRunId) return
+
+    initialLoadDone.current = true
+    history.loadRunResults(history.activeRunId).then((results) => {
+      if (results.length > 0) {
+        setSearchResults(results)
+      }
+    })
+  }, [history.loading, history.activeRunId]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Indeed info banner dismissed state (resets each search)
+  const [infoDismissed, setInfoDismissed] = useState(false)
+  useEffect(() => { setInfoDismissed(false) }, [indeedInfo])
 
   // Sort state
   const [sortBy, setSortBy] = useState<"newest" | "salary" | "company">("newest")
@@ -226,6 +266,24 @@ export default function SearchPage() {
         disabled={selectedProfiles.size === 0}
       />
 
+      {/* Indeed info banner */}
+      {indeedInfo && !infoDismissed && (
+        <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-50 border border-amber-200">
+          <Info size={14} className="text-amber-500 shrink-0" />
+          <span className="text-xs text-amber-700">
+            Indeed search unavailable — showing Dice results only
+          </span>
+          <button
+            type="button"
+            title="Dismiss"
+            onClick={() => setInfoDismissed(true)}
+            className="ml-auto text-amber-400 hover:text-amber-600"
+          >
+            <X size={14} />
+          </button>
+        </div>
+      )}
+
       {/* Errors */}
       {errors.length > 0 && (
         <div className="bg-red-50 border border-red-200 rounded-xl p-4">
@@ -255,6 +313,38 @@ export default function SearchPage() {
         loading={history.loading}
       />
 
+      {/* Historical run banner */}
+      {viewingHistorical && activeRun && !loading && (
+        <div className="flex items-center gap-3 px-4 py-2.5 rounded-lg bg-zinc-100/80 border border-zinc-200">
+          <Clock size={14} className="text-zinc-400 shrink-0" />
+          <span className="text-xs text-zinc-600">
+            Viewing scan from <span className="font-semibold">{formatBannerDate(activeRun.created_at)}</span>
+            {" · "}{activeRun.total_results} jobs
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              setViewingHistorical(false)
+              if (history.runs.length > 0) {
+                handleSelectRun(history.runs[0].id)
+                setViewingHistorical(false)
+              }
+            }}
+            className="ml-auto text-[11px] font-semibold px-3 py-1 rounded-md bg-amber-500 text-white hover:bg-amber-600 transition-colors"
+          >
+            Back to Latest
+          </button>
+        </div>
+      )}
+
+      {/* Saved to history indicator */}
+      {savedToHistory && !loading && searchComplete && (
+        <div className="flex items-center gap-2 text-xs text-emerald-600">
+          <CheckCircle2 size={13} />
+          <span>Saved to history</span>
+        </div>
+      )}
+
       {/* Results */}
       {searchResults.length > 0 && (
         <div className="space-y-3">
@@ -263,7 +353,7 @@ export default function SearchPage() {
               {searchResults.length} Results
             </div>
             <div className="flex items-center gap-3">
-              {lastSearchTime && (
+              {lastSearchTime && !viewingHistorical && (
                 <span className="text-[10px] text-zinc-400">
                   Last search: {lastSearchTime.toLocaleString()}
                 </span>
@@ -271,6 +361,7 @@ export default function SearchPage() {
               <select
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+                title="Sort results"
                 className="text-xs px-3 py-1.5 rounded-lg border border-zinc-200 bg-white text-zinc-700 cursor-pointer focus:outline-none focus:ring-1 focus:ring-amber-300"
               >
                 <option value="newest">Newest First</option>

@@ -33,9 +33,10 @@ async function callSearchApi(
   keyword: string,
   location: string,
   source: string
-): Promise<{ jobs: Job[]; warnings: SearchError[] }> {
+): Promise<{ jobs: Job[]; warnings: SearchError[]; indeedInfo?: string }> {
   const results: Job[] = []
   const warnings: SearchError[] = []
+  let indeedInfo: string | undefined
   const profile = SEARCH_PROFILES.find((p) => p.id === profileId)
   const profileLabel = profile?.label || profileId
 
@@ -64,7 +65,9 @@ async function callSearchApi(
           }))
         )
       }
-      if (data.error) {
+      if (data.info) {
+        indeedInfo = data.info as string
+      } else if (data.error) {
         warnings.push({ profileId, message: `Indeed: ${data.error}` })
       } else if (!data.jobs || data.jobs.length === 0) {
         warnings.push({ profileId, message: "Indeed returned no results" })
@@ -97,7 +100,7 @@ async function callSearchApi(
     }
   }
 
-  return { jobs: results, warnings }
+  return { jobs: results, warnings, indeedInfo }
 }
 
 interface UseSearchOptions {
@@ -116,45 +119,25 @@ export function useSearch(options: UseSearchOptions = {}) {
   })
   const [searchComplete, setSearchComplete] = useState(false)
   const [errors, setErrors] = useState<SearchError[]>([])
+  const [indeedInfo, setIndeedInfo] = useState<string | null>(null)
   const [cachedJobs, setCachedJobs] = useState<Pick<Job, "title" | "company">[]>([])
   const [newFlags, setNewFlags] = useState<Set<string>>(new Set())
   const [lastSearchTime, setLastSearchTime] = useState<Date | null>(null)
 
   const abortRef = useRef(false)
 
-  // Load previous search_cache on init — restore recent results + build dedup cache
+  // Build dedup cache from search_cache on init (for new-job detection)
+  // Result restoration is now handled by the search history hook (run-based)
   useEffect(() => {
-    async function loadCache() {
+    async function loadDedupCache() {
       const { data } = await supabase
         .from("search_cache")
-        .select("results, searched_at")
+        .select("results")
         .order("searched_at", { ascending: false })
         .limit(50)
 
       if (!data || data.length === 0) return
 
-      // Restore recent results (last 24h) as initial display
-      const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
-      const recentEntries = data.filter(
-        (e: { searched_at: string }) => e.searched_at >= cutoff
-      )
-      if (recentEntries.length > 0) {
-        const restored: Job[] = []
-        for (const entry of recentEntries) {
-          if (entry.results && Array.isArray(entry.results)) {
-            restored.push(...(entry.results as Job[]))
-          }
-        }
-        const deduped = deduplicateJobs(restored)
-        const filtered = filterIrrelevant(deduped)
-        if (filtered.length > 0) {
-          setSearchResults(filtered)
-          setLastSearchTime(new Date(data[0].searched_at))
-          setSearchComplete(true)
-        }
-      }
-
-      // Build dedup cache from all entries
       const allCached: Pick<Job, "title" | "company">[] = []
       for (const entry of data) {
         if (entry.results && Array.isArray(entry.results)) {
@@ -165,7 +148,7 @@ export function useSearch(options: UseSearchOptions = {}) {
       }
       setCachedJobs(allCached)
     }
-    loadCache()
+    loadDedupCache()
   }, [])
 
   const toggleProfile = useCallback((id: string) => {
@@ -201,6 +184,7 @@ export function useSearch(options: UseSearchOptions = {}) {
     setLoading(true)
     setSearchComplete(false)
     setErrors([])
+    setIndeedInfo(null)
     setLastSearchTime(null)
     abortRef.current = false
 
@@ -212,6 +196,7 @@ export function useSearch(options: UseSearchOptions = {}) {
     const cacheIds: string[] = []
     let indeedCount = 0
     let diceCount = 0
+    let indeedInfoMsg: string | undefined
 
     // Sequential iteration
     for (let i = 0; i < profiles.length; i++) {
@@ -221,7 +206,7 @@ export function useSearch(options: UseSearchOptions = {}) {
       setProgress({ current: i + 1, total })
 
       try {
-        const { jobs, warnings: apiWarnings } = await callSearchApi(
+        const { jobs, warnings: apiWarnings, indeedInfo: info } = await callSearchApi(
           profile.id,
           profile.keyword,
           profile.location,
@@ -229,6 +214,7 @@ export function useSearch(options: UseSearchOptions = {}) {
         )
         allResults = [...allResults, ...jobs]
         searchErrors.push(...apiWarnings)
+        if (info) indeedInfoMsg = info
 
         // Track source counts
         for (const j of jobs) {
@@ -313,8 +299,10 @@ export function useSearch(options: UseSearchOptions = {}) {
     // Show all results (new first, then seen)
     setSearchResults([...newJobs, ...seenJobs])
     setErrors(searchErrors)
+    setIndeedInfo(indeedInfoMsg ?? null)
     setLoading(false)
     setSearchComplete(true)
+    setLastSearchTime(new Date())
 
     // Update cached jobs for subsequent runs
     setCachedJobs((prev) => [
@@ -345,6 +333,7 @@ export function useSearch(options: UseSearchOptions = {}) {
     progress,
     searchComplete,
     errors,
+    indeedInfo,
     isNew,
     lastSearchTime,
   }
