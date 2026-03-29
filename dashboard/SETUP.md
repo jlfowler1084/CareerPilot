@@ -101,7 +101,7 @@ NEXT_PUBLIC_SUPABASE_URL=https://your-project-id.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=sb_publishable_wr3uv88z...  (full key from step 1.5)
 
 # Anthropic (server-side ONLY — no NEXT_PUBLIC_ prefix!)
-ANTHROPIC_API_KEY=sk-ant-api03-...  (your existing Anthropic API key)
+ANTHROPIC_API_KEY=your-api-key-here  (your existing Anthropic API key)
 ```
 
 **CRITICAL:** The `ANTHROPIC_API_KEY` must NOT have a `NEXT_PUBLIC_` prefix. Without the prefix, Next.js keeps it server-side only, so it never reaches the browser.

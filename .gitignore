@@ -9,6 +9,9 @@ build/
 
 # Environment
 .env
+.env.local
+.env.production
+**/secrets/
 
 # SQLite databases
 data/*.db

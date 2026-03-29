@@ -60,7 +60,7 @@ NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 
 # Anthropic (server-side only — NO NEXT_PUBLIC_ prefix)
-ANTHROPIC_API_KEY=sk-ant-your-key
+ANTHROPIC_API_KEY=your-api-key-here
 ```
 
 Create `dashboard/.env.local` with actual values (never committed).
