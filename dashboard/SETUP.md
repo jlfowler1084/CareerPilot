@@ -75,7 +75,7 @@ This is the account you'll use to log into the dashboard. The session persists ~
 
 1. Go to **Settings** → **API** (or **Data API** in left sidebar)
 2. Copy these two values:
-   - **Project URL** → `https://kfrffocrfnnuimwrngcs.supabase.co`
+   - **Project URL** → `https://your-project-id.supabase.co`
    - **Publishable Key (anon public)** → starts with `sb_publishable_...` or `eyJ...`
 
 ---
@@ -97,7 +97,7 @@ Create `dashboard/.env.local` (this file is gitignored — never committed):
 
 ```env
 # Supabase (client-accessible)
-NEXT_PUBLIC_SUPABASE_URL=https://kfrffocrfnnuimwrngcs.supabase.co
+NEXT_PUBLIC_SUPABASE_URL=https://your-project-id.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=sb_publishable_wr3uv88z...  (full key from step 1.5)
 
 # Anthropic (server-side ONLY — no NEXT_PUBLIC_ prefix!)
@@ -147,7 +147,7 @@ In the Vercel project dashboard → **Settings** → **Environment Variables**, 
 
 | Key | Value | Environment |
 |-----|-------|-------------|
-| `NEXT_PUBLIC_SUPABASE_URL` | `https://kfrffocrfnnuimwrngcs.supabase.co` | All |
+| `NEXT_PUBLIC_SUPABASE_URL` | `https://your-project-id.supabase.co` | All |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | `sb_publishable_...` (full key) | All |
 | `ANTHROPIC_API_KEY` | `sk-ant-api03-...` | All |
 

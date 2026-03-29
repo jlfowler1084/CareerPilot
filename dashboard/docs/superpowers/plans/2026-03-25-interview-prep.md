@@ -52,7 +52,7 @@ ALTER TABLE applications ADD COLUMN IF NOT EXISTS interview_prep JSONB DEFAULT '
 
 - [ ] **Step 2: Apply migration via Supabase MCP**
 
-Run: `mcp__claude_ai_Supabase__apply_migration` with the SQL above against project `kfrffocrfnnuimwrngcs`.
+Run: `mcp__claude_ai_Supabase__apply_migration` with the SQL above against project `your-project-id`.
 
 If MCP fails, fall back to `mcp__claude_ai_Supabase__execute_sql`:
 ```sql
