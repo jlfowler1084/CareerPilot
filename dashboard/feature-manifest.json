@@ -224,6 +224,46 @@
       "area": "search"
     },
     {
+      "ticket": "CAR-77",
+      "name": "Inbox Filter Utilities",
+      "file": "src/lib/inbox-filter-utils.ts",
+      "exports": ["applyInboxQuickFilters", "applyInboxAdvancedFilters", "hasActiveInboxQuickFilters", "hasActiveInboxAdvancedFilters", "parseEmailDate"],
+      "patterns": ["InboxQuickFilters", "InboxAdvancedFilters", "DEFAULT_INBOX_QUICK_FILTERS", "DEFAULT_INBOX_ADVANCED_FILTERS", "dateRange", "linkedStatus", "senderInclude", "domainInclude"],
+      "area": "inbox"
+    },
+    {
+      "ticket": "CAR-77",
+      "name": "Inbox Query Parser",
+      "file": "src/lib/inbox-query-parser.ts",
+      "exports": ["parseInboxQuery", "applyInboxQueryFilter"],
+      "patterns": ["ParsedInboxQuery", "subjectTerms", "fromTerms", "domainTerms", "categoryTerms", "linkedFilter", "autoTrackFilter", "CATEGORY_MAP"],
+      "area": "inbox"
+    },
+    {
+      "ticket": "CAR-77",
+      "name": "Inbox Quick Filters",
+      "file": "src/components/inbox/inbox-quick-filters.tsx",
+      "exports": ["InboxQuickFiltersBar"],
+      "patterns": ["Search emails", "Date", "Linked", "Track", "Auto-tracked", "Needs Review"],
+      "area": "inbox"
+    },
+    {
+      "ticket": "CAR-77",
+      "name": "Inbox Advanced Filters",
+      "file": "src/components/inbox/inbox-advanced-filters.tsx",
+      "exports": ["InboxAdvancedFiltersPanel"],
+      "patterns": ["Advanced Filters", "senderInclude", "domainInclude", "subjectInclude", "Body Keywords", "Clear Advanced Filters"],
+      "area": "inbox"
+    },
+    {
+      "ticket": "CAR-77",
+      "name": "Inbox Query Mode",
+      "file": "src/components/inbox/inbox-query-mode.tsx",
+      "exports": ["InboxQueryMode", "InboxQueryModeToggle"],
+      "patterns": ["Query Mode", "Back to Filters", "SYNTAX_HELP", "recentQueries", "subject:interview"],
+      "area": "inbox"
+    },
+    {
       "ticket": "CAR-62",
       "name": "Applications Page",
       "file": "src/app/(main)/applications/page.tsx",

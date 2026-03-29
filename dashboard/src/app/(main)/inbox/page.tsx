@@ -7,6 +7,20 @@ import { FilterChips, ALL_FILTER_IDS } from "@/components/inbox/filter-chips"
 import { EmailList } from "@/components/inbox/email-list"
 import { EmailDetail } from "@/components/inbox/email-detail"
 import { EmptyState } from "@/components/shared/empty-state"
+import { InboxQuickFiltersBar } from "@/components/inbox/inbox-quick-filters"
+import { InboxAdvancedFiltersPanel } from "@/components/inbox/inbox-advanced-filters"
+import { InboxQueryMode, InboxQueryModeToggle } from "@/components/inbox/inbox-query-mode"
+import {
+  type InboxQuickFilters,
+  type InboxAdvancedFilters,
+  DEFAULT_INBOX_QUICK_FILTERS,
+  DEFAULT_INBOX_ADVANCED_FILTERS,
+  applyInboxQuickFilters,
+  applyInboxAdvancedFilters,
+  hasActiveInboxQuickFilters,
+  hasActiveInboxAdvancedFilters,
+} from "@/lib/inbox-filter-utils"
+import { parseInboxQuery, applyInboxQueryFilter } from "@/lib/inbox-query-parser"
 
 const CONVERSATIONS_EXCLUDED = new Set(["alerts", "irrelevant"])
 
@@ -39,6 +53,30 @@ export default function InboxPage() {
   const [sortOrder, setSortOrder] = useState<"newest" | "oldest">(() => loadPref(INBOX_SORT_KEY, "newest"))
   const [hideSubs, setHideSubs] = useState<boolean>(() => loadPref(INBOX_HIDE_SUBS_KEY, false))
   const [groupByCompany, setGroupByCompany] = useState<boolean>(() => loadPref(INBOX_GROUP_KEY, false))
+
+  // CAR-77: Advanced filtering state
+  const [quickFilters, setQuickFilters] = useState<InboxQuickFilters>(DEFAULT_INBOX_QUICK_FILTERS)
+  const [advancedFilters, setAdvancedFilters] = useState<InboxAdvancedFilters>(DEFAULT_INBOX_ADVANCED_FILTERS)
+  const [queryMode, setQueryMode] = useState(false)
+  const [queryString, setQueryString] = useState("")
+
+  // Compute linked email IDs for filter functions
+  const linkedEmailIds = useMemo(() => {
+    const set = new Set<string>()
+    links.forEach((l) => set.add(l.email_id))
+    return set
+  }, [links])
+
+  // CAR-77: Filter pipeline — apply new filters before passing to EmailList
+  const pipelineFiltered = useMemo(() => {
+    if (queryMode) {
+      const parsed = parseInboxQuery(queryString)
+      return applyInboxQueryFilter(emails, parsed, linkedEmailIds)
+    }
+    let result = applyInboxQuickFilters(emails, quickFilters, linkedEmailIds)
+    result = applyInboxAdvancedFilters(result, advancedFilters)
+    return result
+  }, [emails, queryMode, queryString, quickFilters, advancedFilters, linkedEmailIds])
 
   const selectedEmail = useMemo(
     () => emails.find((e) => e.id === selectedId) || null,
@@ -258,6 +296,34 @@ export default function InboxPage() {
             Group by Company
           </button>
         </div>
+
+        {/* CAR-77: Quick Filters / Advanced Filters / Query Mode */}
+        {!queryMode ? (
+          <div className="mt-3 space-y-2">
+            <InboxQuickFiltersBar
+              filters={quickFilters}
+              onFiltersChange={setQuickFilters}
+              totalCount={emails.length}
+              filteredCount={pipelineFiltered.length}
+            />
+            <InboxAdvancedFiltersPanel
+              filters={advancedFilters}
+              onFiltersChange={setAdvancedFilters}
+              emails={emails}
+            />
+            <InboxQueryModeToggle onClick={() => setQueryMode(true)} />
+          </div>
+        ) : (
+          <div className="mt-3">
+            <InboxQueryMode
+              queryString={queryString}
+              onQueryChange={setQueryString}
+              onToggle={() => setQueryMode(false)}
+              totalCount={emails.length}
+              filteredCount={pipelineFiltered.length}
+            />
+          </div>
+        )}
       </div>
 
       {/* Auto-track banner */}
@@ -283,7 +349,7 @@ export default function InboxPage() {
         {/* Left: email list */}
         <div className={`w-full md:w-[420px] flex-shrink-0 border-r border-zinc-200 dark:border-zinc-800 overflow-hidden ${selectedId ? "hidden md:block" : ""}`}>
           <EmailList
-            emails={emails}
+            emails={pipelineFiltered}
             links={links}
             applications={applications}
             selectedEmailId={selectedId}
