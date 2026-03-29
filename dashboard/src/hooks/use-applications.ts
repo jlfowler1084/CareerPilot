@@ -52,9 +52,16 @@ export function useApplications() {
 
   useEffect(() => {
     const fetchApps = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
+        setLoading(false)
+        return
+      }
+
       const { data } = await supabase
         .from("applications")
         .select("*")
+        .eq("user_id", user.id)
         .order("date_found", { ascending: false })
 
       setApplications(data || [])
