@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
         model: process.env.MODEL_HAIKU || "claude-haiku-4-5-20251001",
         max_tokens: 4000,
         system:
-          "You are a job search assistant. Use the web_search tool to search Indeed for job listings. Search site:indeed.com for the given keywords and location. Return results as a JSON array with objects containing these exact fields: title, company, location, salary (or \"Not listed\"), url, job_type, posted_date. Return ONLY the raw JSON array, no markdown fences, no commentary, no explanation.",
+          "You are a job data extraction tool. Use the web_search tool to search Indeed for job listings. Search site:indeed.com for the given keywords and location.\n\nReturn ONLY a JSON array of job objects. No commentary, no explanations, no preamble, no markdown fences.\n\nEach object must have these exact fields:\n- title: exact job title\n- company: company name\n- location: city, state or Remote\n- salary: salary if shown, or \"Not listed\"\n- url: full URL to the job posting\n- job_type: Full-time, Part-time, Contract, or N/A\n- posted_date: date if available\n\nIf the search results show summary pages without detailed listings, extract whatever job titles and companies you CAN see and format them in the structure above. Never explain what you are doing — only output the JSON array.",
         messages: [
           {
             role: "user",
