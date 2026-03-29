@@ -471,6 +471,22 @@ export function useEmails() {
       console.error("[auto-track-backfill] Non-blocking error:", err)
     }
 
+    // CAR-78: Extract job suggestions from newly classified alert emails
+    try {
+      const alertEmails = classifiedResults.filter(
+        (e) => e.category === "job_alert"
+      )
+      if (alertEmails.length > 0) {
+        await fetch("/api/suggestions/extract", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email_ids: alertEmails.map((e) => e.id) }),
+        })
+      }
+    } catch (err) {
+      console.error("[suggestions-extract] Non-blocking error:", err)
+    }
+
     setScanState((prev) => ({ ...prev, classifying: false }))
   }, [applications, autoUpdateApplicationStatuses])
 

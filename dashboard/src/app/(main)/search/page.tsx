@@ -27,8 +27,10 @@ import { CoverLetterModal } from "@/components/applications/cover-letter-modal"
 import { JobDetailPane } from "@/components/search/job-detail-pane"
 import { ApplyFlow } from "@/components/search/apply-flow"
 import { EmptyState } from "@/components/shared/empty-state"
+import { SuggestionsFeed } from "@/components/search/suggestions-feed"
+import { useSuggestions } from "@/hooks/use-suggestions"
 import { logActivity } from "@/hooks/use-activity-log"
-import { AlertCircle, SearchX, Clock, CheckCircle2, Info, X } from "lucide-react"
+import { AlertCircle, SearchX, Clock, CheckCircle2, Info, X, Mail } from "lucide-react"
 import { format, isToday, isYesterday } from "date-fns"
 import type { Job } from "@/types"
 
@@ -137,6 +139,21 @@ export default function SearchPage() {
   }, [profilesLoading]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const { applications, addApplication, updateApplication } = useApplications()
+
+  // CAR-78: Suggestions
+  const {
+    suggestions, loading: suggestionsLoading, newCount: suggestionsNewCount,
+    extractSuggestions, dismissSuggestion, trackSuggestion, bulkDismiss, refreshSuggestions,
+  } = useSuggestions()
+  const [activeTab, setActiveTab] = useState<"search" | "suggestions">("search")
+
+  // Auto-extract on first load (non-blocking)
+  const extractTriggered = useRef(false)
+  useEffect(() => {
+    if (extractTriggered.current) return
+    extractTriggered.current = true
+    extractSuggestions().catch(() => {})
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Track whether user is viewing a manually-selected historical run
   const [viewingHistorical, setViewingHistorical] = useState(false)
@@ -454,6 +471,54 @@ export default function SearchPage() {
     <div className="p-6 space-y-6">
       <h2 className="text-lg font-bold">Job Search</h2>
 
+      {/* CAR-78: Tab row */}
+      <div className="flex items-center gap-0 border-b border-zinc-200 dark:border-zinc-700">
+        <button
+          type="button"
+          onClick={() => setActiveTab("search")}
+          className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px ${
+            activeTab === "search"
+              ? "border-amber-500 text-amber-700 dark:text-amber-400"
+              : "border-transparent text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300"
+          }`}
+        >
+          Search
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("suggestions")}
+          className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px flex items-center gap-2 ${
+            activeTab === "suggestions"
+              ? "border-amber-500 text-amber-700 dark:text-amber-400"
+              : "border-transparent text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300"
+          }`}
+        >
+          <Mail size={14} />
+          Suggestions
+          {suggestionsNewCount > 0 && (
+            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700">
+              {suggestionsNewCount}
+            </span>
+          )}
+        </button>
+      </div>
+
+      {/* CAR-78: Suggestions tab */}
+      {activeTab === "suggestions" && (
+        <SuggestionsFeed
+          suggestions={suggestions}
+          loading={suggestionsLoading}
+          newCount={suggestionsNewCount}
+          onExtract={extractSuggestions}
+          onDismiss={dismissSuggestion}
+          onTrack={(id) => { trackSuggestion(id) }}
+          onBulkDismiss={bulkDismiss}
+        />
+      )}
+
+      {/* Search tab content */}
+      {activeTab === "search" && <>
+
       {/* Custom Search Bar */}
       <CustomSearchBar
         onQuickSearch={handleQuickSearch}
@@ -735,6 +800,8 @@ export default function SearchPage() {
           />
         )
       })()}
+
+      </>}
     </div>
   )
 }

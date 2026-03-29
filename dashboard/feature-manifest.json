@@ -264,6 +264,54 @@
       "area": "inbox"
     },
     {
+      "ticket": "CAR-78",
+      "name": "Suggestion Extraction Logic",
+      "file": "src/lib/extract-suggestions.ts",
+      "exports": ["extractSuggestionsFromEmail", "parseSubjectForJobs", "detectSource", "extractJobsWithAI"],
+      "patterns": ["ExtractedSuggestion", "DOMAIN_TO_SOURCE", "parseIndeedSubject", "parseGlassdoorSubject", "parseLinkedInSubject"],
+      "area": "search"
+    },
+    {
+      "ticket": "CAR-78",
+      "name": "Suggestions Extract API",
+      "file": "src/app/api/suggestions/extract/route.ts",
+      "exports": ["POST"],
+      "patterns": ["email_job_suggestions", "suggestions_extracted", "job_alert"],
+      "area": "search"
+    },
+    {
+      "ticket": "CAR-78",
+      "name": "Suggestions AI Extract API",
+      "file": "src/app/api/suggestions/ai-extract/route.ts",
+      "exports": ["POST"],
+      "patterns": ["anthropic", "Extract all individual job listings"],
+      "area": "search"
+    },
+    {
+      "ticket": "CAR-78",
+      "name": "Suggestions Action API",
+      "file": "src/app/api/suggestions/action/route.ts",
+      "exports": ["POST"],
+      "patterns": ["dismiss", "track", "bulk_dismiss", "email_job_suggestions"],
+      "area": "search"
+    },
+    {
+      "ticket": "CAR-78",
+      "name": "Suggestions Hook",
+      "file": "src/hooks/use-suggestions.ts",
+      "exports": ["useSuggestions"],
+      "patterns": ["extractSuggestions", "dismissSuggestion", "trackSuggestion", "bulkDismiss", "newCount"],
+      "area": "search"
+    },
+    {
+      "ticket": "CAR-78",
+      "name": "Suggestions Feed",
+      "file": "src/components/search/suggestions-feed.tsx",
+      "exports": ["SuggestionsFeed"],
+      "patterns": ["Job Suggestions from Email", "SuggestionCard", "SOURCE_COLORS", "Alert", "Dismiss Read"],
+      "area": "search"
+    },
+    {
       "ticket": "CAR-62",
       "name": "Applications Page",
       "file": "src/app/(main)/applications/page.tsx",
