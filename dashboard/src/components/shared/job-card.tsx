@@ -1,5 +1,6 @@
-import { Plus, Sparkles, FileText, Send, Zap } from "lucide-react"
-import type { Job } from "@/types"
+import { Plus, Sparkles, FileText, Send, Zap, ListPlus } from "lucide-react"
+import { FitScoreBadge } from "@/components/search/fit-score-badge"
+import type { Job, FitScore } from "@/types"
 
 interface JobCardProps {
   job: Job
@@ -9,11 +10,14 @@ interface JobCardProps {
   onCoverLetter?: (job: Job) => void
   onTrackAndTailor?: (job: Job) => void
   onViewDetails?: (job: Job) => void
+  onAddToQueue?: (job: Job) => void
   tracked: boolean
   isNew?: boolean
+  fitScore?: FitScore
+  inQueue?: boolean
 }
 
-export function JobCard({ job, onTrack, onApply, onTailor, onCoverLetter, onTrackAndTailor, onViewDetails, tracked, isNew }: JobCardProps) {
+export function JobCard({ job, onTrack, onApply, onTailor, onCoverLetter, onTrackAndTailor, onViewDetails, onAddToQueue, tracked, isNew, fitScore, inQueue }: JobCardProps) {
   const sourceColor = job.source === "Indeed" ? "#2557a7" : "#0c7ff2"
 
   return (
@@ -34,6 +38,7 @@ export function JobCard({ job, onTrack, onApply, onTailor, onCoverLetter, onTrac
             <span className="font-bold text-sm text-zinc-900 leading-tight group-hover:text-blue-700 transition-colors">
               {job.title}
             </span>
+            {fitScore && <FitScoreBadge score={fitScore} />}
             {isNew && (
               <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 border border-amber-300">
                 NEW
@@ -80,6 +85,21 @@ export function JobCard({ job, onTrack, onApply, onTailor, onCoverLetter, onTrac
               >
                 <Plus size={10} /> Track
               </button>
+              {onAddToQueue && fitScore && fitScore.total >= 60 && job.easyApply && !inQueue && (
+                <button
+                  type="button"
+                  onClick={() => onAddToQueue(job)}
+                  className="text-[10px] font-semibold px-2.5 py-1 rounded-md bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 transition-colors flex items-center gap-1"
+                  title="Add to auto-apply queue"
+                >
+                  <ListPlus size={10} /> Queue
+                </button>
+              )}
+              {inQueue && (
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-blue-50 text-blue-600 border border-blue-200 flex items-center gap-1">
+                  <ListPlus size={10} /> Queued
+                </span>
+              )}
               {job.url && onApply && (
                 <button
                   type="button"

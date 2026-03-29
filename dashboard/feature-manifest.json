@@ -518,6 +518,46 @@
       "exports": ["POST"],
       "patterns": ["calendar", "event"],
       "area": "calendar"
+    },
+    {
+      "ticket": "CAR-18",
+      "name": "Fit Scoring Engine",
+      "file": "src/lib/fit-scoring.ts",
+      "exports": ["scoreJob"],
+      "patterns": ["scoreTitle", "scoreSkills", "scoreLocation", "scoreSalary", "DEFAULT_TARGET_TITLES"],
+      "area": "search"
+    },
+    {
+      "ticket": "CAR-18",
+      "name": "Skills Inventory Hook",
+      "file": "src/hooks/use-skills-inventory.ts",
+      "exports": ["useSkillsInventory"],
+      "patterns": ["skills_inventory"],
+      "area": "search"
+    },
+    {
+      "ticket": "CAR-18",
+      "name": "Auto-Apply Queue Hook",
+      "file": "src/hooks/use-auto-apply-queue.ts",
+      "exports": ["useAutoApplyQueue"],
+      "patterns": ["auto_apply_queue", "addToQueue", "approveJob", "rejectJob"],
+      "area": "search"
+    },
+    {
+      "ticket": "CAR-18",
+      "name": "Fit Score Badge",
+      "file": "src/components/search/fit-score-badge.tsx",
+      "exports": ["FitScoreBadge"],
+      "patterns": ["FitScoreBadge", "ScoreRow"],
+      "area": "search"
+    },
+    {
+      "ticket": "CAR-18",
+      "name": "Auto-Apply Queue Tab",
+      "file": "src/components/search/auto-apply-queue.tsx",
+      "exports": ["AutoApplyQueue"],
+      "patterns": ["QueueCard", "STATUS_STYLES"],
+      "area": "search"
     }
   ]
 }

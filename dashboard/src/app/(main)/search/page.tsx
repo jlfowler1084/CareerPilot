@@ -28,14 +28,19 @@ import { JobDetailPane } from "@/components/search/job-detail-pane"
 import { ApplyFlow } from "@/components/search/apply-flow"
 import { EmptyState } from "@/components/shared/empty-state"
 import { SuggestionsFeed } from "@/components/search/suggestions-feed"
+import { AutoApplyQueue } from "@/components/search/auto-apply-queue"
 import { useSuggestions } from "@/hooks/use-suggestions"
+import { useSkillsInventory } from "@/hooks/use-skills-inventory"
+import { useAutoApplyQueue } from "@/hooks/use-auto-apply-queue"
+import { scoreJob } from "@/lib/fit-scoring"
 import { logActivity } from "@/hooks/use-activity-log"
-import { AlertCircle, SearchX, Clock, CheckCircle2, Info, X, Mail } from "lucide-react"
+import { AlertCircle, SearchX, Clock, CheckCircle2, Info, X, Mail, ListChecks } from "lucide-react"
 import { format, isToday, isYesterday } from "date-fns"
-import type { Job } from "@/types"
+import type { Job, FitScore } from "@/types"
 
 const HIDDEN_PROFILES_KEY = "careerpilot_hidden_profiles"
 const SELECTED_PROFILES_KEY = "careerpilot_selected_profiles"
+const AUTO_QUEUE_KEY = "careerpilot_auto_queue_enabled"
 
 function loadHiddenProfiles(): Set<string> {
   try {
@@ -145,7 +150,54 @@ export default function SearchPage() {
     suggestions, loading: suggestionsLoading, newCount: suggestionsNewCount,
     extractSuggestions, dismissSuggestion, trackSuggestion, bulkDismiss, refreshSuggestions,
   } = useSuggestions()
-  const [activeTab, setActiveTab] = useState<"search" | "suggestions">("search")
+  const [activeTab, setActiveTab] = useState<"search" | "suggestions" | "queue">("search")
+
+  // CAR-18: Fit Scoring & Auto-Apply Queue
+  const { skills } = useSkillsInventory()
+  const {
+    queue: autoApplyQueue, loading: queueLoading, counts: queueCounts,
+    addToQueue, approveJob, rejectJob, approveAllAbove, clearRejected, isInQueue,
+  } = useAutoApplyQueue()
+  const [autoQueueEnabled, setAutoQueueEnabled] = useState(() => {
+    try { return localStorage.getItem(AUTO_QUEUE_KEY) === "true" } catch { return false }
+  })
+
+  // Memoized fit scores for current search results
+  const fitScores = useMemo(() => {
+    const map = new Map<string, FitScore>()
+    for (const job of searchResults) {
+      const key = `${job.title}|||${job.company}`.toLowerCase()
+      map.set(key, scoreJob(job, skills))
+    }
+    return map
+  }, [searchResults, skills])
+
+  function getFitScore(job: Job): FitScore | undefined {
+    return fitScores.get(`${job.title}|||${job.company}`.toLowerCase())
+  }
+
+  function handleAddToQueue(job: Job) {
+    const score = getFitScore(job)
+    if (score) addToQueue(job, score)
+  }
+
+  // Auto-queue: after search completes, queue 80+ Easy Apply jobs
+  const lastAutoQueuedRef = useRef<number>(0)
+  useEffect(() => {
+    if (!autoQueueEnabled || !searchComplete || loading) return
+    if (fitScores.size === 0) return
+    // Prevent re-triggering on the same search
+    const searchKey = searchResults.length
+    if (lastAutoQueuedRef.current === searchKey) return
+    lastAutoQueuedRef.current = searchKey
+
+    for (const job of searchResults) {
+      const score = getFitScore(job)
+      if (score && score.total >= 80 && job.easyApply && !isInQueue(job)) {
+        addToQueue(job, score)
+      }
+    }
+  }, [searchComplete, loading, fitScores, autoQueueEnabled]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-extract on first load (non-blocking)
   const extractTriggered = useRef(false)
@@ -246,7 +298,7 @@ export default function SearchPage() {
   const companiesForAutocomplete = quickFiltered
 
   // Sort state
-  const [sortBy, setSortBy] = useState<"newest" | "salary" | "company">("newest")
+  const [sortBy, setSortBy] = useState<"newest" | "salary" | "company" | "fit">("newest")
 
   // Track which jobs have been tracked in this session
   const [sessionTracked, setSessionTracked] = useState<Set<string>>(new Set())
@@ -501,6 +553,23 @@ export default function SearchPage() {
             </span>
           )}
         </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("queue")}
+          className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px flex items-center gap-2 ${
+            activeTab === "queue"
+              ? "border-amber-500 text-amber-700 dark:text-amber-400"
+              : "border-transparent text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300"
+          }`}
+        >
+          <ListChecks size={14} />
+          Auto-Apply
+          {queueCounts.pending > 0 && (
+            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 border border-blue-300 dark:border-blue-700">
+              {queueCounts.pending}
+            </span>
+          )}
+        </button>
       </div>
 
       {/* CAR-78: Suggestions tab */}
@@ -513,6 +582,19 @@ export default function SearchPage() {
           onDismiss={dismissSuggestion}
           onTrack={(id) => { trackSuggestion(id) }}
           onBulkDismiss={bulkDismiss}
+        />
+      )}
+
+      {/* CAR-18: Auto-Apply Queue tab */}
+      {activeTab === "queue" && (
+        <AutoApplyQueue
+          queue={autoApplyQueue}
+          loading={queueLoading}
+          counts={queueCounts}
+          onApprove={approveJob}
+          onReject={rejectJob}
+          onApproveAllAbove={approveAllAbove}
+          onClearRejected={clearRejected}
         />
       )}
 
@@ -543,16 +625,32 @@ export default function SearchPage() {
         />
       </div>
 
-      {/* Search Controls */}
-      <SearchControls
-        onRun={runSearch}
-        onStop={stopSearch}
-        loading={loading}
-        progress={progress}
-        searchComplete={searchComplete}
-        resultCount={searchResults.length}
-        disabled={selectedProfiles.size === 0}
-      />
+      {/* Search Controls + Auto-Queue Toggle */}
+      <div className="flex items-center gap-4">
+        <div className="flex-1">
+          <SearchControls
+            onRun={runSearch}
+            onStop={stopSearch}
+            loading={loading}
+            progress={progress}
+            searchComplete={searchComplete}
+            resultCount={searchResults.length}
+            disabled={selectedProfiles.size === 0}
+          />
+        </div>
+        <label className="flex items-center gap-2 cursor-pointer select-none" title="Automatically queue jobs scoring 80+ with Easy Apply after each search">
+          <input
+            type="checkbox"
+            checked={autoQueueEnabled}
+            onChange={(e) => {
+              setAutoQueueEnabled(e.target.checked)
+              localStorage.setItem(AUTO_QUEUE_KEY, String(e.target.checked))
+            }}
+            className="rounded border-zinc-300 text-amber-500 focus:ring-amber-400"
+          />
+          <span className="text-xs text-zinc-600 dark:text-zinc-400 whitespace-nowrap">Auto-queue 80+</span>
+        </label>
+      </div>
 
       {/* Indeed info banner */}
       {indeedInfo && !infoDismissed && (
@@ -685,6 +783,7 @@ export default function SearchPage() {
                 className="text-xs px-3 py-1.5 rounded-lg border border-zinc-200 bg-white text-zinc-700 cursor-pointer focus:outline-none focus:ring-1 focus:ring-amber-300"
               >
                 <option value="newest">Newest First</option>
+                <option value="fit">Fit Score (High to Low)</option>
                 <option value="salary">Salary (High to Low)</option>
                 <option value="company">Company A-Z</option>
               </select>
@@ -692,6 +791,11 @@ export default function SearchPage() {
           </div>
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
             {[...filteredResults].sort((a, b) => {
+              if (sortBy === "fit") {
+                const sa = getFitScore(a)?.total ?? 0
+                const sb = getFitScore(b)?.total ?? 0
+                return sb - sa
+              }
               if (sortBy === "company") return a.company.localeCompare(b.company)
               if (sortBy === "salary") {
                 const extractNum = (s: string) => {
@@ -711,8 +815,11 @@ export default function SearchPage() {
                 onCoverLetter={(j) => setCoverLetterJob(j)}
                 onTrackAndTailor={handleTrackAndTailor}
                 onViewDetails={setDetailJob}
+                onAddToQueue={handleAddToQueue}
                 tracked={isTracked(job)}
                 isNew={isNew(job)}
+                fitScore={getFitScore(job)}
+                inQueue={isInQueue(job)}
               />
             ))}
           </div>

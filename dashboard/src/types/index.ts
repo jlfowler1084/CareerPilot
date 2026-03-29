@@ -254,6 +254,69 @@ export interface ConversationPattern {
   this_week: string
 }
 
+// ─── Fit Scoring & Auto-Apply Queue (CAR-18) ────────
+
+export interface SkillInventoryItem {
+  id: string
+  user_id: string
+  skill_name: string
+  category: "core" | "strong" | "growing" | "familiar"
+  weight: number
+  years_experience: number | null
+  aliases: string[]
+  created_at: string
+}
+
+export interface FitScore {
+  total: number // 0-100
+  breakdown: {
+    title: number   // 0-30
+    skills: number  // 0-40
+    location: number // 0-15
+    salary: number  // 0-15
+  }
+  matchedSkills: string[]
+  missingSkills: string[]
+  easyApply: boolean
+}
+
+export type AutoApplyStatus =
+  | "pending"
+  | "approved"
+  | "generating"
+  | "ready"
+  | "applying"
+  | "applied"
+  | "failed"
+  | "skipped"
+  | "rejected"
+
+export interface AutoApplyQueueItem {
+  id: string
+  user_id: string
+  job_title: string
+  company: string
+  location: string | null
+  salary: string | null
+  job_url: string | null
+  source: string | null
+  easy_apply: boolean
+  fit_score: number
+  score_breakdown: {
+    title: number
+    skills: number
+    location: number
+    salary: number
+  }
+  status: AutoApplyStatus
+  tailored_resume_url: string | null
+  cover_letter_url: string | null
+  application_id: string | null
+  error_message: string | null
+  created_at: string
+  updated_at: string
+}
+
 export type {
   Email,
   EmailCategory,
