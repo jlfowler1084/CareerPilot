@@ -25,24 +25,23 @@ export async function POST(req: NextRequest) {
         "Content-Type": "application/json",
         "x-api-key": process.env.ANTHROPIC_API_KEY!,
         "anthropic-version": "2023-06-01",
-        "anthropic-beta": "mcp-client-2025-04-04",
       },
       body: JSON.stringify({
         model: process.env.MODEL_HAIKU || "claude-haiku-4-5-20251001",
         max_tokens: 4000,
         system:
-          "You are a job search assistant. Use the Indeed MCP tool to search for jobs. Return the raw results exactly as the tool provides them. Do not add commentary.",
+          "You are a job search assistant. Use the web_search tool to search Indeed for job listings. Search site:indeed.com for the given keywords and location. Return results as a JSON array with objects containing these exact fields: title, company, location, salary (or \"Not listed\"), url, job_type, posted_date. Return ONLY the raw JSON array, no markdown fences, no commentary, no explanation.",
         messages: [
           {
             role: "user",
-            content: `Search Indeed for "${keyword}" jobs in "${location}" in the US. Return all results.`,
+            content: `Search Indeed (site:indeed.com) for "${keyword}" jobs in "${location}" in the US. Find current job listings and return them as a JSON array.`,
           },
         ],
-        mcp_servers: [
+        tools: [
           {
-            type: "url",
-            url: "https://mcp.indeed.com/claude/mcp",
-            name: "indeed",
+            type: "web_search_20250305",
+            name: "web_search",
+            max_uses: 3,
           },
         ],
       }),
@@ -50,16 +49,7 @@ export async function POST(req: NextRequest) {
 
     if (!resp.ok) {
       const errBody = await resp.text()
-      console.error("Indeed MCP upstream error:", resp.status, errBody.slice(0, 500))
-      const isAuthError = errBody.includes("Authentication error") || errBody.includes("authorization")
-      if (isAuthError) {
-        return NextResponse.json({
-          jobs: [],
-          source: "Indeed",
-          count: 0,
-          info: "Indeed search unavailable — requires Claude.ai connector authentication",
-        })
-      }
+      console.error("Indeed web search upstream error:", resp.status, errBody.slice(0, 500))
       return NextResponse.json(
         {
           jobs: [],
@@ -74,12 +64,8 @@ export async function POST(req: NextRequest) {
     const data = await resp.json()
     const allText =
       data.content
-        ?.map((b: { type: string; text?: string; content?: { text?: string }[] }) => {
-          if (b.type === "text") return b.text || ""
-          if (b.type === "mcp_tool_result")
-            return b.content?.map((c) => c.text || "").join("\n") || ""
-          return ""
-        })
+        ?.filter((b: { type: string }) => b.type === "text")
+        .map((b: { text?: string }) => b.text || "")
         .join("\n") || ""
 
     const jobs = parseIndeedResults(allText)
@@ -90,10 +76,12 @@ export async function POST(req: NextRequest) {
       count: jobs.length,
     })
   } catch (error) {
-    console.error("Indeed search error:", error)
-    return NextResponse.json(
-      { jobs: [], source: "Indeed", count: 0, error: "MCP timeout" },
-      { status: 200 }
-    )
+    console.error("Indeed web search error:", error)
+    return NextResponse.json({
+      jobs: [],
+      source: "Indeed",
+      count: 0,
+      info: "Indeed search temporarily unavailable",
+    })
   }
 }

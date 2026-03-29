@@ -132,7 +132,7 @@
       "name": "Indeed Search API Route",
       "file": "src/app/api/search-indeed/route.ts",
       "exports": ["POST"],
-      "patterns": ["claude-haiku", "mcp.indeed.com"],
+      "patterns": ["claude-haiku", "web_search"],
       "area": "search"
     },
     {
