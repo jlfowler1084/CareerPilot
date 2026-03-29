@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
-import { Loader2, Copy, Check, Save, RefreshCw } from "lucide-react"
+import { Loader2, Copy, Check, Save, RefreshCw, Download } from "lucide-react"
 import type { Application } from "@/types"
 
 interface TailorModalProps {
@@ -37,6 +37,7 @@ export function TailorModal({
   const [copied, setCopied] = useState(false)
   const [saving, setSaving] = useState(false)
   const [viewing, setViewing] = useState(false)
+  const [downloading, setDownloading] = useState(false)
 
   // When opening in view mode with a saved resume, display it
   useEffect(() => {
@@ -97,6 +98,33 @@ export function TailorModal({
       toast.error("Failed to save tailored resume")
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function handleDownloadPdf() {
+    setDownloading(true)
+    try {
+      const resp = await fetch("/api/generate-pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: "resume",
+          text: tailoredResume,
+          metadata: { title: application.title, company: application.company },
+        }),
+      })
+      if (!resp.ok) {
+        const data = await resp.json()
+        toast.error(data.error || "Failed to generate PDF")
+        return
+      }
+      const data = await resp.json()
+      window.open(data.url, "_blank")
+      toast.success("Resume PDF generated")
+    } catch {
+      toast.error("Failed to generate PDF")
+    } finally {
+      setDownloading(false)
     }
   }
 
@@ -180,6 +208,14 @@ export function TailorModal({
                   <Copy className="size-3.5 mr-1.5" />
                 )}
                 {copied ? "Copied" : "Copy to Clipboard"}
+              </Button>
+              <Button variant="outline" onClick={handleDownloadPdf} disabled={downloading}>
+                {downloading ? (
+                  <Loader2 className="size-3.5 mr-1.5 animate-spin" />
+                ) : (
+                  <Download className="size-3.5 mr-1.5" />
+                )}
+                {downloading ? "Generating..." : "Download PDF"}
               </Button>
               {viewing ? (
                 <Button variant="outline" onClick={handleTailor}>

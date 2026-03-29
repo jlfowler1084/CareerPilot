@@ -558,6 +558,30 @@
       "exports": ["AutoApplyQueue"],
       "patterns": ["QueueCard", "STATUS_STYLES"],
       "area": "search"
+    },
+    {
+      "ticket": "CAR-18",
+      "name": "PDF Generator",
+      "file": "src/lib/pdf-generator.ts",
+      "exports": ["generateResumePdf", "generateCoverLetterPdf"],
+      "patterns": ["PDFDocument", "parseResumeText"],
+      "area": "search"
+    },
+    {
+      "ticket": "CAR-18",
+      "name": "Generate PDF API",
+      "file": "src/app/api/generate-pdf/route.ts",
+      "exports": ["POST"],
+      "patterns": ["sanitizeFilename", "generateResumePdf"],
+      "area": "search"
+    },
+    {
+      "ticket": "CAR-18",
+      "name": "Batch Generate API",
+      "file": "src/app/api/auto-apply/generate-batch/route.ts",
+      "exports": ["POST"],
+      "patterns": ["BatchResult", "queueIds"],
+      "area": "search"
     }
   ]
 }

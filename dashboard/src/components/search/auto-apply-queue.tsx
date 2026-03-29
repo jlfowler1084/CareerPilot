@@ -1,7 +1,8 @@
 "use client"
 
 import { useState, useMemo } from "react"
-import { Check, X, CheckCheck, Trash2, ExternalLink, Loader2 } from "lucide-react"
+import { Check, X, CheckCheck, Trash2, ExternalLink, Loader2, FileText, Sparkles } from "lucide-react"
+import { toast } from "sonner"
 import { FitScoreBadge } from "@/components/search/fit-score-badge"
 import type { AutoApplyQueueItem, AutoApplyStatus } from "@/types"
 
@@ -13,6 +14,7 @@ interface AutoApplyQueueProps {
   onReject: (id: string) => void
   onApproveAllAbove: (minScore: number) => void
   onClearRejected: () => void
+  onGenerateBatch?: (ids: string[]) => Promise<void>
 }
 
 type StatusFilter = "all" | "pending" | "approved" | "applied" | "failed"
@@ -37,8 +39,10 @@ export function AutoApplyQueue({
   onReject,
   onApproveAllAbove,
   onClearRejected,
+  onGenerateBatch,
 }: AutoApplyQueueProps) {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all")
+  const [generating, setGenerating] = useState(false)
 
   const filtered = useMemo(() => {
     if (statusFilter === "all") return queue
@@ -92,6 +96,29 @@ export function AutoApplyQueue({
               Approve All 80+
             </button>
           )}
+          {onGenerateBatch && queue.some((q) => q.status === "approved") && (
+            <button
+              type="button"
+              disabled={generating}
+              onClick={async () => {
+                const ids = queue.filter((q) => q.status === "approved").map((q) => q.id)
+                if (ids.length === 0) return
+                setGenerating(true)
+                try {
+                  await onGenerateBatch(ids)
+                  toast.success(`Generated materials for ${ids.length} job${ids.length !== 1 ? "s" : ""}`)
+                } catch {
+                  toast.error("Batch generation failed")
+                } finally {
+                  setGenerating(false)
+                }
+              }}
+              className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-md bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-700 hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors disabled:opacity-50"
+            >
+              {generating ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+              {generating ? "Generating..." : "Generate All"}
+            </button>
+          )}
           {(queue.some((q) => q.status === "skipped" || q.status === "rejected")) && (
             <button
               type="button"
@@ -114,6 +141,9 @@ export function AutoApplyQueue({
               item={item}
               onApprove={() => onApprove(item.id)}
               onReject={() => onReject(item.id)}
+              onGenerate={onGenerateBatch ? async () => {
+                await onGenerateBatch([item.id])
+              } : undefined}
             />
           ))}
         </div>
@@ -140,13 +170,18 @@ function QueueCard({
   item,
   onApprove,
   onReject,
+  onGenerate,
 }: {
   item: AutoApplyQueueItem
   onApprove: () => void
   onReject: () => void
+  onGenerate?: () => Promise<void>
 }) {
+  const [genLoading, setGenLoading] = useState(false)
   const status = STATUS_STYLES[item.status] || STATUS_STYLES.pending
   const isPending = item.status === "pending"
+  const isApproved = item.status === "approved"
+  const isReady = item.status === "ready"
   const isProcessing = ["generating", "applying"].includes(item.status)
 
   // Build a FitScore-like object for the badge
@@ -217,6 +252,53 @@ function QueueCard({
               >
                 <X size={10} /> Reject
               </button>
+            </div>
+          )}
+
+          {isApproved && onGenerate && (
+            <button
+              type="button"
+              disabled={genLoading}
+              onClick={async () => {
+                setGenLoading(true)
+                try {
+                  await onGenerate()
+                  toast.success("Materials generated")
+                } catch {
+                  toast.error("Generation failed")
+                } finally {
+                  setGenLoading(false)
+                }
+              }}
+              className="text-[10px] font-semibold px-2 py-1 rounded-md bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/50 border border-blue-200 dark:border-blue-700 transition-colors flex items-center gap-1 disabled:opacity-50"
+            >
+              {genLoading ? <Loader2 size={10} className="animate-spin" /> : <Sparkles size={10} />}
+              {genLoading ? "Generating..." : "Generate Materials"}
+            </button>
+          )}
+
+          {(isReady || item.status === "applied") && (
+            <div className="flex items-center gap-1.5">
+              {item.tailored_resume_url && (
+                <a
+                  href={item.tailored_resume_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[10px] font-semibold px-2 py-0.5 rounded bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-700 flex items-center gap-1"
+                >
+                  <FileText size={9} /> Resume
+                </a>
+              )}
+              {item.cover_letter_url && (
+                <a
+                  href={item.cover_letter_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[10px] font-semibold px-2 py-0.5 rounded bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-700 flex items-center gap-1"
+                >
+                  <FileText size={9} /> Cover Letter
+                </a>
+              )}
             </div>
           )}
 

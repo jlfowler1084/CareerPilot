@@ -595,6 +595,14 @@ export default function SearchPage() {
           onReject={rejectJob}
           onApproveAllAbove={approveAllAbove}
           onClearRejected={clearRejected}
+          onGenerateBatch={async (ids) => {
+            const resp = await fetch("/api/auto-apply/generate-batch", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ queueIds: ids }),
+            })
+            if (!resp.ok) throw new Error("Batch generation failed")
+          }}
         />
       )}
 
