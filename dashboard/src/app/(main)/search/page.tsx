@@ -10,7 +10,15 @@ import { CustomSearchBar } from "@/components/search/custom-search-bar"
 import { SearchControls } from "@/components/search/search-controls"
 import { SearchHistory } from "@/components/search/search-history"
 import { SearchFiltersBar, DEFAULT_FILTERS, type SearchFilters } from "@/components/search/search-filters"
-import { applyFilters, hasActiveFilters } from "@/lib/search-filter-utils"
+import {
+  applyFilters,
+  hasActiveFilters,
+  applyAdvancedFilters,
+  hasActiveAdvancedFilters,
+  DEFAULT_ADVANCED_FILTERS,
+  type AdvancedFilters,
+} from "@/lib/search-filter-utils"
+import { AdvancedFiltersPanel } from "@/components/search/advanced-filters"
 import { JobCard } from "@/components/shared/job-card"
 import { TailorModal } from "@/components/applications/tailor-modal"
 import { CoverLetterModal } from "@/components/applications/cover-letter-modal"
@@ -97,6 +105,7 @@ export default function SearchPage() {
       setViewingHistorical(false)
       setSavedToHistory(true)
       setFilters(DEFAULT_FILTERS)
+      setAdvancedFilters(DEFAULT_ADVANCED_FILTERS)
     },
   })
 
@@ -192,10 +201,20 @@ export default function SearchPage() {
 
   // Search filters (client-side, persists across history navigation)
   const [filters, setFilters] = useState<SearchFilters>(DEFAULT_FILTERS)
-  const filteredResults = useMemo(
+  const [advancedFilters, setAdvancedFilters] = useState<AdvancedFilters>(DEFAULT_ADVANCED_FILTERS)
+
+  // Chain: quick filters → advanced filters
+  const quickFiltered = useMemo(
     () => applyFilters(searchResults, filters),
     [searchResults, filters]
   )
+  const filteredResults = useMemo(
+    () => applyAdvancedFilters(quickFiltered, advancedFilters),
+    [quickFiltered, advancedFilters]
+  )
+
+  // Extract unique companies from quick-filtered results for autocomplete
+  const companiesForAutocomplete = quickFiltered
 
   // Sort state
   const [sortBy, setSortBy] = useState<"newest" | "salary" | "company">("newest")
@@ -539,12 +558,19 @@ export default function SearchPage() {
 
       {/* Quick Filters */}
       {searchResults.length > 0 && (
-        <SearchFiltersBar
-          filters={filters}
-          onFiltersChange={setFilters}
-          totalCount={searchResults.length}
-          filteredCount={filteredResults.length}
-        />
+        <>
+          <SearchFiltersBar
+            filters={filters}
+            onFiltersChange={setFilters}
+            totalCount={searchResults.length}
+            filteredCount={filteredResults.length}
+          />
+          <AdvancedFiltersPanel
+            filters={advancedFilters}
+            onFiltersChange={setAdvancedFilters}
+            jobs={quickFiltered}
+          />
+        </>
       )}
 
       {/* Results */}
@@ -552,7 +578,7 @@ export default function SearchPage() {
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <div className="text-xs font-medium text-zinc-500 uppercase tracking-wider">
-              {hasActiveFilters(filters)
+              {hasActiveFilters(filters) || hasActiveAdvancedFilters(advancedFilters)
                 ? `${filteredResults.length} of ${searchResults.length} Results`
                 : `${searchResults.length} Results`}
             </div>

@@ -155,8 +155,16 @@
       "ticket": "CAR-72",
       "name": "Search Filter Utilities",
       "file": "src/lib/search-filter-utils.ts",
-      "exports": ["applyFilters", "hasActiveFilters"],
-      "patterns": ["remote", "Not listed", "easyApply"],
+      "exports": ["applyFilters", "hasActiveFilters", "applyAdvancedFilters", "parseSalary", "parsePostedDate"],
+      "patterns": ["remote", "Not listed", "easyApply", "AdvancedFilters", "salaryMin", "datePosted"],
+      "area": "search"
+    },
+    {
+      "ticket": "CAR-72",
+      "name": "Advanced Filters Panel",
+      "file": "src/components/search/advanced-filters.tsx",
+      "exports": ["AdvancedFiltersPanel"],
+      "patterns": ["includeKeywords", "excludeKeywords", "salaryMin", "companyMode", "datePosted", "Clear Advanced Filters"],
       "area": "search"
     },
     {
