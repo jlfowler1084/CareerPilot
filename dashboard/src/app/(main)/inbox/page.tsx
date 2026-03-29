@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback, useMemo } from "react"
+import { useState, useCallback, useMemo, useEffect } from "react"
 import { RefreshCw, Mail, ArrowLeft } from "lucide-react"
 import { useEmails } from "@/hooks/use-emails"
 import { FilterChips, ALL_FILTER_IDS } from "@/components/inbox/filter-chips"
@@ -9,6 +9,21 @@ import { EmailDetail } from "@/components/inbox/email-detail"
 import { EmptyState } from "@/components/shared/empty-state"
 
 const CONVERSATIONS_EXCLUDED = new Set(["alerts", "irrelevant"])
+
+const INBOX_SORT_KEY = "careerpilot_inbox_sort"
+const INBOX_HIDE_SUBS_KEY = "careerpilot_inbox_hide_subs"
+const INBOX_GROUP_KEY = "careerpilot_inbox_group_by_company"
+
+function loadPref<T>(key: string, fallback: T): T {
+  try {
+    const raw = localStorage.getItem(key)
+    return raw ? JSON.parse(raw) : fallback
+  } catch { return fallback }
+}
+
+function savePref(key: string, value: unknown) {
+  localStorage.setItem(key, JSON.stringify(value))
+}
 
 export default function InboxPage() {
   const {
@@ -21,6 +36,9 @@ export default function InboxPage() {
   const [excludedFilters, setExcludedFilters] = useState<Set<string>>(new Set(["alerts"]))
   const [showUnlinkedOnly, setShowUnlinkedOnly] = useState(false)
   const [showDismissed, setShowDismissed] = useState(false)
+  const [sortOrder, setSortOrder] = useState<"newest" | "oldest">(() => loadPref(INBOX_SORT_KEY, "newest"))
+  const [hideSubs, setHideSubs] = useState<boolean>(() => loadPref(INBOX_HIDE_SUBS_KEY, false))
+  const [groupByCompany, setGroupByCompany] = useState<boolean>(() => loadPref(INBOX_GROUP_KEY, false))
 
   const selectedEmail = useMemo(
     () => emails.find((e) => e.id === selectedId) || null,
@@ -184,6 +202,47 @@ export default function InboxPage() {
           onToggleUnlinked={handleToggleUnlinked}
           showDismissed={showDismissed}
         />
+
+        {/* Sort / Subscription / Grouping controls */}
+        <div className="flex items-center gap-3 mt-2 flex-wrap">
+          <select
+            value={sortOrder}
+            onChange={(e) => {
+              const v = e.target.value as "newest" | "oldest"
+              setSortOrder(v)
+              savePref(INBOX_SORT_KEY, v)
+            }}
+            title="Sort order"
+            className="text-xs px-2.5 py-1 rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 cursor-pointer focus:outline-none focus:ring-1 focus:ring-amber-300"
+          >
+            <option value="newest">Newest First</option>
+            <option value="oldest">Oldest First</option>
+          </select>
+
+          <button
+            type="button"
+            onClick={() => { setHideSubs(!hideSubs); savePref(INBOX_HIDE_SUBS_KEY, !hideSubs) }}
+            className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all ${
+              hideSubs
+                ? "bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30"
+                : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border border-transparent hover:border-zinc-300 dark:hover:border-zinc-600"
+            }`}
+          >
+            Hide Subscriptions
+          </button>
+
+          <button
+            type="button"
+            onClick={() => { setGroupByCompany(!groupByCompany); savePref(INBOX_GROUP_KEY, !groupByCompany) }}
+            className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all ${
+              groupByCompany
+                ? "bg-blue-500/20 text-blue-600 dark:text-blue-400 border border-blue-500/30"
+                : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border border-transparent hover:border-zinc-300 dark:hover:border-zinc-600"
+            }`}
+          >
+            Group by Company
+          </button>
+        </div>
       </div>
 
       {/* Two-panel layout */}
@@ -199,6 +258,9 @@ export default function InboxPage() {
             excludedFilters={excludedFilters}
             showUnlinkedOnly={showUnlinkedOnly}
             showDismissed={showDismissed}
+            sortOrder={sortOrder}
+            hideSubs={hideSubs}
+            groupByCompany={groupByCompany}
             onSelect={handleSelect}
             onCheck={handleCheck}
             onSelectAll={handleSelectAll}

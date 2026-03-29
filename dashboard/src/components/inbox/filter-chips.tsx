@@ -69,8 +69,8 @@ export function FilterChips({
             : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border border-transparent hover:border-zinc-300 dark:hover:border-zinc-600"
         }`}
       >
-        {allActive ? "All" : `All (-${excludedFilters.size})`}
-        <span className="ml-1">{allCount}</span>
+        All
+        <span className="ml-1">{Math.max(0, allCount)}</span>
       </button>
 
       {/* Category chips */}
