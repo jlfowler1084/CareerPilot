@@ -414,6 +414,63 @@ export function useEmails() {
       console.error("[auto-track] Non-blocking error:", err)
     }
 
+    // CAR-79: Progressive backfill — process up to 20 unprocessed emails from last 30 days
+    try {
+      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+      const alreadyProcessedIds = new Set(classifiedResults.map((e) => e.id))
+      const backfillLinkedIds = new Set([...links.map((l) => l.email_id)])
+      // Also include any we just linked above
+      classifiedResults.forEach((e) => { if (e.auto_track_status) alreadyProcessedIds.add(e.id) })
+
+      const unprocessed = emails.filter((e) =>
+        e.auto_track_status === null &&
+        e.category !== "unclassified" &&
+        !alreadyProcessedIds.has(e.id) &&
+        !backfillLinkedIds.has(e.id) &&
+        new Date(e.received_at) > thirtyDaysAgo
+      ).slice(0, 20)
+
+      if (unprocessed.length > 0) {
+        const bfResp = await fetch("/api/auto-track/detect", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email_ids: unprocessed.map((e) => e.id) }),
+        })
+        if (bfResp.ok) {
+          const { results: bfResults } = await bfResp.json()
+          const bfTrackedIds: string[] = []
+          for (const r of bfResults || []) {
+            if (r.tracked && r.application_id) {
+              bfTrackedIds.push(r.email_id)
+              setLinks((prev) => [
+                ...prev,
+                { email_id: r.email_id, application_id: r.application_id, user_id: "", linked_by: "auto_track" as const, linked_at: new Date().toISOString() },
+              ])
+            }
+          }
+          if (bfTrackedIds.length > 0) {
+            setEmails((prev) => prev.map((e) =>
+              bfTrackedIds.includes(e.id) ? { ...e, auto_track_status: "tracked" } : e
+            ))
+            const { data: freshApps } = await supabase
+              .from("applications")
+              .select("id, title, company, status")
+              .eq("user_id", (await supabase.auth.getUser()).data.user?.id || "")
+            if (freshApps) setApplications(freshApps as Pick<Application, "id" | "title" | "company" | "status">[])
+          }
+          const bfPrompted = (bfResults || []).filter((r: { promptUser?: boolean }) => r.promptUser)
+          if (bfPrompted.length > 0) {
+            setEmails((prev) => prev.map((e) => {
+              const match = bfPrompted.find((r: { email_id: string; extraction?: unknown }) => r.email_id === e.id)
+              return match ? { ...e, auto_track_status: "prompted", auto_track_data: match.extraction } : e
+            }))
+          }
+        }
+      }
+    } catch (err) {
+      console.error("[auto-track-backfill] Non-blocking error:", err)
+    }
+
     setScanState((prev) => ({ ...prev, classifying: false }))
   }, [applications, autoUpdateApplicationStatuses])
 
@@ -526,6 +583,83 @@ export function useEmails() {
     ))
   }, [])
 
+  // ── CAR-79: Manual backfill auto-track ─────────────────────────
+  const backfillAutoTrack = useCallback(async (
+    onProgress: (current: number, total: number, found: number) => void,
+  ): Promise<number> => {
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+    const linkedIds = new Set(links.map((l) => l.email_id))
+    const unprocessed = emails.filter((e) =>
+      e.auto_track_status === null &&
+      e.category !== "unclassified" &&
+      !linkedIds.has(e.id) &&
+      new Date(e.received_at) > sevenDaysAgo
+    )
+
+    if (unprocessed.length === 0) return 0
+
+    let found = 0
+    const batchSize = 10
+
+    for (let i = 0; i < unprocessed.length; i += batchSize) {
+      const batch = unprocessed.slice(i, i + batchSize)
+      onProgress(i, unprocessed.length, found)
+
+      try {
+        const resp = await fetch("/api/auto-track/detect", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email_ids: batch.map((e) => e.id) }),
+        })
+        if (resp.ok) {
+          const { results } = await resp.json()
+          const trackedIds: string[] = []
+          for (const r of results || []) {
+            if (r.tracked && r.application_id) {
+              found++
+              trackedIds.push(r.email_id)
+              setLinks((prev) => [
+                ...prev,
+                { email_id: r.email_id, application_id: r.application_id, user_id: "", linked_by: "auto_track" as const, linked_at: new Date().toISOString() },
+              ])
+            }
+          }
+          if (trackedIds.length > 0) {
+            setEmails((prev) => prev.map((e) =>
+              trackedIds.includes(e.id) ? { ...e, auto_track_status: "tracked" } : e
+            ))
+          }
+          const prompted = (results || []).filter((r: { promptUser?: boolean }) => r.promptUser)
+          if (prompted.length > 0) {
+            setEmails((prev) => prev.map((e) => {
+              const match = prompted.find((r: { email_id: string; extraction?: unknown }) => r.email_id === e.id)
+              return match ? { ...e, auto_track_status: "prompted", auto_track_data: match.extraction } : e
+            }))
+          }
+        }
+      } catch (err) {
+        console.error("[backfill] Batch error:", err)
+      }
+
+      if (i + batchSize < unprocessed.length) {
+        await new Promise((r) => setTimeout(r, 1000))
+      }
+    }
+
+    onProgress(unprocessed.length, unprocessed.length, found)
+
+    // Reload applications to pick up newly created ones
+    if (found > 0) {
+      const { data: freshApps } = await supabase
+        .from("applications")
+        .select("id, title, company, status")
+        .eq("user_id", (await supabase.auth.getUser()).data.user?.id || "")
+      if (freshApps) setApplications(freshApps as Pick<Application, "id" | "title" | "company" | "status">[])
+    }
+
+    return found
+  }, [emails, links])
+
   // ── Manual refresh ─────────────────────────────────────────────
   const refresh = useCallback(() => runScan(), [runScan])
 
@@ -544,5 +678,6 @@ export function useEmails() {
     markRead,
     markReplied,
     refresh,
+    backfillAutoTrack,
   }
 }

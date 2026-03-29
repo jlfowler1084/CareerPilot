@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useCallback, useMemo, useEffect } from "react"
-import { RefreshCw, Mail, ArrowLeft, X } from "lucide-react"
+import { RefreshCw, Mail, ArrowLeft, X, Zap } from "lucide-react"
 import { useEmails } from "@/hooks/use-emails"
 import { FilterChips, ALL_FILTER_IDS } from "@/components/inbox/filter-chips"
 import { EmailList } from "@/components/inbox/email-list"
@@ -42,7 +42,7 @@ function savePref(key: string, value: unknown) {
 export default function InboxPage() {
   const {
     emails, links, applications, loading, scanState,
-    linkEmail, unlinkEmail, dismissEmail, undismissEmail, dismissMany, linkMany, markRead, markReplied, refresh,
+    linkEmail, unlinkEmail, dismissEmail, undismissEmail, dismissMany, linkMany, markRead, markReplied, refresh, backfillAutoTrack,
   } = useEmails()
 
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -138,6 +138,44 @@ export default function InboxPage() {
   }, [linkMany])
 
   const [autoTrackBanner, setAutoTrackBanner] = useState<string | null>(null)
+
+  // CAR-79: Backfill state
+  const [backfillState, setBackfillState] = useState<{
+    scanning: boolean; current: number; total: number; found: number
+  } | null>(null)
+  const [backfillResult, setBackfillResult] = useState<string | null>(null)
+
+  const unprocessedCount = useMemo(() => {
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+    const linkedIds = new Set(links.map((l) => l.email_id))
+    return emails.filter((e) =>
+      e.auto_track_status === null &&
+      e.category !== "unclassified" &&
+      !linkedIds.has(e.id) &&
+      new Date(e.received_at) > sevenDaysAgo
+    ).length
+  }, [emails, links])
+
+  const handleBackfill = useCallback(async () => {
+    setBackfillState({ scanning: true, current: 0, total: 0, found: 0 })
+    setBackfillResult(null)
+    try {
+      const found = await backfillAutoTrack((current, total, found) => {
+        setBackfillState({ scanning: true, current, total, found })
+      })
+      setBackfillState(null)
+      if (found > 0) {
+        setBackfillResult(`Found ${found} new application${found !== 1 ? "s" : ""}`)
+      } else {
+        setBackfillResult("All emails already scanned")
+      }
+      setTimeout(() => setBackfillResult(null), 5000)
+    } catch {
+      setBackfillState(null)
+      setBackfillResult("Scan failed")
+      setTimeout(() => setBackfillResult(null), 5000)
+    }
+  }, [backfillAutoTrack])
 
   // Check for newly auto-tracked emails and show banner
   useEffect(() => {
@@ -295,6 +333,30 @@ export default function InboxPage() {
           >
             Group by Company
           </button>
+
+          {/* CAR-79: Scan for Applications button */}
+          {backfillResult ? (
+            <span className="px-2.5 py-1 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+              {backfillResult}
+            </span>
+          ) : backfillState?.scanning ? (
+            <span className="px-2.5 py-1 text-xs font-medium text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
+              <Zap size={12} className="animate-pulse" />
+              Scanning {backfillState.current}/{backfillState.total} emails...
+            </span>
+          ) : unprocessedCount > 0 ? (
+            <button
+              type="button"
+              onClick={handleBackfill}
+              disabled={scanState.scanning || scanState.classifying}
+              className="px-2.5 py-1 rounded-md text-xs font-medium transition-all bg-zinc-100 dark:bg-zinc-800 text-amber-600 dark:text-amber-400 border border-amber-500/30 hover:bg-amber-50 dark:hover:bg-amber-900/20 disabled:opacity-50"
+            >
+              <span className="flex items-center gap-1.5">
+                <Zap size={12} />
+                Scan for Applications
+              </span>
+            </button>
+          ) : null}
         </div>
 
         {/* CAR-77: Quick Filters / Advanced Filters / Query Mode */}
