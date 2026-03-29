@@ -1,7 +1,8 @@
 # CLAUDE.md — CareerPilot Project Context
+<!-- Global rules inherited from: ~/.claude/CLAUDE.md -->
+<!-- Global hooks inherited from: ~/.claude/settings.json -->
 
 ## Project Identity
-
 CareerPilot is a Python CLI application for personal career management:
 - Gmail scanning for recruiter emails with Claude-powered classification and response drafting
 - Google Calendar integration for availability checking and interview scheduling
@@ -10,454 +11,101 @@ CareerPilot is a Python CLI application for personal career management:
 - Skill gap tracking with Claude-powered study roadmap generation
 - Progress journaling with weekly insights and momentum analysis
 
-**Owner:** Joe
 **Location:** `F:\Projects\CareerPilot\`
-**Platform:** Windows 10, Python 3.8+ (Microsoft Store Python 3.8.10)
+**Repo:** jlfowler1084/CareerPilot (private), **Branch:** master
 
----
-
-## Environment
-
-- **OS:** Windows 10/11
-- **Shell:** PowerShell 5.1+ / bash (via Git Bash or WSL) — Claude Code uses bash syntax
-- **Python:** 3.8+ (Microsoft Store Python 3.8.10 — use `python -m pip install` not bare `pip`)
+## Environment (Project-Specific)
+- **Python:** 3.8+ (Microsoft Store Python 3.8.10 — use `python -m pip install`)
 - **Python compat:** Use `from __future__ import annotations` in all modules with type hints — `list[str]` syntax requires 3.9+
-- **Node.js:** v24.14.0 (installed at `C:\Program Files\nodejs\`)
-- **MCP config:** `.mcp.json` in project root (NOT settings.json)
-
-Use `python -m pip install` for package installs — bare `pip install` may target a different Python installation.
-
-Temp files may be cleaned up quickly by Windows — save diagnostic outputs to persistent locations (e.g., the project's `data/` or `logs/` directory), not system temp folders.
-
-### MCP Fallback Strategy
-
-The Atlassian MCP server for Jira may disconnect mid-session. Follow this escalation:
-1. Try MCP tools first (1 attempt)
-2. If MCP fails, immediately fall back to direct Jira REST API:
-   ```python
-   import requests, base64, os
-   auth = base64.b64encode(f"{os.environ['JIRA_EMAIL']}:{os.environ['JIRA_API_TOKEN']}".encode()).decode()
-   headers = {"Authorization": f"Basic {auth}", "Content-Type": "application/json"}
-   response = requests.get("https://jlfowler1084.atlassian.net/rest/api/3/issue/SCRUM-XX", headers=headers)
-   ```
-3. Do NOT retry MCP more than once — it wastes entire sessions
-4. Jira project: SCRUM on jlfowler1084.atlassian.net, transition ID 41 = Done
-
----
+- **Shell:** Claude Code uses bash syntax in this project
 
 ## Testing
-
-### Test Commands
-
 - Run all tests: `python -m pytest tests/`
-- Run a specific test file: `python -m pytest tests/test_scanner.py`
-- Run with verbose output: `python -m pytest tests/ -v`
-- NEVER report "no regression" without actually running the test suite
-
-After ANY code change:
-1. Run `python -m pytest tests/` against all test cases
-2. If any test fails, STOP — diagnose before attempting another fix
-3. Never stack multiple fixes without testing between each one
-4. Report test results BEFORE telling the user "fix confirmed"
-
-### Regression Prevention
-
-Before implementing any fix:
-1. Analyze which other modules could be affected
-2. List the specific functions that will change and the regression risks
-3. Run the full test suite to establish a clean baseline BEFORE editing code
-
-After implementing any fix:
-1. Run the full test suite
-2. If any module regresses, STOP — diagnose before attempting another fix
-3. Never stack multiple fixes without testing between each one
-4. Report test results with pass/fail counts before declaring "fix confirmed"
-
----
-
-## Directory Structure
-
-```
-F:\Projects\CareerPilot\
-├── CLAUDE.md                      ← this file
-├── README.md                      ← project description + setup instructions
-├── requirements.txt               ← Python dependencies
-├── .env.example                   ← environment variable template
-├── .gitignore                     ← Python, .env, __pycache__, *.db, tokens, IDE
-├── config/
-│   ├── settings.py                ← central config (loads .env, exposes constants)
-│   └── search_profiles.py         ← job search keyword/location profiles
-├── src/
-│   ├── __init__.py
-│   ├── gmail/
-│   │   ├── __init__.py
-│   │   ├── scanner.py             ← Gmail API integration, recruiter detection
-│   │   ├── responder.py           ← Draft/send responses via Claude
-│   │   └── templates.py           ← response templates + personal context
-│   ├── calendar/
-│   │   ├── __init__.py
-│   │   └── scheduler.py           ← Google Calendar availability + booking
-│   ├── jobs/
-│   │   ├── __init__.py
-│   │   ├── searcher.py            ← Indeed/Dice API search wrapper
-│   │   ├── tracker.py             ← application tracking (SQLite)
-│   │   └── analyzer.py            ← job description analysis via Claude
-│   ├── journal/
-│   │   ├── __init__.py
-│   │   ├── entries.py             ← create/read/search journal entries
-│   │   └── insights.py            ← Claude-powered gap analysis on entries
-│   ├── interviews/
-│   │   ├── __init__.py
-│   │   ├── transcripts.py         ← load and parse interview transcripts
-│   │   └── coach.py               ← Claude-powered interview analysis
-│   ├── skills/
-│   │   ├── __init__.py
-│   │   ├── tracker.py             ← skill inventory + progress tracking
-│   │   └── roadmap.py             ← study plan generation via Claude
-│   └── db/
-│       ├── __init__.py
-│       └── models.py              ← SQLite schema + CRUD operations
-├── cli.py                         ← main CLI entry point (Click + Rich)
-├── tests/
-│   └── ...                        ← pytest test files
-└── data/
-    ├── journal/                   ← markdown journal entries
-    ├── transcripts/               ← interview transcript files
-    ├── gmail_token.json           ← Gmail OAuth token (gitignored)
-    └── calendar_token.json        ← Calendar OAuth token (gitignored)
-```
-
----
+- Run specific: `python -m pytest tests/test_scanner.py -v`
 
 ## Code Conventions
-
 ### Python
-
 - Use `click` for CLI interfaces — `cli.py` is the main entry point
-- Use `Rich` for terminal UI (tables, panels, progress bars, markdown)
-- Include `if __name__ == "__main__":` guards in all runnable modules
-- Use `logging` module, not bare `print()`, for status output
-- On Windows, reconfigure stdout/stderr to UTF-8 when output may be captured:
-  ```python
-  if sys.platform == 'win32':
-      sys.stdout.reconfigure(encoding='utf-8', errors='replace')
-      sys.stderr.reconfigure(encoding='utf-8', errors='replace')
-  ```
-- Resolve file paths relative to script location using `Path(__file__).resolve().parent`
+- Use `Rich` for terminal UI (tables, panels, progress bars, markdown rendering)
 - Use `python-dotenv` to load `.env` — all config via `config/settings.py`
-- SQLite for local data (applications, skills, interview analyses) — database at `data/careerpilot.db`
-- Google OAuth tokens stored in `data/` directory, auto-refreshed on expiry
+- SQLite for local data at `data/careerpilot.db`
+- Google OAuth tokens in `data/`, auto-refreshed on expiry
+- Timezone: `America/Indiana/Indianapolis` (EST, no DST)
 
-### General
-
-- All paths configurable via `config/settings.py` — reference paths relative to project root
-- When generating code, produce **complete working files**, not fragments
-- When modifying existing files, show specific changes with surrounding context
-- Timezone: `America/Indiana/Indianapolis` (EST, no DST — Indiana is always Eastern)
-
----
+## Directory Structure
+```
+CareerPilot/
+├── cli.py                 # Click CLI entry point
+├── config/
+│   └── settings.py        # Central configuration
+├── data/
+│   ├── careerpilot.db     # SQLite database
+│   └── token.json         # Google OAuth token
+├── modules/
+│   ├── scanner.py         # Gmail scanning + classification
+│   ├── calendar_mgr.py    # Google Calendar integration
+│   ├── job_search.py      # Indeed/Dice automation
+│   ├── interview.py       # Transcript analysis + mock interviews
+│   ├── skills.py          # Skill gap tracking + study roadmaps
+│   └── journal.py         # Progress journaling
+├── tests/
+├── .env                   # API keys (never committed)
+├── .mcp.json              # MCP server configuration
+└── requirements.txt
+```
 
 ## Key Components
-
-### config/settings.py
-
-Loads `.env` and exposes all config values as module-level constants:
-- `ANTHROPIC_API_KEY` — Anthropic API key
-- `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI` — Google OAuth
-- `GMAIL_SCOPES`, `CALENDAR_SCOPES` — Google API scopes
-- `DB_PATH` — SQLite database path (default: `data/careerpilot.db`)
-
-### CLI Commands (Click)
-
-| Command | Purpose |
-|---|---|
-| `python cli.py scan` | Scan Gmail + display recruiter emails, respond/decline/skip |
-| `python cli.py calendar` | Show availability for next 5 days |
-| `python cli.py journal new` | Create a new journal entry |
-| `python cli.py journal list` | Show recent entries |
-| `python cli.py journal insights` | Weekly summary via Claude |
-| `python cli.py skills` | Show skill inventory with gap visualization |
-| `python cli.py roadmap` | Generate study roadmap via Claude |
-| `python cli.py search` | Run job search profiles |
-| `python cli.py tracker` | Show application pipeline (kanban) |
-| `python cli.py tracker stats` | Search/application analytics |
-| `python cli.py interview analyze <file>` | Analyze interview transcript |
-| `python cli.py interview mock` | Interactive mock interview |
-
-### API Integrations
-
-| API | Purpose | Auth |
-|---|---|---|
-| Anthropic (Claude) | Email classification, response drafting, gap analysis, interview coaching, roadmap generation | API key in `.env` |
-| Gmail API | Inbox scanning, draft creation, email sending | OAuth2 (InstalledAppFlow) |
-| Google Calendar API | Availability checking, event creation | OAuth2 (InstalledAppFlow) |
-| Indeed (via MCP) | Job search | MCP server |
-| Dice (via MCP) | Job search | MCP server |
-
-### Claude API Pattern
-
-```python
-import anthropic
-
-client = anthropic.Anthropic()  # reads ANTHROPIC_API_KEY from env
-response = client.messages.create(
-    model="claude-sonnet-4-6",
-    max_tokens=1024,
-    system="...",
-    messages=[{"role": "user", "content": "..."}],
-)
-```
-
-### SQLite Tables
-
-| Table | Purpose |
-|---|---|
-| `applications` | Job application tracking (status, dates, notes) |
-| `skills` | Skill inventory (name, category, current/target level) |
-| `interview_analyses` | Stored interview analysis results for trend tracking |
-
----
-
-## External Dependencies
-
-| Package | Purpose |
-|---|---|
-| `anthropic` | Claude API SDK |
-| `google-auth`, `google-auth-oauthlib`, `google-auth-httplib2` | Google OAuth2 |
-| `google-api-python-client` | Gmail and Calendar API client |
-| `python-dotenv` | Load `.env` config |
-| `rich` | Terminal UI (tables, panels, progress bars) |
-| `click` | CLI framework |
-| `pytest` | Test framework |
-
----
-
-## MCP Servers
-
-MCP configuration lives in `.mcp.json` at the project root — **not** in `settings.py` or `.claude/settings.json`.
-
-### Prerequisites
-
-| Requirement | Status | Details |
-|---|---|---|
-| Node.js | Installed | v24.14.0 at `C:\Program Files\nodejs\node.exe` |
-| npx | Installed | `C:\Program Files\nodejs\npx.cmd` (bundled with Node.js) |
-
-No global npm packages required — servers are fetched via `npx -y` on first use.
-
-### Context7 (`@upstash/context7-mcp`)
-
-Provides up-to-date library documentation and code examples. Use when working with any third-party library to get current API docs rather than relying on training-data approximations.
-
-### Atlassian MCP
-
-Connects to Atlassian Cloud (Jira, Confluence) via the official hosted MCP endpoint. Authenticates via browser OAuth on first use each session.
-
-**Fallback if unavailable:** Update Jira tickets manually via browser or use direct REST API.
-
----
-
-## API Cost Governance
-
-**Rules for ALL outbound API calls.**
-
-Before writing, modifying, or adding ANY outbound API call (Anthropic, Google, MCP, Supabase edge functions, or third-party), you MUST:
-
-### Check alternatives first (in this order):
-
-1. Can this be done with a direct MCP server call (no AI intermediary)?
-2. Can this be done with a direct REST API call?
-3. Can this be done with rules-based logic (regex, keyword matching, lookup table)?
-4. Can this be done with cached/precomputed results?
-5. If AI is genuinely needed, can Haiku handle it?
-6. Only use Sonnet if the task requires multi-step reasoning, nuanced generation, or complex analysis.
-7. Only use Opus for critical planning tasks with high stakes.
-
-### Document the call
-
-Add/update an entry in `dashboard/docs/api-registry.md` with:
-- Route or function path
-- Target service and model (if AI)
-- Purpose (1 sentence)
-- Trigger (what fires this call)
-- Justification for model choice (if AI)
-- Estimated cost per call
-
-### Use environment variables for model strings
-
-Never hardcode model names. Use:
-- `process.env.MODEL_HAIKU` for classification, extraction, simple relay
-- `process.env.MODEL_SONNET` for reasoning, generation, complex analysis
-- `process.env.MODEL_OPUS` for critical multi-step planning (rare)
-
-### Error handling is mandatory
-
-Every API call must have try/catch with:
-- No silent retries that could double-bill
-- Graceful degradation (show cached data or a clear error, don't retry in a loop)
-- Rate limit awareness (back off, don't hammer)
-
-### Never use Claude as an MCP relay
-
-If the goal is to call an MCP tool and return its results, call the MCP server directly. Claude should only be in the path if it needs to **reason** about the results.
-
-### Model selection quick reference
-
-| Task Type | Model | Examples |
-|---|---|---|
-| Classification (< 5 categories) | Haiku | Email categorization, job relevance scoring |
-| Data extraction (structured) | Haiku | Pulling fields from text, topic tagging |
-| Simple text generation | Haiku | Short summaries, status labels |
-| Complex reasoning | Sonnet | Interview prep, cover letter drafting, pattern analysis |
-| Nuanced generation | Sonnet | Resume tailoring, reply drafting with context |
-| Multi-step planning | Opus | Architecture decisions, complex workflow design |
-| Data relay / search | NO AI | Job search via MCP, API lookups, CRUD operations |
-
----
-
-## Claude Code Model Selection
-
-### Auto-Detect Rule
-
-At the START of every task, before doing any work, evaluate the task complexity and output a model recommendation:
-📊 Model recommendation: [HAIKU | SONNET | OPUS]
-Reason: [one-line justification]
-
-If the current session model is higher than needed, say so. If it's lower than what the task requires, warn immediately so the user can switch before work begins.
-
-### Model Tiers
-
-**HAIKU — Use for:**
-- File renaming, moving, copying, simple reorganization
-- Find-and-replace across files (mechanical changes)
-- Env var substitution (replacing hardcoded strings)
-- Adding boilerplate (auth guards, error handlers, imports)
-- Simple grep/search tasks and reporting
-- Linting, formatting, or fixing syntax errors
-- Updating documentation with known facts
-- Running tests and reporting results
-- Git operations (commit, push, branch, merge)
-- Any task where the instructions are fully specified and require no judgment
-
-**SONNET — Use for:**
-- Writing new features or components with business logic
-- Refactoring code that requires understanding architecture
-- Debugging non-obvious issues (requires reasoning about state/flow)
-- Writing or modifying API routes with complex request/response handling
-- Designing data models or database schemas
-- Writing tests that require understanding intent and edge cases
-- Code review and suggesting improvements
-- Multi-file changes that need to stay internally consistent
-- Prompt engineering for AI-powered features
-- Any task that requires reading context, making decisions, or generating non-trivial code
-
-**OPUS — Use for:**
-- Architecture design across multiple systems
-- Complex multi-step planning with dependencies
-- Analyzing and redesigning entire subsystems
-- Tasks requiring deep reasoning about tradeoffs
-- Critical production changes with high stakes
-- Full codebase audits (like the cost audit)
-- Writing design docs that require synthesizing many sources
-
-### Prompt Convention
-
-When writing prompts, include a model hint at the top:
-```
-[HAIKU] Add Supabase auth guards to search-indeed and search-dice routes.
-
-[SONNET] Refactor the email classification pipeline to support batch mode.
-
-[OPUS] Audit all 28 API call sites and produce a cost optimization report.
-```
-
-If no hint is provided, default to SONNET (safe middle ground). If the task turns out to be simpler or more complex than expected mid-execution, note the mismatch.
-
-### Decision Shortcuts
-
-Ask yourself: "Does this task require Claude to THINK, or just DO?"
-- Just DO → Haiku
-- Think then do → Sonnet
-- Think deeply about many things, then plan, then do → Opus
-
----
-
-## Common Mistakes to Avoid
-
-- Don't hardcode absolute paths — everything goes through `config/settings.py`
-- Don't add Python dependencies without calling them out — update `requirements.txt`
-- Don't use bare `pip install` — use `python -m pip install`
-- Don't recommend rewriting working components in a different language/framework without clear reason
-- Don't overwrite MCP config files (e.g., `.mcp.json`) — always merge new entries into the existing object
-- Don't restructure config schema without discussion
-- Don't stack multiple code fixes without running the test suite between each one
-- Don't report "no regression" without actually running pytest
-- Don't retry failed MCP connections more than once — fall back to REST API immediately
-- Don't assume temp files still exist — Windows may clean them up
-- Don't send emails without explicit user approval — Gmail responder starts in draft-only mode
-
----
-
-## Git Workflow
-
-**Repo:** `jlfowler1084/CareerPilot` (private)
-**Branch:** `master` (default working branch)
-**Remote:** `origin` → GitHub
-
-### Standard workflow for all code changes:
-
-1. **Pull before starting work:** `git pull origin master` to ensure you're on the latest
-2. **Make changes** — edit files as needed
-3. **Stage and commit** with a descriptive message:
-   ```
-   git add -A
-   git commit -m "feat: description of what changed"
-   ```
-4. **Push to remote:** `git push origin master`
-
-### Commit message conventions:
-
-- `feat:` — new feature or capability
-- `fix:` — bug fix
-- `refactor:` — code restructuring, no behavior change
-- `docs:` — documentation updates (CLAUDE.md, README, comments)
-- `chore:` — maintenance (dependencies, config, cleanup)
-- `test:` — adding or updating tests
-
-### Rules:
-
-- **Every task that modifies project files should end with a commit and push.** Don't leave uncommitted changes.
-- **Never commit** files matching `.gitignore` patterns: `data/`, `*.db`, token files, `.env`, `__pycache__/`, `.claude/settings.local.json`
-- If a task involves multiple logical changes, use **separate commits** for each
-- Before starting any work session, run `git status` to check for uncommitted changes from previous sessions
-
----
+### CLI Commands
+| Command | Description |
+|---------|-------------|
+| `scan` | Scan Gmail for recruiter emails, classify, draft responses |
+| `calendar` | Check availability, suggest interview slots |
+| `search` | Search Indeed/Dice, track applications |
+| `interview` | Analyze transcripts, run mock interviews |
+| `skills` | Track skill gaps, generate study roadmaps |
+| `journal` | Progress entries, weekly insights |
+
+### MCP Servers (Project-Specific)
+- **Supabase** — cloud data sync (permission: `mcp__Supabase__*`)
+- **Playwright** — browser automation for job sites (permission: `mcp__plugin_playwright_playwright__*`)
+- **Indeed/Dice** — job search APIs
 
 ## Privacy & Safety
+- **Draft-only mode:** Gmail responder saves drafts only — nothing sends without explicit approval
+- **All data stays local:** SQLite + markdown files. Nothing leaves except API calls
+- **OAuth tokens:** Stored locally in `data/`, never committed
+- **API keys:** In `.env`, never committed
 
-- **Draft-only mode:** The Gmail responder saves drafts — nothing sends without explicit user approval
-- **All data stays local:** SQLite database + markdown files. Nothing leaves the machine except API calls to Google and Anthropic
-- **OAuth tokens:** Stored locally in `data/` directory, never committed to git
-- **API keys:** Stored in `.env`, never committed to git
-
----
-
-## Things to Avoid
-
-- **Don't suggest cloud services** for features that work locally unless specifically asked
-- **Don't auto-send emails** — always draft first, require explicit approval
-- **Don't store API keys in code** — always use `.env` and `config/settings.py`
-- **Don't skip OAuth token refresh** — always handle expired tokens gracefully
-- **Don't break the CLI** — all features accessible via `cli.py` commands
-
----
+## Project-Specific Mistakes to Avoid
+- Don't use bare `pip install` — use `python -m pip install` (targets MS Store Python 3.8)
+- Don't send emails without explicit user approval — draft-only mode
+- Don't skip OAuth token refresh handling
+- Don't use `list[str]` syntax — use `List[str]` from typing or `from __future__ import annotations`
 
 ## Current Priorities
+### Phase 1 — Foundation (Current)
+- Gmail scanner with Claude classification
+- SQLite storage layer
+- Basic CLI structure
 
-Phase-based development roadmap:
-1. Phase 1 — Gmail recruiter scanner + response drafting (1a: scanner, 1b: responder)
-2. Phase 2 — Google Calendar integration (availability + scheduling)
-3. Phase 3 — Journal system + skill gap analysis
-4. Phase 4 — Interview transcript analysis + coaching
-5. Phase 5 — Job search integration + application tracker
-6. Phase 6 — Unified dashboard CLI + daily workflow
+### Phase 2 — Calendar + Scheduling
+- Google Calendar integration
+- Interview slot suggestions
+
+### Phase 3 — Job Search Automation
+- Indeed/Dice API integration
+- Application tracking
+
+### Phase 4 — Intelligence Layer
+- Interview transcript analysis
+- Skill gap identification
+- Study roadmap generation
+
+### Phase 5 — Journaling + Insights
+- Progress journaling
+- Weekly momentum analysis
+
+### Phase 6 — Polish
+- Rich terminal UI
+- Export capabilities
+- Supabase cloud sync
