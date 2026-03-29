@@ -60,14 +60,14 @@
       "name": "Job Search Page",
       "file": "src/app/(main)/search/page.tsx",
       "exports": [],
-      "patterns": ["SearchControls", "SearchHistory"],
+      "patterns": ["SearchControls", "SearchHistory", "CustomSearchBar", "useSearchProfiles"],
       "area": "search"
     },
     {
       "ticket": "CAR-58",
       "name": "Search Profiles",
       "file": "src/lib/constants.ts",
-      "exports": ["SEARCH_PROFILES"],
+      "exports": ["DEFAULT_SEARCH_PROFILES", "SEARCH_PROFILES"],
       "patterns": ["sysadmin_local", "syseng_local", "devops_local", "powershell_remote"],
       "area": "search"
     },
@@ -157,6 +157,30 @@
       "file": "src/lib/search-filter-utils.ts",
       "exports": ["applyFilters", "hasActiveFilters"],
       "patterns": ["remote", "Not listed", "easyApply"],
+      "area": "search"
+    },
+    {
+      "ticket": "CAR-72",
+      "name": "Search Profiles Hook",
+      "file": "src/hooks/use-search-profiles.ts",
+      "exports": ["useSearchProfiles"],
+      "patterns": ["search_profiles", "createProfile", "deleteProfile", "fetchProfiles"],
+      "area": "search"
+    },
+    {
+      "ticket": "CAR-72",
+      "name": "Custom Search Bar",
+      "file": "src/components/search/custom-search-bar.tsx",
+      "exports": ["CustomSearchBar"],
+      "patterns": ["Quick Search", "Save as Profile", "ICON_OPTIONS"],
+      "area": "search"
+    },
+    {
+      "ticket": "CAR-72",
+      "name": "Profile Management",
+      "file": "src/components/search/profile-chips.tsx",
+      "exports": ["ProfileChips"],
+      "patterns": ["Edit", "Delete", "Duplicate", "DropdownMenu", "hiddenProfiles"],
       "area": "search"
     },
     {

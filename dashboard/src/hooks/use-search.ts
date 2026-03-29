@@ -2,13 +2,28 @@
 
 import { useState, useCallback, useRef, useEffect } from "react"
 import { createClient } from "@/lib/supabase/client"
-import { SEARCH_PROFILES } from "@/lib/constants"
+import { DEFAULT_SEARCH_PROFILES } from "@/lib/constants"
 import {
   deduplicateJobs,
   filterIrrelevant,
   deduplicateAgainstCache,
 } from "@/lib/search-utils"
 import type { Job, SearchCacheEntry } from "@/types"
+
+/** Profile shape accepted by the search hook — supports both legacy (label) and Supabase (name) formats */
+export interface SearchProfileInput {
+  id: string
+  keyword: string
+  location: string
+  source: string
+  icon: string
+  label?: string
+  name?: string
+}
+
+function getProfileLabel(profile: SearchProfileInput): string {
+  return profile.label || profile.name || profile.id
+}
 
 const supabase = createClient()
 
@@ -32,13 +47,12 @@ async function callSearchApi(
   profileId: string,
   keyword: string,
   location: string,
-  source: string
+  source: string,
+  profileLabel: string
 ): Promise<{ jobs: Job[]; warnings: SearchError[]; indeedInfo?: string }> {
   const results: Job[] = []
   const warnings: SearchError[] = []
   let indeedInfo: string | undefined
-  const profile = SEARCH_PROFILES.find((p) => p.id === profileId)
-  const profileLabel = profile?.label || profileId
 
   // Determine which APIs to call
   const callIndeed =
@@ -105,9 +119,16 @@ async function callSearchApi(
 
 interface UseSearchOptions {
   onRunCreated?: (runId: string) => void
+  /** Dynamic profiles list — falls back to DEFAULT_SEARCH_PROFILES when empty/undefined */
+  profiles?: SearchProfileInput[]
 }
 
 export function useSearch(options: UseSearchOptions = {}) {
+  const allProfiles: SearchProfileInput[] =
+    options.profiles && options.profiles.length > 0
+      ? options.profiles
+      : DEFAULT_SEARCH_PROFILES.map((p) => ({ ...p }))
+
   const [searchResults, setSearchResults] = useState<Job[]>([])
   const [selectedProfiles, setSelectedProfiles] = useState<Set<string>>(
     () => new Set(DEFAULT_PROFILES)
@@ -164,8 +185,8 @@ export function useSearch(options: UseSearchOptions = {}) {
   }, [])
 
   const selectAll = useCallback(() => {
-    setSelectedProfiles(new Set(SEARCH_PROFILES.map((p) => p.id)))
-  }, [])
+    setSelectedProfiles(new Set(allProfiles.map((p) => p.id)))
+  }, [allProfiles])
 
   const selectNone = useCallback(() => {
     setSelectedProfiles(new Set())
@@ -176,7 +197,7 @@ export function useSearch(options: UseSearchOptions = {}) {
   }, [])
 
   const runSearch = useCallback(async () => {
-    const profiles = SEARCH_PROFILES.filter((p) =>
+    const profiles = allProfiles.filter((p) =>
       selectedProfiles.has(p.id)
     )
     if (profiles.length === 0) return
@@ -210,7 +231,8 @@ export function useSearch(options: UseSearchOptions = {}) {
           profile.id,
           profile.keyword,
           profile.location,
-          profile.source
+          profile.source,
+          getProfileLabel(profile)
         )
         allResults = [...allResults, ...jobs]
         searchErrors.push(...apiWarnings)
@@ -275,7 +297,7 @@ export function useSearch(options: UseSearchOptions = {}) {
           .from("search_runs")
           .insert({
             user_id: user.id,
-            profiles_used: profiles.map((p) => p.label),
+            profiles_used: profiles.map((p) => getProfileLabel(p)),
             total_results: allResults.length,
             indeed_count: indeedCount,
             dice_count: diceCount,
@@ -309,7 +331,7 @@ export function useSearch(options: UseSearchOptions = {}) {
       ...prev,
       ...allResults.map((j) => ({ title: j.title, company: j.company })),
     ])
-  }, [selectedProfiles, cachedJobs, options])
+  }, [selectedProfiles, cachedJobs, options, allProfiles])
 
   const isNew = useCallback(
     (job: Job): boolean => {

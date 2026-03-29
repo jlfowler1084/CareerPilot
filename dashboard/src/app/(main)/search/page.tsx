@@ -3,8 +3,10 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from "react"
 import { useSearch } from "@/hooks/use-search"
 import { useSearchHistory } from "@/hooks/use-search-history"
+import { useSearchProfiles } from "@/hooks/use-search-profiles"
 import { useApplications } from "@/hooks/use-applications"
 import { ProfileChips } from "@/components/search/profile-chips"
+import { CustomSearchBar } from "@/components/search/custom-search-bar"
 import { SearchControls } from "@/components/search/search-controls"
 import { SearchHistory } from "@/components/search/search-history"
 import { SearchFiltersBar, DEFAULT_FILTERS, type SearchFilters } from "@/components/search/search-filters"
@@ -20,8 +22,56 @@ import { AlertCircle, SearchX, Clock, CheckCircle2, Info, X } from "lucide-react
 import { format, isToday, isYesterday } from "date-fns"
 import type { Job } from "@/types"
 
+const HIDDEN_PROFILES_KEY = "careerpilot_hidden_profiles"
+const SELECTED_PROFILES_KEY = "careerpilot_selected_profiles"
+
+function loadHiddenProfiles(): Set<string> {
+  try {
+    const raw = localStorage.getItem(HIDDEN_PROFILES_KEY)
+    return raw ? new Set(JSON.parse(raw)) : new Set()
+  } catch { return new Set() }
+}
+
+function saveHiddenProfiles(ids: Set<string>) {
+  localStorage.setItem(HIDDEN_PROFILES_KEY, JSON.stringify([...ids]))
+}
+
+function loadSelectedProfiles(): Set<string> | null {
+  try {
+    const raw = localStorage.getItem(SELECTED_PROFILES_KEY)
+    return raw ? new Set(JSON.parse(raw)) : null
+  } catch { return null }
+}
+
+function saveSelectedProfiles(ids: Set<string>) {
+  localStorage.setItem(SELECTED_PROFILES_KEY, JSON.stringify([...ids]))
+}
+
 export default function SearchPage() {
   const history = useSearchHistory()
+  const {
+    profiles: supabaseProfiles,
+    loading: profilesLoading,
+    createProfile,
+    updateProfile,
+    deleteProfile,
+  } = useSearchProfiles()
+
+  // Hidden profiles (default profiles hidden via localStorage)
+  const [hiddenProfiles, setHiddenProfiles] = useState<Set<string>>(() => loadHiddenProfiles())
+
+  // Convert Supabase profiles to the format use-search expects
+  const searchProfileInputs = useMemo(
+    () => supabaseProfiles.map((p) => ({
+      id: p.id,
+      name: p.name,
+      keyword: p.keyword,
+      location: p.location,
+      source: p.source,
+      icon: p.icon,
+    })),
+    [supabaseProfiles]
+  )
 
   const {
     searchResults,
@@ -40,6 +90,7 @@ export default function SearchPage() {
     isNew,
     lastSearchTime,
   } = useSearch({
+    profiles: searchProfileInputs,
     onRunCreated: (runId) => {
       history.loadHistory()
       history.setActiveRunId(runId)
@@ -48,6 +99,30 @@ export default function SearchPage() {
       setFilters(DEFAULT_FILTERS)
     },
   })
+
+  // Persist selected profiles to localStorage
+  useEffect(() => {
+    if (selectedProfiles.size > 0) {
+      saveSelectedProfiles(selectedProfiles)
+    }
+  }, [selectedProfiles])
+
+  // Restore selected profiles from localStorage on mount
+  const selectionRestored = useRef(false)
+  useEffect(() => {
+    if (selectionRestored.current || profilesLoading) return
+    selectionRestored.current = true
+    const saved = loadSelectedProfiles()
+    if (saved && saved.size > 0) {
+      // Only restore IDs that still exist in current profiles
+      const validIds = new Set(supabaseProfiles.map((p) => p.id))
+      for (const id of saved) {
+        if (validIds.has(id) && !selectedProfiles.has(id)) {
+          toggleProfile(id)
+        }
+      }
+    }
+  }, [profilesLoading]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const { applications, addApplication, updateApplication } = useApplications()
 
@@ -250,18 +325,125 @@ export default function SearchPage() {
     }
   }
 
+  // Custom search handler: creates a temporary profile and runs it
+  function handleQuickSearch(keyword: string, location: string, source: string) {
+    const tempId = `custom_${Date.now()}`
+    const tempProfile = {
+      id: tempId,
+      name: keyword,
+      keyword,
+      location,
+      source,
+      icon: "\uD83D\uDD0D",
+    }
+    // Add temp profile to selected set and trigger search
+    // We add it directly to searchProfileInputs by creating a temporary entry
+    toggleProfile(tempId)
+    // Run search with this single custom profile via the API directly
+    const callSearch = async () => {
+      const profiles = [tempProfile]
+      const allJobs: Job[] = []
+      for (const p of profiles) {
+        const callIndeed = p.source === "both" || p.source === "indeed"
+        const callDice = p.source === "both" || p.source === "dice" || p.source === "dice_contract"
+        const contractOnly = p.source === "dice_contract"
+
+        if (callIndeed) {
+          try {
+            const res = await fetch("/api/search-indeed", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ keyword: p.keyword, location: p.location }),
+            })
+            const data = await res.json()
+            if (data.jobs && Array.isArray(data.jobs)) {
+              allJobs.push(...data.jobs.map((j: Job) => ({ ...j, source: "Indeed" as const, profileId: p.id, profileLabel: p.name })))
+            }
+          } catch { /* ignore */ }
+        }
+        if (callDice) {
+          try {
+            const res = await fetch("/api/search-dice", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ keyword: p.keyword, location: p.location, contractOnly }),
+            })
+            const data = await res.json()
+            if (data.jobs && Array.isArray(data.jobs)) {
+              allJobs.push(...data.jobs.map((j: Job) => ({ ...j, source: "Dice" as const, profileId: p.id, profileLabel: p.name })))
+            }
+          } catch { /* ignore */ }
+        }
+      }
+      // Merge with existing results
+      setSearchResults((prev) => {
+        const existing = new Set(prev.map((j) => `${j.title}|||${j.company}`.toLowerCase()))
+        const newJobs = allJobs.filter((j) => !existing.has(`${j.title}|||${j.company}`.toLowerCase()))
+        return [...newJobs, ...prev]
+      })
+    }
+    callSearch()
+  }
+
+  function handleSaveProfile(profile: {
+    name: string
+    keyword: string
+    location: string
+    source: "dice" | "indeed" | "both" | "dice_contract"
+    icon: string
+  }) {
+    createProfile(profile)
+  }
+
+  function handleHideProfile(id: string) {
+    if (id === "__show_all__") {
+      setHiddenProfiles(new Set())
+      saveHiddenProfiles(new Set())
+      return
+    }
+    setHiddenProfiles((prev) => {
+      const next = new Set(prev)
+      next.add(id)
+      saveHiddenProfiles(next)
+      return next
+    })
+  }
+
+  function handleDuplicateProfile(profile: (typeof supabaseProfiles)[number]) {
+    createProfile({
+      name: `${profile.name} (Copy)`,
+      keyword: profile.keyword,
+      location: profile.location,
+      source: profile.source,
+      icon: profile.icon,
+    })
+  }
+
   return (
     <div className="p-6 space-y-6">
       <h2 className="text-lg font-bold">Job Search</h2>
 
+      {/* Custom Search Bar */}
+      <CustomSearchBar
+        onQuickSearch={handleQuickSearch}
+        onSaveProfile={handleSaveProfile}
+        disabled={loading}
+      />
+
       {/* Profile Chips */}
-      <div className="bg-white rounded-xl border border-zinc-200 p-5">
+      <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-700 p-5">
         <ProfileChips
+          profiles={supabaseProfiles}
           selectedProfiles={selectedProfiles}
           toggleProfile={toggleProfile}
           selectAll={selectAll}
           selectNone={selectNone}
           disabled={loading}
+          onEditProfile={(id, updates) => updateProfile(id, updates)}
+          onDeleteProfile={deleteProfile}
+          onDuplicateProfile={handleDuplicateProfile}
+          onHideProfile={handleHideProfile}
+          hiddenProfiles={hiddenProfiles}
         />
       </div>
 

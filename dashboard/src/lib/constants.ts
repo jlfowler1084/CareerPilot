@@ -24,7 +24,8 @@ export const RESPONSE_STATUSES: ApplicationStatus[] = [
   "rejected",
 ]
 
-export const SEARCH_PROFILES = [
+/** Fallback profiles used when Supabase is unavailable */
+export const DEFAULT_SEARCH_PROFILES = [
   { id: "sysadmin_local", label: "Sys Admin — Indy", icon: "\uD83D\uDDA5\uFE0F", keyword: "systems administrator", location: "Indianapolis, IN", source: "both" as const },
   { id: "syseng_local", label: "Systems Engineer — Indy", icon: "\u2699\uFE0F", keyword: "systems engineer Windows", location: "Indianapolis, IN", source: "both" as const },
   { id: "devops_local", label: "DevOps / Cloud — Indy", icon: "\u2601\uFE0F", keyword: "DevOps cloud engineer Azure", location: "Indianapolis, IN", source: "both" as const },
@@ -34,6 +35,9 @@ export const SEARCH_PROFILES = [
   { id: "contract_infra", label: "Contract — Infrastructure", icon: "\uD83D\uDCCB", keyword: "Windows server VMware infrastructure", location: "Indianapolis, IN", source: "dice_contract" as const },
   { id: "ad_identity", label: "AD / Identity — Remote", icon: "\uD83D\uDD10", keyword: "Active Directory engineer identity", location: "remote", source: "dice" as const },
 ] as const
+
+/** @deprecated Use DEFAULT_SEARCH_PROFILES — kept for backward compatibility */
+export const SEARCH_PROFILES = DEFAULT_SEARCH_PROFILES
 
 export const CONVERSATION_TYPES = [
   { id: "phone" as const, label: "Phone Call", icon: "\u{1F4DE}" },
