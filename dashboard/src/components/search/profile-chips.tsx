@@ -55,7 +55,10 @@ export function ProfileChips({
                   : "bg-zinc-50 text-zinc-500 border-zinc-200 hover:bg-zinc-100"
               } disabled:opacity-50 disabled:cursor-not-allowed`}
             >
-              {profile.label}
+              <span className="inline-flex items-center gap-1.5">
+                <span>{profile.icon}</span>
+                <span>{profile.label}</span>
+              </span>
             </button>
           )
         })}

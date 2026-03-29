@@ -25,14 +25,14 @@ export const RESPONSE_STATUSES: ApplicationStatus[] = [
 ]
 
 export const SEARCH_PROFILES = [
-  { id: "sysadmin_local", label: "Sys Admin — Indy", keyword: "systems administrator", location: "Indianapolis, IN", source: "both" as const },
-  { id: "syseng_local", label: "Systems Engineer — Indy", keyword: "systems engineer Windows", location: "Indianapolis, IN", source: "both" as const },
-  { id: "devops_local", label: "DevOps / Cloud — Indy", keyword: "DevOps cloud engineer Azure", location: "Indianapolis, IN", source: "both" as const },
-  { id: "powershell_remote", label: "PowerShell / Automation — Remote", keyword: "PowerShell automation engineer", location: "remote", source: "both" as const },
-  { id: "infra_remote", label: "Infrastructure — Remote", keyword: "Windows server VMware infrastructure", location: "remote", source: "dice" as const },
-  { id: "msp_local", label: "MSP / IT Services — Indy", keyword: "managed services IT engineer", location: "Indianapolis, IN", source: "indeed" as const },
-  { id: "contract_infra", label: "Contract — Infrastructure", keyword: "Windows server VMware infrastructure", location: "Indianapolis, IN", source: "dice_contract" as const },
-  { id: "ad_identity", label: "AD / Identity — Remote", keyword: "Active Directory engineer identity", location: "remote", source: "dice" as const },
+  { id: "sysadmin_local", label: "Sys Admin — Indy", icon: "\uD83D\uDDA5\uFE0F", keyword: "systems administrator", location: "Indianapolis, IN", source: "both" as const },
+  { id: "syseng_local", label: "Systems Engineer — Indy", icon: "\u2699\uFE0F", keyword: "systems engineer Windows", location: "Indianapolis, IN", source: "both" as const },
+  { id: "devops_local", label: "DevOps / Cloud — Indy", icon: "\u2601\uFE0F", keyword: "DevOps cloud engineer Azure", location: "Indianapolis, IN", source: "both" as const },
+  { id: "powershell_remote", label: "PowerShell / Automation — Remote", icon: "\uD83D\uDCDC", keyword: "PowerShell automation engineer", location: "remote", source: "both" as const },
+  { id: "infra_remote", label: "Infrastructure — Remote", icon: "\uD83C\uDFD7\uFE0F", keyword: "Windows server VMware infrastructure", location: "remote", source: "dice" as const },
+  { id: "msp_local", label: "MSP / IT Services — Indy", icon: "\uD83D\uDD27", keyword: "managed services IT engineer", location: "Indianapolis, IN", source: "indeed" as const },
+  { id: "contract_infra", label: "Contract — Infrastructure", icon: "\uD83D\uDCCB", keyword: "Windows server VMware infrastructure", location: "Indianapolis, IN", source: "dice_contract" as const },
+  { id: "ad_identity", label: "AD / Identity — Remote", icon: "\uD83D\uDD10", keyword: "Active Directory engineer identity", location: "remote", source: "dice" as const },
 ] as const
 
 export const CONVERSATION_TYPES = [

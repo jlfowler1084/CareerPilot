@@ -4,13 +4,14 @@ import { useState, useEffect } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
-import { LayoutDashboard, Search, Briefcase, BarChart3, ChevronRight, Mail } from "lucide-react"
+import { LayoutDashboard, Search, Briefcase, BarChart3, ChevronRight, Mail, MessageSquare } from "lucide-react"
 
 const NAV_ITEMS = [
   { id: "overview", href: "/", label: "Overview", icon: LayoutDashboard },
   { id: "inbox", href: "/inbox", label: "Inbox", icon: Mail },
   { id: "search", href: "/search", label: "Job Search", icon: Search },
   { id: "applications", href: "/applications", label: "Applications", icon: Briefcase },
+  { id: "conversations", href: "/conversations", label: "Conversations", icon: MessageSquare },
   { id: "analytics", href: "/analytics", label: "Analytics", icon: BarChart3 },
 ]
 

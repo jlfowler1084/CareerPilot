@@ -14,6 +14,7 @@ import { ActivityFeed } from "@/components/dashboard/activity-feed"
 import { SkillGapsWidget } from "@/components/dashboard/skill-gaps-widget"
 import { EmptyState } from "@/components/shared/empty-state"
 import { RelativeTime } from "@/components/ui/relative-time"
+import { AreaChart, Area, XAxis, Tooltip, ResponsiveContainer } from "recharts"
 import {
   Rocket,
   Search,
@@ -191,11 +192,36 @@ function computeWeeklyStats(applications: Application[]) {
   }
 }
 
+const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+
+function computeDailyActivity(applications: Application[]) {
+  const now = new Date()
+  const days: { day: string; count: number }[] = []
+
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(now)
+    d.setDate(now.getDate() - i)
+    d.setHours(0, 0, 0, 0)
+    const nextDay = new Date(d)
+    nextDay.setDate(d.getDate() + 1)
+
+    const count = applications.filter((a) => {
+      const created = new Date(a.date_found)
+      return created >= d && created < nextDay
+    }).length
+
+    days.push({ day: DAY_LABELS[d.getDay()], count })
+  }
+
+  return days
+}
+
 export default function OverviewPage() {
   const { applications, loading } = useApplications()
   const stats = useMemo(() => computeStats(applications), [applications])
   const alerts = useMemo(() => computeAlerts(applications), [applications])
   const weekly = useMemo(() => computeWeeklyStats(applications), [applications])
+  const dailyActivity = useMemo(() => computeDailyActivity(applications), [applications])
 
   // Fetch recent application events for activity feed
   const [events, setEvents] = useState<ApplicationEvent[]>([])
@@ -598,6 +624,41 @@ export default function OverviewPage() {
               <div className="text-[10px] text-zinc-500 uppercase tracking-wider">
                 Active Pipeline
               </div>
+            </div>
+          </div>
+
+          {/* Activity sparkline */}
+          <div className="space-y-2 mb-5">
+            <div className="text-[10px] text-zinc-500 uppercase tracking-wider font-medium">
+              Activity · Last 7 Days
+            </div>
+            <div className="h-[120px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={dailyActivity} margin={{ top: 4, right: 4, bottom: 0, left: 4 }}>
+                  <defs>
+                    <linearGradient id="activityFill" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#f59e0b" stopOpacity={0.2} />
+                      <stop offset="100%" stopColor="#f59e0b" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <XAxis
+                    dataKey="day"
+                    tick={{ fontSize: 10, fontFamily: "monospace", fill: "#a1a1aa" }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <Tooltip
+                    contentStyle={{ fontSize: 11, borderRadius: 8, border: "1px solid #e4e4e7" }}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="count"
+                    stroke="#f59e0b"
+                    strokeWidth={2}
+                    fill="url(#activityFill)"
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
             </div>
           </div>
 
