@@ -1,12 +1,14 @@
 "use client"
 
-import { useState, useRef, useCallback, useEffect } from "react"
+import { useState, useRef, useCallback, useEffect, useMemo } from "react"
 import { useSearch } from "@/hooks/use-search"
 import { useSearchHistory } from "@/hooks/use-search-history"
 import { useApplications } from "@/hooks/use-applications"
 import { ProfileChips } from "@/components/search/profile-chips"
 import { SearchControls } from "@/components/search/search-controls"
 import { SearchHistory } from "@/components/search/search-history"
+import { SearchFiltersBar, DEFAULT_FILTERS, type SearchFilters } from "@/components/search/search-filters"
+import { applyFilters, hasActiveFilters } from "@/lib/search-filter-utils"
 import { JobCard } from "@/components/shared/job-card"
 import { TailorModal } from "@/components/applications/tailor-modal"
 import { CoverLetterModal } from "@/components/applications/cover-letter-modal"
@@ -43,6 +45,7 @@ export default function SearchPage() {
       history.setActiveRunId(runId)
       setViewingHistorical(false)
       setSavedToHistory(true)
+      setFilters(DEFAULT_FILTERS)
     },
   })
 
@@ -111,6 +114,13 @@ export default function SearchPage() {
   // Indeed info banner dismissed state (resets each search)
   const [infoDismissed, setInfoDismissed] = useState(false)
   useEffect(() => { setInfoDismissed(false) }, [indeedInfo])
+
+  // Search filters (client-side, persists across history navigation)
+  const [filters, setFilters] = useState<SearchFilters>(DEFAULT_FILTERS)
+  const filteredResults = useMemo(
+    () => applyFilters(searchResults, filters),
+    [searchResults, filters]
+  )
 
   // Sort state
   const [sortBy, setSortBy] = useState<"newest" | "salary" | "company">("newest")
@@ -345,12 +355,24 @@ export default function SearchPage() {
         </div>
       )}
 
-      {/* Results */}
+      {/* Quick Filters */}
       {searchResults.length > 0 && (
+        <SearchFiltersBar
+          filters={filters}
+          onFiltersChange={setFilters}
+          totalCount={searchResults.length}
+          filteredCount={filteredResults.length}
+        />
+      )}
+
+      {/* Results */}
+      {filteredResults.length > 0 && (
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <div className="text-xs font-medium text-zinc-500 uppercase tracking-wider">
-              {searchResults.length} Results
+              {hasActiveFilters(filters)
+                ? `${filteredResults.length} of ${searchResults.length} Results`
+                : `${searchResults.length} Results`}
             </div>
             <div className="flex items-center gap-3">
               {lastSearchTime && !viewingHistorical && (
@@ -371,7 +393,7 @@ export default function SearchPage() {
             </div>
           </div>
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
-            {[...searchResults].sort((a, b) => {
+            {[...filteredResults].sort((a, b) => {
               if (sortBy === "company") return a.company.localeCompare(b.company)
               if (sortBy === "salary") {
                 const extractNum = (s: string) => {
@@ -399,7 +421,16 @@ export default function SearchPage() {
         </div>
       )}
 
-      {/* Empty state */}
+      {/* Empty state: filters hid everything */}
+      {searchResults.length > 0 && filteredResults.length === 0 && (
+        <EmptyState
+          icon={SearchX}
+          title="No matching results"
+          description="All results are hidden by your filters. Try adjusting or clearing filters above."
+        />
+      )}
+
+      {/* Empty state: no results at all */}
       {searchComplete && searchResults.length === 0 && !loading && (
         <EmptyState
           icon={SearchX}

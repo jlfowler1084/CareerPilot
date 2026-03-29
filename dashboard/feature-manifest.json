@@ -144,6 +144,22 @@
       "area": "search"
     },
     {
+      "ticket": "CAR-72",
+      "name": "Search Filters Bar",
+      "file": "src/components/search/search-filters.tsx",
+      "exports": ["SearchFiltersBar", "DEFAULT_FILTERS"],
+      "patterns": ["source", "jobType", "hasSalary", "easyApplyOnly", "keyword"],
+      "area": "search"
+    },
+    {
+      "ticket": "CAR-72",
+      "name": "Search Filter Utilities",
+      "file": "src/lib/search-filter-utils.ts",
+      "exports": ["applyFilters", "hasActiveFilters"],
+      "patterns": ["remote", "Not listed", "easyApply"],
+      "area": "search"
+    },
+    {
       "ticket": "CAR-62",
       "name": "Applications Page",
       "file": "src/app/(main)/applications/page.tsx",
