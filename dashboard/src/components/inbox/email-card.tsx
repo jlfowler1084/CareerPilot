@@ -61,6 +61,16 @@ export function EmailCard({
               {linkedApp.title} @ {linkedApp.company}
             </span>
           )}
+          {email.auto_track_status === "tracked" && !linkedApp && (
+            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400">
+              Auto-tracked &#x2713;
+            </span>
+          )}
+          {email.auto_track_status === "prompted" && !linkedApp && (
+            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400">
+              Track this?
+            </span>
+          )}
         </div>
       </div>
     </div>

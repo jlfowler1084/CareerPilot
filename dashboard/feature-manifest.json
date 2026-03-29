@@ -56,6 +56,22 @@
       "area": "inbox"
     },
     {
+      "ticket": "CAR-76",
+      "name": "Auto-Track Detection Logic",
+      "file": "src/lib/auto-track.ts",
+      "exports": ["detectApplicationConfirmation", "extractFromHints", "buildExtractionPrompt"],
+      "patterns": ["DOMAIN_BLOCKLIST", "isConfirmation", "confidence", "statusUpdate"],
+      "area": "inbox"
+    },
+    {
+      "ticket": "CAR-76",
+      "name": "Auto-Track API Route",
+      "file": "src/app/api/auto-track/detect/route.ts",
+      "exports": ["POST"],
+      "patterns": ["auto-track", "createOrLinkApplication", "handleStatusUpdate"],
+      "area": "inbox"
+    },
+    {
       "ticket": "CAR-58",
       "name": "Job Search Page",
       "file": "src/app/(main)/search/page.tsx",

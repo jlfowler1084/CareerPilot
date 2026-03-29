@@ -34,6 +34,8 @@ export interface Email {
   is_read: boolean
   dismissed: boolean
   replied_at: string | null
+  auto_track_status: string | null
+  auto_track_data: Record<string, unknown> | null
   created_at: string
   updated_at: string
 }
@@ -42,7 +44,7 @@ export interface EmailApplicationLink {
   email_id: string
   application_id: string
   user_id: string
-  linked_by: "manual" | "confirmed_suggestion" | "auto_status"
+  linked_by: "manual" | "confirmed_suggestion" | "auto_status" | "auto_track"
   linked_at: string
 }
 

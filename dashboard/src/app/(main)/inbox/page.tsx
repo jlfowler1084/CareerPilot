@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useCallback, useMemo, useEffect } from "react"
-import { RefreshCw, Mail, ArrowLeft } from "lucide-react"
+import { RefreshCw, Mail, ArrowLeft, X } from "lucide-react"
 import { useEmails } from "@/hooks/use-emails"
 import { FilterChips, ALL_FILTER_IDS } from "@/components/inbox/filter-chips"
 import { EmailList } from "@/components/inbox/email-list"
@@ -98,6 +98,21 @@ export default function InboxPage() {
     linkMany(ids, appId)
     setCheckedIds(new Set())
   }, [linkMany])
+
+  const [autoTrackBanner, setAutoTrackBanner] = useState<string | null>(null)
+
+  // Check for newly auto-tracked emails and show banner
+  useEffect(() => {
+    const tracked = emails.filter((e) => e.auto_track_status === "tracked")
+    if (tracked.length > 0 && !autoTrackBanner) {
+      // Only show banner once per session
+      const shown = sessionStorage.getItem("autotrack_banner_shown")
+      if (!shown) {
+        setAutoTrackBanner(`${tracked.length} application${tracked.length !== 1 ? "s" : ""} auto-tracked from email`)
+        sessionStorage.setItem("autotrack_banner_shown", "1")
+      }
+    }
+  }, [emails]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (loading) {
     return (
@@ -244,6 +259,24 @@ export default function InboxPage() {
           </button>
         </div>
       </div>
+
+      {/* Auto-track banner */}
+      {autoTrackBanner && (
+        <div className="flex items-center gap-2 px-6 py-2 bg-emerald-50 dark:bg-emerald-900/20 border-b border-emerald-200 dark:border-emerald-800">
+          <span className="text-xs text-emerald-700 dark:text-emerald-400">{autoTrackBanner}</span>
+          <a href="/applications" className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:underline">
+            View Applications
+          </a>
+          <button
+            type="button"
+            title="Dismiss"
+            onClick={() => setAutoTrackBanner(null)}
+            className="ml-auto text-emerald-400 hover:text-emerald-600 dark:hover:text-emerald-300"
+          >
+            <X size={14} />
+          </button>
+        </div>
+      )}
 
       {/* Two-panel layout */}
       <div className="flex flex-1 overflow-hidden">

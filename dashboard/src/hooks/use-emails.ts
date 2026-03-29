@@ -366,6 +366,54 @@ export function useEmails() {
       await autoUpdateApplicationStatuses(statusEmails)
     }
 
+    // Auto-track: detect confirmation emails and create application records
+    try {
+      const linkedIds = new Set(links.map((l) => l.email_id))
+      const unlinked = classifiedResults.filter((e) => !linkedIds.has(e.id) && !e.auto_track_status)
+      if (unlinked.length > 0) {
+        const resp = await fetch("/api/auto-track/detect", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email_ids: unlinked.map((e) => e.id) }),
+        })
+        if (resp.ok) {
+          const { results } = await resp.json()
+          const trackedIds: string[] = []
+          for (const r of results || []) {
+            if (r.tracked && r.application_id) {
+              trackedIds.push(r.email_id)
+              setLinks((prev) => [
+                ...prev,
+                { email_id: r.email_id, application_id: r.application_id, user_id: "", linked_by: "auto_track" as const, linked_at: new Date().toISOString() },
+              ])
+            }
+          }
+          // Update local email state with auto_track_status
+          if (trackedIds.length > 0) {
+            setEmails((prev) => prev.map((e) =>
+              trackedIds.includes(e.id) ? { ...e, auto_track_status: "tracked" } : e
+            ))
+            // Reload applications to pick up newly created ones
+            const { data: freshApps } = await supabase
+              .from("applications")
+              .select("id, title, company, status")
+              .eq("user_id", (await supabase.auth.getUser()).data.user?.id || "")
+            if (freshApps) setApplications(freshApps as Pick<Application, "id" | "title" | "company" | "status">[])
+          }
+          // Update prompted emails
+          const prompted = (results || []).filter((r: { promptUser?: boolean }) => r.promptUser)
+          if (prompted.length > 0) {
+            setEmails((prev) => prev.map((e) => {
+              const match = prompted.find((r: { email_id: string; extraction?: unknown }) => r.email_id === e.id)
+              return match ? { ...e, auto_track_status: "prompted", auto_track_data: match.extraction } : e
+            }))
+          }
+        }
+      }
+    } catch (err) {
+      console.error("[auto-track] Non-blocking error:", err)
+    }
+
     setScanState((prev) => ({ ...prev, classifying: false }))
   }, [applications, autoUpdateApplicationStatuses])
 
