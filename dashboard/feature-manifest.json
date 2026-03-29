@@ -312,6 +312,22 @@
       "area": "search"
     },
     {
+      "ticket": "CAR-81",
+      "name": "Suggestions Fit Scoring",
+      "file": "src/components/search/suggestions-feed.tsx",
+      "exports": ["SuggestionsFeed"],
+      "patterns": ["FitScoreBadge", "getFitScore", "onAddToQueue", "isInQueue", "fit_score"],
+      "area": "search"
+    },
+    {
+      "ticket": "CAR-81",
+      "name": "Suggestions Auto-Queue",
+      "file": "src/app/(main)/search/page.tsx",
+      "exports": [],
+      "patterns": ["suggestionScores", "getSuggestionFitScore", "handleSuggestionQueue", "isSuggestionInQueue", "lastAutoQueuedSuggestionsRef"],
+      "area": "search"
+    },
+    {
       "ticket": "CAR-62",
       "name": "Applications Page",
       "file": "src/app/(main)/applications/page.tsx",

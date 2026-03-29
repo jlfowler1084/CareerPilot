@@ -199,6 +199,64 @@ export default function SearchPage() {
     }
   }, [searchComplete, loading, fitScores, autoQueueEnabled]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // CAR-81: Memoized fit scores for suggestions
+  const suggestionScores = useMemo(() => {
+    const map = new Map<string, FitScore>()
+    for (const s of suggestions) {
+      const key = `${s.title}|||${s.company}`.toLowerCase()
+      map.set(key, scoreJob({
+        title: s.title,
+        company: s.company,
+        location: s.location || "",
+        salary: s.salary || "Not listed",
+        source: s.source || "",
+      }, skills))
+    }
+    return map
+  }, [suggestions, skills])
+
+  function getSuggestionFitScore(s: { title: string; company: string }): FitScore | undefined {
+    return suggestionScores.get(`${s.title}|||${s.company}`.toLowerCase())
+  }
+
+  function handleSuggestionQueue(s: { title: string; company: string; location: string | null; salary: string | null; source: string; job_url: string | null }) {
+    const score = getSuggestionFitScore(s)
+    if (!score) return
+    addToQueue({
+      title: s.title,
+      company: s.company,
+      location: s.location || "",
+      salary: s.salary || "Not listed",
+      url: s.job_url || "",
+      source: `${s.source} Suggestion` as Job["source"],
+      posted: "",
+      type: "",
+      profileId: "",
+      profileLabel: "Suggestion",
+    }, score)
+  }
+
+  function isSuggestionInQueue(s: { title: string; company: string }): boolean {
+    return isInQueue({ title: s.title, company: s.company })
+  }
+
+  // CAR-81: Auto-queue suggestions scoring 80+ when auto-queue is enabled
+  const lastAutoQueuedSuggestionsRef = useRef<number>(0)
+  useEffect(() => {
+    if (!autoQueueEnabled || suggestionsLoading) return
+    if (suggestionScores.size === 0) return
+    const sugKey = suggestions.length
+    if (lastAutoQueuedSuggestionsRef.current === sugKey) return
+    lastAutoQueuedSuggestionsRef.current = sugKey
+
+    for (const s of suggestions) {
+      const score = getSuggestionFitScore(s)
+      if (score && score.total >= 80 && !isSuggestionInQueue(s)) {
+        handleSuggestionQueue(s)
+      }
+    }
+  }, [suggestions, suggestionsLoading, suggestionScores, autoQueueEnabled]) // eslint-disable-line react-hooks/exhaustive-deps
+
   // Auto-extract on first load (non-blocking)
   const extractTriggered = useRef(false)
   useEffect(() => {
@@ -582,6 +640,9 @@ export default function SearchPage() {
           onDismiss={dismissSuggestion}
           onTrack={(id) => { trackSuggestion(id) }}
           onBulkDismiss={bulkDismiss}
+          getFitScore={getSuggestionFitScore}
+          onAddToQueue={handleSuggestionQueue}
+          isInQueue={isSuggestionInQueue}
         />
       )}
 

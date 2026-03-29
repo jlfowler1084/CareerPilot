@@ -1,8 +1,12 @@
 "use client"
 
 import { useState, useMemo } from "react"
-import { RefreshCw, Plus, X, ExternalLink, Mail } from "lucide-react"
+import { RefreshCw, Plus, X, ExternalLink, Mail, ListChecks } from "lucide-react"
+import { FitScoreBadge } from "@/components/search/fit-score-badge"
 import type { Suggestion } from "@/hooks/use-suggestions"
+import type { FitScore } from "@/types"
+
+type SortOption = "newest" | "fit_score" | "source"
 
 interface SuggestionsFeedProps {
   suggestions: Suggestion[]
@@ -12,6 +16,9 @@ interface SuggestionsFeedProps {
   onDismiss: (id: string) => void
   onTrack: (id: string) => void
   onBulkDismiss: (ids: string[]) => void
+  getFitScore?: (suggestion: Suggestion) => FitScore | undefined
+  onAddToQueue?: (suggestion: Suggestion) => void
+  isInQueue?: (suggestion: Suggestion) => boolean
 }
 
 const SOURCE_COLORS: Record<string, { bg: string; text: string; border: string; left: string }> = {
@@ -43,11 +50,16 @@ export function SuggestionsFeed({
   onDismiss,
   onTrack,
   onBulkDismiss,
+  getFitScore,
+  onAddToQueue,
+  isInQueue,
 }: SuggestionsFeedProps) {
   const [extracting, setExtracting] = useState(false)
   const [extractResult, setExtractResult] = useState<string | null>(null)
   const [sourceFilter, setSourceFilter] = useState<string>("all")
   const [statusFilter, setStatusFilter] = useState<string>("all")
+  const hasScores = !!getFitScore
+  const [sortBy, setSortBy] = useState<SortOption>(hasScores ? "fit_score" : "newest")
 
   const filtered = useMemo(() => {
     let list = suggestions
@@ -57,8 +69,20 @@ export function SuggestionsFeed({
     if (statusFilter === "new") {
       list = list.filter((s) => s.status === "new")
     }
+    // Sort
+    if (sortBy === "fit_score" && getFitScore) {
+      list = [...list].sort((a, b) => {
+        const sa = getFitScore(a)?.total ?? 0
+        const sb = getFitScore(b)?.total ?? 0
+        if (sb !== sa) return sb - sa
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      })
+    } else if (sortBy === "source") {
+      list = [...list].sort((a, b) => a.source.localeCompare(b.source))
+    }
+    // "newest" is the default order from the API (created_at desc)
     return list
-  }, [suggestions, sourceFilter, statusFilter])
+  }, [suggestions, sourceFilter, statusFilter, sortBy, getFitScore])
 
   const sources = useMemo(() => {
     const set = new Set(suggestions.map((s) => s.source))
@@ -153,6 +177,12 @@ export function SuggestionsFeed({
             <FilterChip label="All" active={statusFilter === "all"} onClick={() => setStatusFilter("all")} />
             <FilterChip label="New" active={statusFilter === "new"} onClick={() => setStatusFilter("new")} />
           </div>
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] font-mono uppercase text-zinc-400 dark:text-zinc-500 tracking-wider">Sort</span>
+            <FilterChip label="Newest" active={sortBy === "newest"} onClick={() => setSortBy("newest")} />
+            {hasScores && <FilterChip label="Fit Score" active={sortBy === "fit_score"} onClick={() => setSortBy("fit_score")} />}
+            <FilterChip label="Source" active={sortBy === "source"} onClick={() => setSortBy("source")} />
+          </div>
         </div>
       )}
 
@@ -165,6 +195,9 @@ export function SuggestionsFeed({
               suggestion={s}
               onDismiss={() => onDismiss(s.id)}
               onTrack={() => onTrack(s.id)}
+              fitScore={getFitScore?.(s)}
+              onAddToQueue={onAddToQueue ? () => onAddToQueue(s) : undefined}
+              inQueue={isInQueue?.(s) ?? false}
             />
           ))}
         </div>
@@ -192,14 +225,21 @@ function SuggestionCard({
   suggestion: s,
   onDismiss,
   onTrack,
+  fitScore,
+  onAddToQueue,
+  inQueue,
 }: {
   suggestion: Suggestion
   onDismiss: () => void
   onTrack: () => void
+  fitScore?: FitScore
+  onAddToQueue?: () => void
+  inQueue: boolean
 }) {
   const style = getSourceStyle(s.source)
   const isNew = s.status === "new"
   const isTracked = s.status === "interested"
+  const canQueue = fitScore && fitScore.total >= 60 && onAddToQueue
 
   return (
     <div
@@ -212,6 +252,7 @@ function SuggestionCard({
             <span className="font-bold text-sm text-zinc-900 dark:text-zinc-100 leading-tight">
               {s.title}
             </span>
+            {fitScore && <FitScoreBadge score={fitScore} />}
             {isNew && (
               <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700">
                 NEW
@@ -253,6 +294,29 @@ function SuggestionCard({
               >
                 <Plus size={10} /> Track
               </button>
+              {canQueue && !inQueue && (
+                s.job_url ? (
+                  <button
+                    type="button"
+                    onClick={onAddToQueue}
+                    className="text-[10px] font-semibold px-2.5 py-1 rounded-md bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/50 border border-blue-200 dark:border-blue-700 transition-colors flex items-center gap-1"
+                  >
+                    <ListChecks size={10} /> Queue
+                  </button>
+                ) : (
+                  <span
+                    className="text-[10px] font-semibold px-2.5 py-1 rounded-md bg-zinc-100 dark:bg-zinc-800 text-zinc-400 dark:text-zinc-500 border border-zinc-200 dark:border-zinc-700 flex items-center gap-1 cursor-default"
+                    title="No job URL available"
+                  >
+                    <ListChecks size={10} /> Queue
+                  </span>
+                )
+              )}
+              {inQueue && (
+                <span className="text-[10px] font-bold px-2 py-1 rounded-md bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-700 flex items-center gap-1">
+                  <ListChecks size={10} /> Queued
+                </span>
+              )}
               {s.job_url && (
                 <a
                   href={s.job_url}
