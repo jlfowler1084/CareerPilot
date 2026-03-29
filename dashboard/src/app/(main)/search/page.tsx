@@ -603,6 +603,27 @@ export default function SearchPage() {
             })
             if (!resp.ok) throw new Error("Batch generation failed")
           }}
+          onStartSession={async (ids) => {
+            const resp = await fetch("/api/auto-apply/session", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ queueIds: ids }),
+            })
+            if (!resp.ok) throw new Error("Failed to start session")
+          }}
+          onStopSession={async () => {
+            // Reset applying items back to ready
+            const applyingIds = autoApplyQueue
+              .filter((q) => q.status === "applying")
+              .map((q) => q.id)
+            for (const id of applyingIds) {
+              await fetch("/api/auto-apply/session", {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ queueId: id, status: "skipped", error: "Session stopped by user" }),
+              })
+            }
+          }}
         />
       )}
 

@@ -582,6 +582,38 @@
       "exports": ["POST"],
       "patterns": ["BatchResult", "queueIds"],
       "area": "search"
+    },
+    {
+      "ticket": "CAR-18",
+      "name": "Apply Session API",
+      "file": "src/app/api/auto-apply/session/route.ts",
+      "exports": ["GET", "POST", "PATCH"],
+      "patterns": ["sessionId", "applying"],
+      "area": "search"
+    },
+    {
+      "ticket": "CAR-18",
+      "name": "Screening Answers API",
+      "file": "src/app/api/auto-apply/screening/route.ts",
+      "exports": ["POST"],
+      "patterns": ["question_pattern", "confidence"],
+      "area": "search"
+    },
+    {
+      "ticket": "CAR-18",
+      "name": "Apply Log API",
+      "file": "src/app/api/auto-apply/log/route.ts",
+      "exports": ["GET", "POST"],
+      "patterns": ["auto_apply_log", "queueId"],
+      "area": "search"
+    },
+    {
+      "ticket": "CAR-18",
+      "name": "Apply Workflow Definitions",
+      "file": "src/lib/indeed-apply-workflow.ts",
+      "exports": ["INDEED_APPLY_STEPS", "DICE_APPLY_STEPS", "getStepsForSource"],
+      "patterns": ["INDEED_APPLY_STEPS", "DICE_APPLY_STEPS"],
+      "area": "search"
     }
   ]
 }

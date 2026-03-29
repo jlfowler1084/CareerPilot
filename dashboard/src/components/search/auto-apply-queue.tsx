@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useMemo } from "react"
-import { Check, X, CheckCheck, Trash2, ExternalLink, Loader2, FileText, Sparkles } from "lucide-react"
+import { Check, X, CheckCheck, Trash2, ExternalLink, Loader2, FileText, Sparkles, Play, Square, Copy, ChevronDown, ChevronRight } from "lucide-react"
 import { toast } from "sonner"
 import { FitScoreBadge } from "@/components/search/fit-score-badge"
 import type { AutoApplyQueueItem, AutoApplyStatus } from "@/types"
@@ -15,6 +15,8 @@ interface AutoApplyQueueProps {
   onApproveAllAbove: (minScore: number) => void
   onClearRejected: () => void
   onGenerateBatch?: (ids: string[]) => Promise<void>
+  onStartSession?: (ids: string[]) => Promise<void>
+  onStopSession?: () => Promise<void>
 }
 
 type StatusFilter = "all" | "pending" | "approved" | "applied" | "failed"
@@ -40,9 +42,28 @@ export function AutoApplyQueue({
   onApproveAllAbove,
   onClearRejected,
   onGenerateBatch,
+  onStartSession,
+  onStopSession,
 }: AutoApplyQueueProps) {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all")
   const [generating, setGenerating] = useState(false)
+  const [sessionStarting, setSessionStarting] = useState(false)
+  const [sessionStopping, setSessionStopping] = useState(false)
+  const [triggerCopied, setTriggerCopied] = useState(false)
+
+  // Session state derived from queue items
+  const readyCount = queue.filter((q) => q.status === "ready").length
+  const applyingItems = queue.filter((q) => q.status === "applying")
+  const sessionItems = queue.filter((q) => ["applying", "applied", "failed", "skipped"].includes(q.status))
+  const hasActiveSession = applyingItems.length > 0
+  const sessionComplete = sessionItems.length > 0 && applyingItems.length === 0 && readyCount === 0
+  const sessionStats = {
+    total: sessionItems.length,
+    applied: sessionItems.filter((q) => q.status === "applied").length,
+    failed: sessionItems.filter((q) => q.status === "failed").length,
+    skipped: sessionItems.filter((q) => q.status === "skipped").length,
+    remaining: applyingItems.length,
+  }
 
   const filtered = useMemo(() => {
     if (statusFilter === "all") return queue
@@ -131,6 +152,108 @@ export function AutoApplyQueue({
           )}
         </div>
       </div>
+
+      {/* Session Panel */}
+      {onStartSession && readyCount > 0 && !hasActiveSession && !sessionComplete && (
+        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-semibold text-blue-800 dark:text-blue-200">{readyCount} job{readyCount !== 1 ? "s" : ""} ready to apply</p>
+              <p className="text-xs text-blue-600 dark:text-blue-400 mt-0.5">Start a session to begin auto-applying via Claude in Chrome</p>
+            </div>
+            <button
+              type="button"
+              disabled={sessionStarting}
+              onClick={async () => {
+                const ids = queue.filter((q) => q.status === "ready").map((q) => q.id)
+                setSessionStarting(true)
+                try {
+                  await onStartSession(ids)
+                  toast.success(`Session started with ${ids.length} jobs`)
+                } catch {
+                  toast.error("Failed to start session")
+                } finally {
+                  setSessionStarting(false)
+                }
+              }}
+              className="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold rounded-md bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-50"
+            >
+              {sessionStarting ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />}
+              Start Apply Session
+            </button>
+          </div>
+        </div>
+      )}
+
+      {hasActiveSession && (
+        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-semibold text-blue-800 dark:text-blue-200">
+              Applying... {sessionStats.applied + sessionStats.failed + sessionStats.skipped}/{sessionStats.total} complete
+            </p>
+            {onStopSession && (
+              <button
+                type="button"
+                disabled={sessionStopping}
+                onClick={async () => {
+                  setSessionStopping(true)
+                  try {
+                    await onStopSession()
+                    toast.success("Session stopped")
+                  } catch {
+                    toast.error("Failed to stop session")
+                  } finally {
+                    setSessionStopping(false)
+                  }
+                }}
+                className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-md bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-700 hover:bg-red-100 transition-colors disabled:opacity-50"
+              >
+                {sessionStopping ? <Loader2 size={12} className="animate-spin" /> : <Square size={12} />}
+                Stop Session
+              </button>
+            )}
+          </div>
+          {/* Progress bar */}
+          <div className="w-full h-2 bg-blue-200 dark:bg-blue-800 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-blue-600 rounded-full transition-all duration-500"
+              style={{ width: `${sessionStats.total > 0 ? ((sessionStats.applied + sessionStats.failed + sessionStats.skipped) / sessionStats.total) * 100 : 0}%` }}
+            />
+          </div>
+          <div className="text-[10px] font-mono text-blue-600 dark:text-blue-400">
+            Applied: {sessionStats.applied} | Failed: {sessionStats.failed} | Skipped: {sessionStats.skipped} | Remaining: {sessionStats.remaining}
+          </div>
+          <div className="bg-white dark:bg-zinc-800 rounded-lg p-3 border border-blue-100 dark:border-blue-900">
+            <p className="text-xs text-zinc-600 dark:text-zinc-400 mb-2">Go to Claude.ai and say:</p>
+            <div className="flex items-center gap-2">
+              <code className="text-xs bg-zinc-100 dark:bg-zinc-700 px-3 py-1.5 rounded font-mono text-zinc-800 dark:text-zinc-200 flex-1">
+                Apply to my queued jobs
+              </code>
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard.writeText("Apply to my queued jobs")
+                  setTriggerCopied(true)
+                  setTimeout(() => setTriggerCopied(false), 2000)
+                }}
+                className="text-[10px] px-2 py-1.5 rounded-md bg-zinc-100 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200 transition-colors flex items-center gap-1"
+              >
+                {triggerCopied ? <Check size={10} /> : <Copy size={10} />}
+                {triggerCopied ? "Copied" : "Copy"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {sessionComplete && (
+        <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-xl p-4">
+          <p className="text-sm font-semibold text-emerald-800 dark:text-emerald-200 mb-1">Session Complete</p>
+          <p className="text-xs text-emerald-600 dark:text-emerald-400">
+            {sessionStats.applied} applied · {sessionStats.failed} failed · {sessionStats.skipped} skipped
+          </p>
+        </div>
+      )}
 
       {/* Queue items */}
       {filtered.length > 0 ? (
@@ -318,8 +441,77 @@ function QueueCard({
               View Application
             </span>
           )}
+
+          {item.status === "failed" && item.error_message && (
+            <p className="text-[10px] text-red-500 dark:text-red-400 max-w-[200px] text-right" title={item.error_message}>
+              {item.error_message.length > 60 ? item.error_message.slice(0, 60) + "..." : item.error_message}
+            </p>
+          )}
+
+          {(item.status === "applied" || item.status === "failed") && (
+            <LogViewer queueId={item.id} />
+          )}
         </div>
       </div>
+    </div>
+  )
+}
+
+// ─── Log Viewer ─────────────────────────────────────
+
+function LogViewer({ queueId }: { queueId: string }) {
+  const [open, setOpen] = useState(false)
+  const [logs, setLogs] = useState<Array<{ action: string; success: boolean; details: Record<string, unknown>; created_at: string }>>([])
+  const [loading, setLoading] = useState(false)
+
+  async function loadLogs() {
+    if (logs.length > 0) {
+      setOpen(!open)
+      return
+    }
+    setLoading(true)
+    setOpen(true)
+    try {
+      const resp = await fetch(`/api/auto-apply/log?queueId=${queueId}`)
+      if (resp.ok) {
+        const data = await resp.json()
+        setLogs(data.logs || [])
+      }
+    } catch {
+      // ignore
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={loadLogs}
+        className="text-[10px] text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 flex items-center gap-1 transition-colors"
+      >
+        {open ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
+        View Log
+      </button>
+      {open && (
+        <div className="mt-1.5 space-y-1 max-w-[220px]">
+          {loading && <Loader2 size={10} className="animate-spin text-zinc-400" />}
+          {!loading && logs.length === 0 && (
+            <p className="text-[9px] text-zinc-400">No logs recorded</p>
+          )}
+          {logs.map((log, i) => (
+            <div key={i} className="flex items-start gap-1.5">
+              <span className={`text-[9px] mt-0.5 ${log.success ? "text-emerald-500" : "text-red-500"}`}>
+                {log.success ? "+" : "x"}
+              </span>
+              <span className="text-[9px] text-zinc-500 dark:text-zinc-400">
+                {log.action}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
