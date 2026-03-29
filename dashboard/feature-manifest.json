@@ -1,0 +1,355 @@
+{
+  "_meta": {
+    "project": "CareerPilot",
+    "generated": "2026-03-29",
+    "audit_score": "103/110 (93.6%)",
+    "description": "Feature manifest for automated regression checks. Each entry maps a shipped feature to its file path, key exports, and verification patterns. The regression-check skill reads this file and verifies every entry still exists in the codebase."
+  },
+  "base_path": "dashboard",
+  "features": [
+    {
+      "ticket": "CAR-60",
+      "name": "Sidebar Navigation",
+      "file": "src/components/layout/sidebar.tsx",
+      "exports": ["Sidebar"],
+      "patterns": ["Overview", "Inbox", "Job Search", "Applications", "Analytics"],
+      "area": "layout"
+    },
+    {
+      "ticket": "CAR-60",
+      "name": "App Layout",
+      "file": "src/app/(main)/layout.tsx",
+      "exports": [],
+      "patterns": ["Sidebar"],
+      "area": "layout"
+    },
+    {
+      "ticket": "CAR-42",
+      "name": "Overview Page",
+      "file": "src/app/(main)/page.tsx",
+      "exports": [],
+      "patterns": ["Active Pipeline", "Response Rate", "Quick Actions", "Attention Needed"],
+      "area": "overview"
+    },
+    {
+      "ticket": "CAR-34",
+      "name": "Inbox Page",
+      "file": "src/app/(main)/inbox/page.tsx",
+      "exports": [],
+      "patterns": ["EmailList", "EmailDetail"],
+      "area": "inbox"
+    },
+    {
+      "ticket": "CAR-34",
+      "name": "Gmail Integration Hook",
+      "file": "src/hooks/use-emails.ts",
+      "exports": ["useEmails"],
+      "patterns": ["gmail/scan"],
+      "area": "inbox"
+    },
+    {
+      "ticket": "CAR-40",
+      "name": "Smart Contact Linking",
+      "file": "src/components/inbox/email-detail.tsx",
+      "exports": ["EmailDetail"],
+      "patterns": ["Linked to"],
+      "area": "inbox"
+    },
+    {
+      "ticket": "CAR-58",
+      "name": "Job Search Page",
+      "file": "src/app/(main)/search/page.tsx",
+      "exports": [],
+      "patterns": ["SearchControls", "SearchHistory"],
+      "area": "search"
+    },
+    {
+      "ticket": "CAR-58",
+      "name": "Search Profiles",
+      "file": "src/lib/constants.ts",
+      "exports": ["SEARCH_PROFILES"],
+      "patterns": ["sysadmin_local", "syseng_local", "devops_local", "powershell_remote"],
+      "area": "search"
+    },
+    {
+      "ticket": "CAR-58",
+      "name": "Job Card Component",
+      "file": "src/components/shared/job-card.tsx",
+      "exports": ["JobCard"],
+      "patterns": ["Easy Apply", "source"],
+      "area": "search"
+    },
+    {
+      "ticket": "CAR-58",
+      "name": "Search Controls",
+      "file": "src/components/search/search-controls.tsx",
+      "exports": ["SearchControls"],
+      "patterns": ["Run Search", "Stop"],
+      "area": "search"
+    },
+    {
+      "ticket": "CAR-58",
+      "name": "Search Hook",
+      "file": "src/hooks/use-search.ts",
+      "exports": ["useSearch"],
+      "patterns": ["search_cache", "search-indeed", "search-dice"],
+      "area": "search"
+    },
+    {
+      "ticket": "CAR-58",
+      "name": "Search Utilities",
+      "file": "src/lib/search-utils.ts",
+      "exports": ["deduplicateJobs"],
+      "patterns": ["deduplicateJobs", "filterIrrelevant"],
+      "area": "search"
+    },
+    {
+      "ticket": "CAR-46",
+      "name": "Search History Panel",
+      "file": "src/components/search/search-history.tsx",
+      "exports": ["SearchHistory"],
+      "patterns": ["runs", "scans"],
+      "area": "search"
+    },
+    {
+      "ticket": "CAR-46",
+      "name": "Search History Hook",
+      "file": "src/hooks/use-search-history.ts",
+      "exports": ["useSearchHistory"],
+      "patterns": ["search_runs", "loadRunResults", "createRun"],
+      "area": "search"
+    },
+    {
+      "ticket": "CAR-35",
+      "name": "Dice MCP Direct Client",
+      "file": "src/lib/mcp-client.ts",
+      "exports": ["searchDiceDirect"],
+      "patterns": ["mcp.dice.com"],
+      "area": "search"
+    },
+    {
+      "ticket": "CAR-35",
+      "name": "Indeed Search API Route",
+      "file": "src/app/api/search-indeed/route.ts",
+      "exports": ["POST"],
+      "patterns": ["claude-haiku", "mcp.indeed.com"],
+      "area": "search"
+    },
+    {
+      "ticket": "CAR-35",
+      "name": "Dice Search API Route",
+      "file": "src/app/api/search-dice/route.ts",
+      "exports": ["POST"],
+      "patterns": ["searchDiceDirect"],
+      "area": "search"
+    },
+    {
+      "ticket": "CAR-62",
+      "name": "Applications Page",
+      "file": "src/app/(main)/applications/page.tsx",
+      "exports": [],
+      "patterns": ["ApplicationRow", "DetailPanel"],
+      "area": "applications"
+    },
+    {
+      "ticket": "CAR-62",
+      "name": "Applications Hook",
+      "file": "src/hooks/use-applications.ts",
+      "exports": ["useApplications"],
+      "patterns": ["addApplication", "updateApplication", "deleteApplication"],
+      "area": "applications"
+    },
+    {
+      "ticket": "CAR-41",
+      "name": "Application Detail Panel",
+      "file": "src/components/applications/application-row.tsx",
+      "exports": ["ApplicationRow"],
+      "patterns": ["Details", "Intelligence", "TabsList", "TabsTrigger"],
+      "area": "applications"
+    },
+    {
+      "ticket": "CAR-43",
+      "name": "Status Badge",
+      "file": "src/components/shared/status-badge.tsx",
+      "exports": ["StatusBadge"],
+      "patterns": ["STATUS_CONFIG", "found"],
+      "area": "applications"
+    },
+    {
+      "ticket": "CAR-44",
+      "name": "URL Auto-Fill API Route",
+      "file": "src/app/api/extract-job/route.ts",
+      "exports": ["POST"],
+      "patterns": ["extract", "company", "title"],
+      "area": "applications"
+    },
+    {
+      "ticket": "CAR-45",
+      "name": "Communications Section",
+      "file": "src/components/applications/communications-section.tsx",
+      "exports": ["CommunicationsSection"],
+      "patterns": ["gmail", "thread"],
+      "area": "applications"
+    },
+    {
+      "ticket": "CAR-57",
+      "name": "Intelligence Tab",
+      "file": "src/components/intelligence/intelligence-tab.tsx",
+      "exports": ["IntelligenceTab"],
+      "patterns": ["CompanyBriefDisplay", "InterviewPrepDisplay", "debrief", "skill"],
+      "area": "intelligence"
+    },
+    {
+      "ticket": "CAR-57",
+      "name": "Intelligence Hook",
+      "file": "src/hooks/use-intelligence.ts",
+      "exports": ["useIntelligence"],
+      "patterns": ["brief", "preps", "debriefs", "skillMentions"],
+      "area": "intelligence"
+    },
+    {
+      "ticket": "CAR-57",
+      "name": "Intelligence API — Generate",
+      "file": "src/app/api/intelligence/generate/route.ts",
+      "exports": ["POST"],
+      "patterns": ["company_brief", "interview_prep"],
+      "area": "intelligence"
+    },
+    {
+      "ticket": "CAR-57",
+      "name": "Intelligence API — Fetch",
+      "file": "src/app/api/intelligence/[applicationId]/route.ts",
+      "exports": ["GET"],
+      "patterns": ["brief", "preps", "debriefs", "skill_mentions"],
+      "area": "intelligence"
+    },
+    {
+      "ticket": "CAR-57",
+      "name": "Model Routing Config",
+      "file": "src/lib/intelligence/model-config.ts",
+      "exports": ["INTELLIGENCE_MODELS", "getModelConfig"],
+      "patterns": ["haiku", "sonnet"],
+      "area": "intelligence"
+    },
+    {
+      "ticket": "CAR-57",
+      "name": "Intelligence Supabase Helpers",
+      "file": "src/lib/intelligence/supabase-helpers.ts",
+      "exports": ["upsertCompanyBrief", "getIntelligenceSummary"],
+      "patterns": ["company_briefs", "interview_prep", "debriefs", "skill_mentions"],
+      "area": "intelligence"
+    },
+    {
+      "ticket": "CAR-56",
+      "name": "Company Brief Generator",
+      "file": "src/lib/intelligence/generators/company-brief.ts",
+      "exports": ["generateCompanyBrief"],
+      "patterns": ["web_search", "why_good_fit", "red_flags", "tech_stack"],
+      "area": "intelligence"
+    },
+    {
+      "ticket": "CAR-56",
+      "name": "Company Brief Display",
+      "file": "src/components/intelligence/company-brief.tsx",
+      "exports": ["CompanyBriefDisplay"],
+      "patterns": ["fit", "tech_stack", "red_flags"],
+      "area": "intelligence"
+    },
+    {
+      "ticket": "CAR-52",
+      "name": "Interview Prep Generator",
+      "file": "src/lib/intelligence/generators/interview-prep.ts",
+      "exports": ["generateInterviewPrep"],
+      "patterns": ["phone_screen", "technical", "hiring_manager", "final_round", "offer"],
+      "area": "intelligence"
+    },
+    {
+      "ticket": "CAR-52",
+      "name": "Interview Prep Display",
+      "file": "src/components/intelligence/interview-prep-display.tsx",
+      "exports": ["InterviewPrepDisplay"],
+      "patterns": ["Practice Mode", "Reveal approach", "Career Narrative"],
+      "area": "intelligence"
+    },
+    {
+      "ticket": "CAR-56",
+      "name": "Resume Context",
+      "file": "src/lib/intelligence/resume-context.ts",
+      "exports": ["RESUME_SUMMARY", "RESUME_SKILLS"],
+      "patterns": ["PowerShell", "VMware", "Active Directory", "Splunk"],
+      "area": "intelligence"
+    },
+    {
+      "ticket": "CAR-63",
+      "name": "Analytics Page",
+      "file": "src/app/(main)/analytics/page.tsx",
+      "exports": [],
+      "patterns": ["SourceChart", "PipelineFunnel"],
+      "area": "analytics"
+    },
+    {
+      "ticket": "CAR-64",
+      "name": "Auth Middleware",
+      "file": "src/lib/supabase/middleware.ts",
+      "exports": [],
+      "patterns": ["supabase", "auth", "login"],
+      "area": "auth"
+    },
+    {
+      "ticket": "CAR-64",
+      "name": "Login Page",
+      "file": "src/app/login/page.tsx",
+      "exports": [],
+      "patterns": ["signIn", "email", "password"],
+      "area": "auth"
+    },
+    {
+      "ticket": "CAR-38",
+      "name": "Resume Tailoring API Route",
+      "file": "src/app/api/tailor-resume/route.ts",
+      "exports": ["POST"],
+      "patterns": ["resume", "tailor"],
+      "area": "resume"
+    },
+    {
+      "ticket": "CAR-22",
+      "name": "Cover Letter API Route",
+      "file": "src/app/api/cover-letter/route.ts",
+      "exports": ["POST"],
+      "patterns": ["cover letter"],
+      "area": "resume"
+    },
+    {
+      "ticket": "CAR-28",
+      "name": "Interview Coaching Section",
+      "file": "src/components/coaching/coaching-section.tsx",
+      "exports": ["CoachingSection"],
+      "patterns": ["coach", "score"],
+      "area": "coaching"
+    },
+    {
+      "ticket": "CAR-28",
+      "name": "Practice Mode",
+      "file": "src/components/coaching/practice-mode.tsx",
+      "exports": ["PracticeMode"],
+      "patterns": ["practice", "question"],
+      "area": "coaching"
+    },
+    {
+      "ticket": "CAR-39",
+      "name": "Conversations Page",
+      "file": "src/app/(main)/conversations/page.tsx",
+      "exports": [],
+      "patterns": ["ConversationList", "PatternInsights"],
+      "area": "conversations"
+    },
+    {
+      "ticket": "CAR-31",
+      "name": "Calendar Sync API Route",
+      "file": "src/app/api/calendar-sync/route.ts",
+      "exports": ["POST"],
+      "patterns": ["calendar", "event"],
+      "area": "calendar"
+    }
+  ]
+}
