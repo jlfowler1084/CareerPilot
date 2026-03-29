@@ -1,17 +1,11 @@
 import PDFDocument from "pdfkit"
-import path from "path"
 
-// Resolve PDFKit's built-in font data directory to avoid ENOENT on Next.js dev server
-const PDFKIT_FONT_DIR = path.join(
-  path.dirname(require.resolve("pdfkit/package.json")),
-  "js",
-  "data"
-)
-
+// PDFKit built-in font names — works when pdfkit is in serverExternalPackages
+// (Next.js won't bundle it, so Node.js resolves the font data directory normally)
 const FONTS = {
-  regular: path.join(PDFKIT_FONT_DIR, "Helvetica.afm"),
-  bold: path.join(PDFKIT_FONT_DIR, "Helvetica-Bold.afm"),
-  oblique: path.join(PDFKIT_FONT_DIR, "Helvetica-Oblique.afm"),
+  regular: "Helvetica",
+  bold: "Helvetica-Bold",
+  oblique: "Helvetica-Oblique",
 }
 
 // ─── Resume PDF ──────────────────────────────────────
