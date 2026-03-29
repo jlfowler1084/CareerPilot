@@ -239,7 +239,7 @@ function SuggestionCard({
   const style = getSourceStyle(s.source)
   const isNew = s.status === "new"
   const isTracked = s.status === "interested"
-  const canQueue = fitScore && fitScore.total >= 60 && onAddToQueue
+  const canQueue = !!onAddToQueue
 
   return (
     <div

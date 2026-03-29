@@ -19,6 +19,8 @@ export interface AutoApplySettings {
   min_salary: number
   require_cover_letter: boolean
   auto_generate_materials: boolean
+  scheduled_apply_enabled: boolean
+  scheduled_apply_interval: number
   created_at: string
   updated_at: string
 }

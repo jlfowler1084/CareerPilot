@@ -1,4 +1,18 @@
 import PDFDocument from "pdfkit"
+import path from "path"
+
+// Resolve PDFKit's built-in font data directory to avoid ENOENT on Next.js dev server
+const PDFKIT_FONT_DIR = path.join(
+  path.dirname(require.resolve("pdfkit/package.json")),
+  "js",
+  "data"
+)
+
+const FONTS = {
+  regular: path.join(PDFKIT_FONT_DIR, "Helvetica.afm"),
+  bold: path.join(PDFKIT_FONT_DIR, "Helvetica-Bold.afm"),
+  oblique: path.join(PDFKIT_FONT_DIR, "Helvetica-Oblique.afm"),
+}
 
 // ─── Resume PDF ──────────────────────────────────────
 
@@ -111,7 +125,7 @@ export async function generateResumePdf(
       switch (section.type) {
         case "name":
           doc
-            .font("Helvetica-Bold")
+            .font(FONTS.bold)
             .fontSize(18)
             .text(section.text, { align: "center" })
           doc.moveDown(0.2)
@@ -119,7 +133,7 @@ export async function generateResumePdf(
 
         case "contact":
           doc
-            .font("Helvetica")
+            .font(FONTS.regular)
             .fontSize(10)
             .text(section.text, { align: "center" })
           doc.moveDown(0.5)
@@ -128,7 +142,7 @@ export async function generateResumePdf(
         case "header":
           doc.moveDown(0.4)
           doc
-            .font("Helvetica-Bold")
+            .font(FONTS.bold)
             .fontSize(12)
             .text(section.text, { align: "left" })
           // Thin horizontal rule below header
@@ -145,14 +159,14 @@ export async function generateResumePdf(
         case "company":
           doc.moveDown(0.15)
           doc
-            .font("Helvetica-Bold")
+            .font(FONTS.bold)
             .fontSize(11)
             .text(section.text, { align: "left" })
           break
 
         case "role":
           doc
-            .font("Helvetica-Oblique")
+            .font(FONTS.oblique)
             .fontSize(10.5)
             .text(section.text, { align: "left" })
           doc.moveDown(0.15)
@@ -160,7 +174,7 @@ export async function generateResumePdf(
 
         case "bullet":
           doc
-            .font("Helvetica")
+            .font(FONTS.regular)
             .fontSize(10.5)
             .text(`•  ${section.text}`, {
               align: "left",
@@ -171,7 +185,7 @@ export async function generateResumePdf(
 
         case "text":
           doc
-            .font("Helvetica")
+            .font(FONTS.regular)
             .fontSize(10.5)
             .text(section.text, {
               align: "left",
@@ -208,7 +222,7 @@ export async function generateCoverLetterPdf(
 
     // Header: Name
     doc
-      .font("Helvetica-Bold")
+      .font(FONTS.bold)
       .fontSize(14)
       .text(metadata.name, { align: "left" })
     doc.moveDown(0.3)
@@ -234,7 +248,7 @@ export async function generateCoverLetterPdf(
       if (line.startsWith("Dear ")) {
         inBody = true
         doc
-          .font("Helvetica")
+          .font(FONTS.regular)
           .fontSize(10.5)
           .text(line, { align: "left" })
         doc.moveDown(0.5)
@@ -245,7 +259,7 @@ export async function generateCoverLetterPdf(
       if (/^(Sincerely|Best regards|Regards|Respectfully|Warm regards),?$/i.test(line)) {
         doc.moveDown(0.5)
         doc
-          .font("Helvetica")
+          .font(FONTS.regular)
           .fontSize(10.5)
           .text(line, { align: "left" })
         doc.moveDown(1.5)
@@ -255,13 +269,13 @@ export async function generateCoverLetterPdf(
       if (inBody) {
         // Body paragraph
         doc
-          .font("Helvetica")
+          .font(FONTS.regular)
           .fontSize(10.5)
           .text(line, { align: "left", lineGap: 2 })
       } else {
         // Pre-body content (date, recipient address, etc.)
         doc
-          .font("Helvetica")
+          .font(FONTS.regular)
           .fontSize(10)
           .text(line, { align: "left" })
       }

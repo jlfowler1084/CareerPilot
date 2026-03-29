@@ -272,6 +272,40 @@ export default function SettingsPage() {
         </div>
       </div>
 
+      {/* Scheduled Apply */}
+      <div className="bg-white rounded-xl border border-zinc-200 p-6 space-y-4">
+        <h3 className="text-sm font-bold text-zinc-800">Scheduled Auto-Apply</h3>
+        <div className="flex items-center gap-4">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={settings.scheduled_apply_enabled ?? false}
+              onChange={(e) => updateSettings({ scheduled_apply_enabled: e.target.checked })}
+              className="rounded border-zinc-300 text-amber-500 focus:ring-amber-400"
+            />
+            <span className="text-xs text-zinc-600">Enable scheduled apply</span>
+          </label>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-zinc-500">Check every:</span>
+            <select
+              value={settings.scheduled_apply_interval ?? 30}
+              onChange={(e) => updateSettings({ scheduled_apply_interval: parseInt(e.target.value) })}
+              disabled={!settings.scheduled_apply_enabled}
+              title="Check interval"
+              className="text-xs px-2 py-1 border border-zinc-200 rounded-md focus:ring-1 focus:ring-amber-400 disabled:opacity-50"
+            >
+              <option value={15}>15 min</option>
+              <option value={30}>30 min</option>
+              <option value={60}>1 hour</option>
+              <option value={120}>2 hours</option>
+            </select>
+          </div>
+        </div>
+        <p className="text-[10px] text-zinc-400">
+          When enabled, the dashboard will check for approved queue items with materials ready and prompt to start an apply session.
+        </p>
+      </div>
+
       {/* Screening Answers */}
       <div className="bg-white rounded-xl border border-zinc-200 p-6 space-y-4">
         <h3 className="text-sm font-bold text-zinc-800">Screening Answers</h3>

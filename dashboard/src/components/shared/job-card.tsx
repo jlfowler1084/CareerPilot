@@ -85,11 +85,15 @@ export function JobCard({ job, onTrack, onApply, onTailor, onCoverLetter, onTrac
               >
                 <Plus size={10} /> Track
               </button>
-              {onAddToQueue && fitScore && fitScore.total >= 60 && job.easyApply && !inQueue && (
+              {onAddToQueue && !inQueue && (
                 <button
                   type="button"
                   onClick={() => onAddToQueue(job)}
-                  className="text-[10px] font-semibold px-2.5 py-1 rounded-md bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 transition-colors flex items-center gap-1"
+                  className={`text-[10px] font-semibold px-2.5 py-1 rounded-md transition-colors flex items-center gap-1 ${
+                    fitScore && fitScore.total >= 60 && job.easyApply
+                      ? "bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200"
+                      : "bg-zinc-50 text-zinc-500 hover:bg-zinc-100 border border-zinc-200"
+                  }`}
                   title="Add to auto-apply queue"
                 >
                   <ListPlus size={10} /> Queue
