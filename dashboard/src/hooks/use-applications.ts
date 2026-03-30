@@ -4,26 +4,23 @@ import { useEffect, useState, useCallback } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { RESPONSE_STATUSES } from "@/lib/constants"
 import { logActivity } from "@/hooks/use-activity-log"
+import { useAuth } from "@/contexts/auth-context"
 import { toast } from "sonner"
 import type { Application, ApplicationStatus, ApplicationEventType, ExtractedJob, Job } from "@/types"
 
 const supabase = createClient()
 
 async function insertApplicationEvent(
+  userId: string,
   applicationId: string,
   eventType: ApplicationEventType,
   description: string,
   previousValue?: string | null,
   newValue?: string | null
 ) {
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) return
-
   await supabase.from("application_events").insert({
     application_id: applicationId,
-    user_id: user.id,
+    user_id: userId,
     event_type: eventType,
     description,
     previous_value: previousValue ?? null,
@@ -49,15 +46,13 @@ function computeDateUpdates(
 export function useApplications() {
   const [applications, setApplications] = useState<Application[]>([])
   const [loading, setLoading] = useState(true)
+  const { user, loading: authLoading } = useAuth()
 
   useEffect(() => {
-    const fetchApps = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) {
-        setLoading(false)
-        return
-      }
+    if (authLoading) return
+    if (!user) { setLoading(false); return }
 
+    const fetchApps = async () => {
       const { data } = await supabase
         .from("applications")
         .select("*")
@@ -98,16 +93,13 @@ export function useApplications() {
     return () => {
       supabase.removeChannel(channel)
     }
-  }, [])
+  }, [user, authLoading])
 
   const addApplication = useCallback(
     async (
       job: Partial<Application> | Job,
       entryPoint: "search" | "manual" = "manual"
     ) => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
       if (!user) return
 
       const status = entryPoint === "search" ? "interested" : "found"
@@ -149,10 +141,11 @@ export function useApplications() {
 
       if (!error && data) {
         toast.success(`Application tracked: ${data.title}`)
-        await logActivity(`Tracked: ${data.title} at ${data.company}`)
+        await logActivity(user.id, `Tracked: ${data.title} at ${data.company}`)
 
         if (data.tailored_resume) {
           await insertApplicationEvent(
+            user.id,
             data.id,
             "resume_tailored",
             `Resume tailored for ${data.title} at ${data.company}`
@@ -162,7 +155,7 @@ export function useApplications() {
 
       return { data, error }
     },
-    []
+    [user]
   )
 
   const updateApplication = useCallback(
@@ -210,11 +203,12 @@ export function useApplications() {
         const statusLabel = updates.status
           ? ` → ${updates.status}`
           : ""
-        await logActivity(`Updated: ${data.title}${statusLabel}`)
+        if (user) await logActivity(user.id, `Updated: ${data.title}${statusLabel}`)
 
         // Log status change event
         if (updates.status && current && updates.status !== current.status) {
           await insertApplicationEvent(
+            user?.id ?? "",
             id,
             "status_change",
             `Status changed from ${current.status} to ${updates.status}`,
@@ -226,6 +220,7 @@ export function useApplications() {
         // Log resume tailored event
         if (updates.tailored_resume && !current?.tailored_resume) {
           await insertApplicationEvent(
+            user?.id ?? "",
             id,
             "resume_tailored",
             `Resume tailored for ${data.title} at ${data.company}`
@@ -235,6 +230,7 @@ export function useApplications() {
         // Log cover letter generated event
         if (updates.cover_letter && !current?.cover_letter) {
           await insertApplicationEvent(
+            user?.id ?? "",
             id,
             "cover_letter_generated",
             `Cover letter generated for ${data.title} at ${data.company}`
@@ -244,6 +240,7 @@ export function useApplications() {
         // Log calendar scheduled event
         if (updates.calendar_event_id && !current?.calendar_event_id) {
           await insertApplicationEvent(
+            user?.id ?? "",
             id,
             "calendar_scheduled",
             `Calendar event scheduled for ${data.title}`
@@ -253,7 +250,7 @@ export function useApplications() {
 
       return { data, error }
     },
-    [applications]
+    [applications, user]
   )
 
   const deleteApplication = useCallback(async (id: string) => {
@@ -263,17 +260,14 @@ export function useApplications() {
       toast.error("Failed to delete application")
     } else {
       toast.success("Application deleted")
-      if (app) {
-        await logActivity(`Removed: ${app.title} at ${app.company}`)
+      if (app && user) {
+        await logActivity(user.id, `Removed: ${app.title} at ${app.company}`)
       }
     }
-  }, [applications])
+  }, [applications, user])
 
   const createFromExtraction = useCallback(
     async (extracted: ExtractedJob, url: string) => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
       if (!user) return { data: null, error: "Not authenticated" }
 
       const { data, error } = await supabase
@@ -299,8 +293,9 @@ export function useApplications() {
         .single()
 
       if (!error && data) {
-        await logActivity(`Tracked: ${data.title} at ${data.company}`)
+        await logActivity(user.id, `Tracked: ${data.title} at ${data.company}`)
         await insertApplicationEvent(
+          user.id,
           data.id,
           "tracked",
           `Imported from ${extracted.source} via URL extraction`
@@ -309,7 +304,7 @@ export function useApplications() {
 
       return { data, error }
     },
-    []
+    [user]
   )
 
   const updateContact = useCallback(
@@ -330,6 +325,7 @@ export function useApplications() {
       if (!error && data) {
         toast.success("Contact info saved")
         await insertApplicationEvent(
+          user?.id ?? "",
           id,
           "contact_added",
           `Contact info updated: ${contact.contact_name || "unnamed"}`
@@ -356,6 +352,7 @@ export function useApplications() {
       if (!error && data) {
         toast.success("Notes saved")
         await insertApplicationEvent(
+          user?.id ?? "",
           id,
           "note_added",
           "Notes updated"

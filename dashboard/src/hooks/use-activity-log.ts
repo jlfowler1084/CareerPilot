@@ -3,14 +3,9 @@ import type { ActivityEntry } from "@/types"
 
 const supabase = createClient()
 
-export async function logActivity(action: string): Promise<void> {
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) return
-
+export async function logActivity(userId: string, action: string): Promise<void> {
   await supabase.from("activity_log").insert({
-    user_id: user.id,
+    user_id: userId,
     action,
   })
 }

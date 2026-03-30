@@ -34,6 +34,7 @@ import { useSkillsInventory } from "@/hooks/use-skills-inventory"
 import { useAutoApplyQueue } from "@/hooks/use-auto-apply-queue"
 import { scoreJob } from "@/lib/fit-scoring"
 import { logActivity } from "@/hooks/use-activity-log"
+import { useAuth } from "@/contexts/auth-context"
 import { AlertCircle, SearchX, Clock, CheckCircle2, Info, X, Mail, ListChecks } from "lucide-react"
 import { format, isToday, isYesterday } from "date-fns"
 import type { Job, FitScore, ScanMetadata } from "@/types"
@@ -65,6 +66,7 @@ function saveSelectedProfiles(ids: Set<string>) {
 }
 
 export default function SearchPage() {
+  const { user } = useAuth()
   const history = useSearchHistory()
   const {
     profiles: supabaseProfiles,
@@ -476,7 +478,7 @@ export default function SearchPage() {
       }
     }
 
-    await logActivity(`Applied to ${job.title} at ${job.company}`)
+    if (user) await logActivity(user.id, `Applied to ${job.title} at ${job.company}`)
     setApplyJob(null)
   }
 

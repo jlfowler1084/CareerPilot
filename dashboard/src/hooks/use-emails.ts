@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client"
 import { extractDomain, extractPreview } from "@/lib/gmail/parse"
 import { findDomainMatch } from "@/lib/gmail/suggestions"
 import type { Email, EmailApplicationLink, ClassificationResult, Application, ApplicationStatus } from "@/types"
+import { useAuth } from "@/contexts/auth-context"
 
 const supabase = createClient()
 const SCAN_COOLDOWN_MS = 15 * 60 * 1000 // 15 minutes
@@ -53,13 +54,14 @@ export function useEmails() {
     lastScan: null,
   })
   const classifyAttemptsRef = useRef<Record<string, number>>({})
+  const { user, loading: authLoading } = useAuth()
 
   // ── Load cached data on mount ──────────────────────────────────
   useEffect(() => {
-    const load = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) { setLoading(false); return }
+    if (authLoading) return
+    if (!user) { setLoading(false); return }
 
+    const load = async () => {
       const [emailsRes, linksRes, appsRes, settingsRes] = await Promise.all([
         supabase.from("emails").select("*").eq("user_id", user.id).order("received_at", { ascending: false }),
         supabase.from("email_application_links").select("*").eq("user_id", user.id),
@@ -77,7 +79,7 @@ export function useEmails() {
       setLoading(false)
     }
     load()
-  }, [])
+  }, [user, authLoading])
 
   // ── Scan-on-load trigger ───────────────────────────────────────
   useEffect(() => {
@@ -105,7 +107,6 @@ export function useEmails() {
 
   // ── Scan Gmail for new emails ──────────────────────────────────
   const runScan = useCallback(async (forceSince?: string) => {
-    const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
 
     setScanState((prev) => ({ ...prev, scanning: true }))
@@ -176,11 +177,10 @@ export function useEmails() {
       console.error("Scan error:", error)
       setScanState((prev) => ({ ...prev, scanning: false }))
     }
-  }, [emails, scanState.lastScan])
+  }, [emails, scanState.lastScan, user])
 
   // ── Auto-update application statuses from email signals ───────
   const autoUpdateApplicationStatuses = useCallback(async (classifiedEmails: Email[]) => {
-    const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
 
     const cutoff = new Date(Date.now() - STATUS_UPDATE_WINDOW_DAYS * 24 * 60 * 60 * 1000)
@@ -251,7 +251,7 @@ export function useEmails() {
           .eq("id", email.id)
       }
     }
-  }, [])
+  }, [user])
 
   // ── Classify emails in batches ─────────────────────────────────
   const classifyEmails = useCallback(async (toClassify: Email[]) => {
@@ -397,7 +397,7 @@ export function useEmails() {
             const { data: freshApps } = await supabase
               .from("applications")
               .select("id, title, company, status")
-              .eq("user_id", (await supabase.auth.getUser()).data.user?.id || "")
+              .eq("user_id", user?.id || "")
             if (freshApps) setApplications(freshApps as Pick<Application, "id" | "title" | "company" | "status">[])
           }
           // Update prompted emails
@@ -455,7 +455,7 @@ export function useEmails() {
             const { data: freshApps } = await supabase
               .from("applications")
               .select("id, title, company, status")
-              .eq("user_id", (await supabase.auth.getUser()).data.user?.id || "")
+              .eq("user_id", user?.id || "")
             if (freshApps) setApplications(freshApps as Pick<Application, "id" | "title" | "company" | "status">[])
           }
           const bfPrompted = (bfResults || []).filter((r: { promptUser?: boolean }) => r.promptUser)
@@ -522,7 +522,6 @@ export function useEmails() {
     applicationId: string,
     linkedBy: "manual" | "confirmed_suggestion" = "manual"
   ) => {
-    const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
 
     const { data } = await supabase
@@ -534,7 +533,7 @@ export function useEmails() {
     if (data) {
       setLinks((prev) => [...prev, data])
     }
-  }, [])
+  }, [user])
 
   const unlinkEmail = useCallback(async (emailId: string, applicationId: string) => {
     await supabase
@@ -570,7 +569,6 @@ export function useEmails() {
   }, [])
 
   const linkMany = useCallback(async (emailIds: string[], applicationId: string) => {
-    const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
 
     const rows = emailIds.map((emailId) => ({
@@ -584,7 +582,7 @@ export function useEmails() {
     if (data) {
       setLinks((prev) => [...prev, ...data])
     }
-  }, [])
+  }, [user])
 
   const markRead = useCallback(async (emailId: string) => {
     await supabase.from("emails").update({ is_read: true }).eq("id", emailId)
@@ -669,12 +667,12 @@ export function useEmails() {
       const { data: freshApps } = await supabase
         .from("applications")
         .select("id, title, company, status")
-        .eq("user_id", (await supabase.auth.getUser()).data.user?.id || "")
+        .eq("user_id", user?.id || "")
       if (freshApps) setApplications(freshApps as Pick<Application, "id" | "title" | "company" | "status">[])
     }
 
     return found
-  }, [emails, links])
+  }, [emails, links, user])
 
   // ── Manual refresh ─────────────────────────────────────────────
   const refresh = useCallback(() => runScan(), [runScan])

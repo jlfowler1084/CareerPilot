@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react"
 import { useAutoApplySettings } from "@/hooks/use-auto-apply-settings"
 import { createClient } from "@/lib/supabase/client"
+import { useAuth } from "@/contexts/auth-context"
 import { toast } from "sonner"
 import { Save, Plus, Trash2, X } from "lucide-react"
 
@@ -10,6 +11,7 @@ const supabase = createClient()
 
 export default function SettingsPage() {
   const { settings, updateSettings, loading } = useAutoApplySettings()
+  const { user, loading: authLoading } = useAuth()
 
   // Excluded companies tag input
   const [companyInput, setCompanyInput] = useState("")
@@ -29,10 +31,9 @@ export default function SettingsPage() {
   const [skillsLoading, setSkillsLoading] = useState(true)
 
   useEffect(() => {
-    const load = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
+    if (authLoading || !user) return
 
+    const load = async () => {
       const { data: a } = await supabase
         .from("screening_answers")
         .select("*")
@@ -50,7 +51,7 @@ export default function SettingsPage() {
       setSkillsLoading(false)
     }
     load()
-  }, [])
+  }, [user, authLoading])
 
   const addExcludedCompany = useCallback(() => {
     if (!companyInput.trim() || !settings) return

@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useRef, useEffect } from "react"
 import { createClient } from "@/lib/supabase/client"
+import { useAuth } from "@/contexts/auth-context"
 import { DEFAULT_SEARCH_PROFILES } from "@/lib/constants"
 import {
   deduplicateJobs,
@@ -146,6 +147,7 @@ export function useSearch(options: UseSearchOptions = {}) {
   const [lastSearchTime, setLastSearchTime] = useState<Date | null>(null)
 
   const abortRef = useRef(false)
+  const { user } = useAuth()
 
   // Build dedup cache from search_cache on init (for new-job detection)
   // Result restoration is now handled by the search history hook (run-based)
@@ -245,9 +247,6 @@ export function useSearch(options: UseSearchOptions = {}) {
         }
 
         // Write to search_cache
-        const {
-          data: { user },
-        } = await supabase.auth.getUser()
         if (user) {
           const { data: cached } = await supabase
             .from("search_cache")
@@ -289,9 +288,6 @@ export function useSearch(options: UseSearchOptions = {}) {
 
     // Create search run record and link cache entries
     if (cacheIds.length > 0) {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
       if (user) {
         const { data: run } = await supabase
           .from("search_runs")
@@ -331,7 +327,7 @@ export function useSearch(options: UseSearchOptions = {}) {
       ...prev,
       ...allResults.map((j) => ({ title: j.title, company: j.company })),
     ])
-  }, [selectedProfiles, cachedJobs, options, allProfiles])
+  }, [selectedProfiles, cachedJobs, options, allProfiles, user])
 
   const isNew = useCallback(
     (job: Job): boolean => {

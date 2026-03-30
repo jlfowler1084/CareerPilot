@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo } from "react"
 import { X, Search, Loader2, Link2 } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
+import { useAuth } from "@/contexts/auth-context"
 import { CategoryBadge } from "@/components/inbox/category-badge"
 import { formatDistanceToNow } from "date-fns"
 import type { Email } from "@/types"
@@ -36,6 +37,7 @@ export function LinkEmailModal({
   const [search, setSearch] = useState("")
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [linking, setLinking] = useState(false)
+  const { user } = useAuth()
 
   useEffect(() => {
     if (!open) return
@@ -117,9 +119,6 @@ export function LinkEmailModal({
     if (selected.size === 0) return
     setLinking(true)
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
     if (!user) { setLinking(false); return }
 
     const inserts = Array.from(selected).map((emailId) => ({

@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react"
 import { createClient } from "@/lib/supabase/client"
+import { useAuth } from "@/contexts/auth-context"
 import type { AutoApplyQueueItem, AutoApplyStatus, FitScore, Job } from "@/types"
 
 const supabase = createClient()
@@ -9,9 +10,9 @@ const supabase = createClient()
 export function useAutoApplyQueue() {
   const [queue, setQueue] = useState<AutoApplyQueueItem[]>([])
   const [loading, setLoading] = useState(true)
+  const { user, loading: authLoading } = useAuth()
 
   const fetchQueue = useCallback(async (statusFilter?: AutoApplyStatus) => {
-    const { data: { user } } = await supabase.auth.getUser()
     if (!user) { setLoading(false); return }
 
     let query = supabase
@@ -27,9 +28,10 @@ export function useAutoApplyQueue() {
     const { data } = await query
     setQueue(data || [])
     setLoading(false)
-  }, [])
+  }, [user])
 
   useEffect(() => {
+    if (authLoading) return
     fetchQueue()
 
     // Real-time subscription
@@ -43,10 +45,9 @@ export function useAutoApplyQueue() {
       .subscribe()
 
     return () => { supabase.removeChannel(channel) }
-  }, [fetchQueue])
+  }, [fetchQueue, authLoading])
 
   const addToQueue = useCallback(async (job: Job, fitScore: FitScore) => {
-    const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
 
     // Check for duplicates (same title + company)
@@ -80,7 +81,7 @@ export function useAutoApplyQueue() {
       setQueue((prev) => [data, ...prev])
     }
     return data
-  }, [queue])
+  }, [queue, user])
 
   const updateStatus = useCallback(async (id: string, status: AutoApplyStatus) => {
     const { error } = await supabase
