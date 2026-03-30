@@ -54,7 +54,7 @@ export function LinkEmailModal({
         .select("email_id")
         .eq("application_id", applicationId)
 
-      const alreadyLinked = new Set((links || []).map((l: { email_id: string }) => l.email_id))
+      const alreadyLinked = new Set<string>((links || []).map((l: { email_id: string }) => l.email_id))
 
       // Fetch recent actionable emails
       const { data: emailData } = await supabase

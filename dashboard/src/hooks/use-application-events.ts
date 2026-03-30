@@ -42,8 +42,8 @@ export function useApplicationEvents(applicationId: string | null) {
           table: "application_events",
           filter: `application_id=eq.${applicationId}`,
         },
-        (payload) => {
-          setEvents((prev) => [payload.new as ApplicationEvent, ...prev])
+        (payload: { new: Record<string, unknown> }) => {
+          setEvents((prev) => [payload.new as unknown as ApplicationEvent, ...prev])
         }
       )
       .subscribe()

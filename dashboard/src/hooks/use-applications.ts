@@ -70,20 +70,20 @@ export function useApplications() {
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "applications" },
-        (payload) => {
+        (payload: { eventType: string; new: Record<string, unknown>; old: Record<string, unknown> }) => {
           if (payload.eventType === "INSERT") {
-            setApplications((prev) => [payload.new as Application, ...prev])
+            setApplications((prev) => [payload.new as unknown as Application, ...prev])
           } else if (payload.eventType === "UPDATE") {
             setApplications((prev) =>
               prev.map((a) =>
-                a.id === (payload.new as Application).id
-                  ? (payload.new as Application)
+                a.id === (payload.new as unknown as Application).id
+                  ? (payload.new as unknown as Application)
                   : a
               )
             )
           } else if (payload.eventType === "DELETE") {
             setApplications((prev) =>
-              prev.filter((a) => a.id !== (payload.old as Application).id)
+              prev.filter((a) => a.id !== (payload.old as unknown as Application).id)
             )
           }
         }

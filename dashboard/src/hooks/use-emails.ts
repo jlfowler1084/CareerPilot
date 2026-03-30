@@ -193,7 +193,7 @@ export function useEmails() {
 
     if (!fullApps || fullApps.length === 0) return
 
-    const eligibleApps = fullApps.filter((app) => {
+    const eligibleApps = fullApps.filter((app: { date_applied: string | null; date_found: string | null }) => {
       const refDate = app.date_applied || app.date_found
       return refDate && new Date(refDate) >= cutoff
     })
@@ -206,7 +206,7 @@ export function useEmails() {
       if (!companyFromEmail) continue
 
       // Find matching applications by fuzzy company name
-      const matches = eligibleApps.filter((app) => fuzzyCompanyMatch(companyFromEmail, app.company))
+      const matches = eligibleApps.filter((app: { company: string }) => fuzzyCompanyMatch(companyFromEmail, app.company))
 
       if (matches.length === 1) {
         const match = matches[0]
@@ -242,8 +242,8 @@ export function useEmails() {
         console.log(`[auto-status] ${match.company}: ${match.status} → ${targetStatus} (via ${email.category} email)`)
       } else if (matches.length > 1) {
         // Ambiguous — just set suggestion, don't auto-update
-        const mostRecent = matches.sort((a, b) =>
-          new Date(b.date_applied || b.date_found).getTime() - new Date(a.date_applied || a.date_found).getTime()
+        const mostRecent = matches.sort((a: { date_applied: string | null; date_found: string | null }, b: { date_applied: string | null; date_found: string | null }) =>
+          new Date(b.date_applied || b.date_found || "").getTime() - new Date(a.date_applied || a.date_found || "").getTime()
         )[0]
         await supabase
           .from("emails")

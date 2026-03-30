@@ -57,9 +57,9 @@ function ApplicationsContent() {
       .from("email_application_links")
       .select("application_id")
       .eq("linked_by", "auto_status")
-      .then(({ data }) => {
+      .then(({ data }: { data: { application_id: string }[] | null }) => {
         if (data) {
-          setAutoStatusAppIds(new Set(data.map((l) => l.application_id)))
+          setAutoStatusAppIds(new Set(data.map((l: { application_id: string }) => l.application_id)))
         }
       })
   }, [applications])
