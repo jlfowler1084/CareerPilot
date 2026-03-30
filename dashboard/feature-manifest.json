@@ -12,7 +12,7 @@
       "name": "Sidebar Navigation",
       "file": "src/components/layout/sidebar.tsx",
       "exports": ["Sidebar"],
-      "patterns": ["Overview", "Inbox", "Job Search", "Applications", "Analytics"],
+      "patterns": ["Overview", "Inbox", "Job Search", "Applications", "Auto-Apply", "Analytics"],
       "area": "layout"
     },
     {
@@ -694,6 +694,22 @@
       "exports": ["POST"],
       "patterns": ["viewed", "scan_results"],
       "area": "search"
+    },
+    {
+      "ticket": "CAR-85",
+      "name": "Auto-Apply Page",
+      "file": "src/app/(main)/auto-apply/page.tsx",
+      "exports": [],
+      "patterns": ["Auto-Apply Queue", "Ready to Apply", "Pending Review", "Cowork"],
+      "area": "auto-apply"
+    },
+    {
+      "ticket": "CAR-85",
+      "name": "Auto-Apply Sidebar Badge",
+      "file": "src/components/layout/sidebar.tsx",
+      "exports": ["Sidebar"],
+      "patterns": ["auto-apply", "useApprovedQueueCount", "Rocket"],
+      "area": "auto-apply"
     }
   ]
 }

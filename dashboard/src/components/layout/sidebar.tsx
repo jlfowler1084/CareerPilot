@@ -5,13 +5,14 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import { useAuth } from "@/contexts/auth-context"
-import { LayoutDashboard, Search, Briefcase, BarChart3, ChevronRight, Mail, MessageSquare, Settings } from "lucide-react"
+import { LayoutDashboard, Search, Briefcase, BarChart3, ChevronRight, Mail, MessageSquare, Settings, Rocket } from "lucide-react"
 
 const NAV_ITEMS = [
   { id: "overview", href: "/", label: "Overview", icon: LayoutDashboard },
   { id: "inbox", href: "/inbox", label: "Inbox", icon: Mail },
   { id: "search", href: "/search", label: "Job Search", icon: Search },
   { id: "applications", href: "/applications", label: "Applications", icon: Briefcase },
+  { id: "auto-apply", href: "/auto-apply", label: "Auto-Apply", icon: Rocket },
   { id: "conversations", href: "/conversations", label: "Conversations", icon: MessageSquare },
   { id: "analytics", href: "/analytics", label: "Analytics", icon: BarChart3 },
   { id: "settings", href: "/settings", label: "Settings", icon: Settings },
@@ -49,10 +50,41 @@ function useActiveAppCount() {
   return count
 }
 
+function useApprovedQueueCount() {
+  const { user } = useAuth()
+  const [count, setCount] = useState<number | null>(null)
+  useEffect(() => {
+    if (!user) return
+    const supabase = createClient()
+    const fetchCount = async () => {
+      const { count: c } = await supabase
+        .from("auto_apply_queue")
+        .select("*", { count: "exact", head: true })
+        .eq("user_id", user.id)
+        .eq("status", "approved")
+      setCount(c ?? 0)
+    }
+    fetchCount()
+
+    const channel = supabase
+      .channel("sidebar-queue-count")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "auto_apply_queue" },
+        () => fetchCount()
+      )
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
+  }, [user])
+  return count
+}
+
 export function Sidebar() {
   const [open, setOpen] = useState(true)
   const pathname = usePathname()
   const activeCount = useActiveAppCount()
+  const approvedQueueCount = useApprovedQueueCount()
 
   return (
     <aside
@@ -93,6 +125,11 @@ export function Sidebar() {
                   {item.id === "applications" && activeCount !== null && activeCount > 0 && (
                     <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-500 text-zinc-900 leading-none">
                       {activeCount}
+                    </span>
+                  )}
+                  {item.id === "auto-apply" && approvedQueueCount !== null && approvedQueueCount > 0 && (
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-500 text-white leading-none">
+                      {approvedQueueCount}
                     </span>
                   )}
                 </span>
