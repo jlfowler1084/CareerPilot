@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
+import { useAuth } from "@/contexts/auth-context"
 import { LayoutDashboard, Search, Briefcase, BarChart3, ChevronRight, Mail, MessageSquare, Settings } from "lucide-react"
 
 const NAV_ITEMS = [
@@ -19,13 +20,16 @@ const NAV_ITEMS = [
 const ACTIVE_STATUSES = ["interested", "applied", "phone_screen", "interview"]
 
 function useActiveAppCount() {
+  const { user } = useAuth()
   const [count, setCount] = useState<number | null>(null)
   useEffect(() => {
+    if (!user) return
     const supabase = createClient()
     const fetchCount = async () => {
       const { count: c } = await supabase
         .from("applications")
         .select("*", { count: "exact", head: true })
+        .eq("user_id", user.id)
         .in("status", ACTIVE_STATUSES)
       setCount(c ?? 0)
     }
@@ -41,7 +45,7 @@ function useActiveAppCount() {
       .subscribe()
 
     return () => { supabase.removeChannel(channel) }
-  }, [])
+  }, [user])
   return count
 }
 
