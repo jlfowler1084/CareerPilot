@@ -42,3 +42,5 @@ get-refresh-token.js
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+screenshot-*.png
