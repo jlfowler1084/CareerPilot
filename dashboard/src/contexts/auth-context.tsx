@@ -14,10 +14,10 @@ const AuthContext = createContext<AuthContextType>({ user: null, loading: true }
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
-  const supabase = createClient()
 
   useEffect(() => {
     let mounted = true
+    const supabase = createClient()
 
     supabase.auth.getUser()
       .then(({ data: { user: u } }: { data: { user: User | null } }) => {
@@ -27,8 +27,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       })
       .catch((err: unknown) => {
-        console.warn("Auth getUser failed:", err)
-        if (mounted) setLoading(false)
+        // Handle Navigator Lock steal errors from React Strict Mode gracefully
+        if (mounted) {
+          console.warn("Auth getUser recovered:", err instanceof Error ? err.message : err)
+          setLoading(false)
+        }
       })
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
