@@ -32,7 +32,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: resultsError.message }, { status: 500 })
     }
 
-    // Fetch metadata for this date
+    // Fetch metadata for this date (.maybeSingle — table may have 0 rows)
     const { data: metadata } = await supabase
       .from("scan_metadata")
       .select("*")
@@ -40,7 +40,7 @@ export async function GET(req: NextRequest) {
       .eq("scan_date", date)
       .order("started_at", { ascending: false })
       .limit(1)
-      .single()
+      .maybeSingle()
 
     return NextResponse.json({
       results: results || [],

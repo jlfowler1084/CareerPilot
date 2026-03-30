@@ -59,7 +59,7 @@ export async function POST(req: NextRequest) {
       .select("details, fetched_at")
       .eq("job_url", body.url)
       .gte("fetched_at", staleDate)
-      .single()
+      .maybeSingle()
 
     if (cached) {
       return NextResponse.json({ ...cached.details, cached: true })

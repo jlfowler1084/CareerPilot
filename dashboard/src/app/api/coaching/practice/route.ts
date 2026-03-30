@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
         .select("title, company, notes, salary_range")
         .eq("id", applicationId)
         .eq("user_id", user.id)
-        .single()
+        .maybeSingle()
 
       if (app) {
         appContext = `Role: ${app.title} at ${app.company}\nNotes: ${app.notes || "none"}\nSalary: ${app.salary_range || "unknown"}`

@@ -38,7 +38,7 @@ export function useAutoApplySettings() {
         .from("auto_apply_settings")
         .select("*")
         .eq("user_id", user.id)
-        .single()
+        .maybeSingle()
 
       if (!data) {
         const { data: newSettings } = await supabase

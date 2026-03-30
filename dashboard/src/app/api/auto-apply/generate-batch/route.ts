@@ -72,7 +72,7 @@ export async function POST(req: NextRequest) {
             .from("applications")
             .select("tailored_resume")
             .eq("id", item.application_id)
-            .single()
+            .maybeSingle()
           resumeText = app?.tailored_resume || null
         }
 
@@ -120,7 +120,7 @@ export async function POST(req: NextRequest) {
             .from("applications")
             .select("cover_letter")
             .eq("id", item.application_id)
-            .single()
+            .maybeSingle()
           coverLetterText = app?.cover_letter || null
         }
 

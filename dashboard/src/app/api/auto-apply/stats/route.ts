@@ -63,7 +63,7 @@ export async function GET() {
       .from("auto_apply_settings")
       .select("max_daily_applications")
       .eq("user_id", user.id)
-      .single()
+      .maybeSingle()
 
     const maxDaily = settingsData?.max_daily_applications || 10
     const dailyLimit = { used: today.applied, max: maxDaily }
