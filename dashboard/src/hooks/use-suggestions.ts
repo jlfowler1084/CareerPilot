@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react"
 import { createClient } from "@/lib/supabase/client"
+import { useAuth } from "@/contexts/auth-context"
 
 const supabase = createClient()
 
@@ -23,16 +24,17 @@ export interface Suggestion {
 export function useSuggestions() {
   const [suggestions, setSuggestions] = useState<Suggestion[]>([])
   const [loading, setLoading] = useState(true)
+  const { user, loading: authLoading } = useAuth()
 
   const newCount = suggestions.filter((s) => s.status === "new").length
 
   // Load suggestions on mount
   useEffect(() => {
+    if (authLoading) return
     loadSuggestions()
-  }, [])
+  }, [user, authLoading])
 
   async function loadSuggestions() {
-    const { data: { user } } = await supabase.auth.getUser()
     if (!user) { setLoading(false); return }
 
     // Load via email join — suggestions are linked to emails which have user_id

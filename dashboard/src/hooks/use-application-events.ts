@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react"
 import { createClient } from "@/lib/supabase/client"
+import { useAuth } from "@/contexts/auth-context"
 import type { ApplicationEvent, ApplicationEventType } from "@/types"
 
 const supabase = createClient()
@@ -9,6 +10,7 @@ const supabase = createClient()
 export function useApplicationEvents(applicationId: string | null) {
   const [events, setEvents] = useState<ApplicationEvent[]>([])
   const [loading, setLoading] = useState(false)
+  const { user } = useAuth()
 
   useEffect(() => {
     if (!applicationId) {
@@ -59,9 +61,6 @@ export function useApplicationEvents(applicationId: string | null) {
       previousValue?: string | null,
       newValue?: string | null
     ) => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
       if (!user) return
 
       await supabase.from("application_events").insert({
@@ -73,7 +72,7 @@ export function useApplicationEvents(applicationId: string | null) {
         new_value: newValue ?? null,
       })
     },
-    []
+    [user]
   )
 
   return { events, loading, addEvent }

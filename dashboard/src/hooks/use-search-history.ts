@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect } from "react"
 import { createClient } from "@/lib/supabase/client"
+import { useAuth } from "@/contexts/auth-context"
 import type { SearchRun, Job } from "@/types"
 import {
   deduplicateJobs,
@@ -22,6 +23,7 @@ export function useSearchHistory() {
   const [runs, setRuns] = useState<SearchRun[]>([])
   const [activeRunId, setActiveRunId] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const { user } = useAuth()
 
   const loadHistory = useCallback(async () => {
     setLoading(true)
@@ -58,9 +60,6 @@ export function useSearchHistory() {
 
   const createRun = useCallback(
     async (params: CreateRunParams): Promise<string | null> => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
       if (!user) return null
 
       const { data, error } = await supabase
@@ -83,7 +82,7 @@ export function useSearchHistory() {
       setActiveRunId(data.id)
       return data.id
     },
-    [loadHistory]
+    [loadHistory, user]
   )
 
   const deleteRun = useCallback(

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { createClient } from "@/lib/supabase/client"
+import { useAuth } from "@/contexts/auth-context"
 import type { SkillInventoryItem } from "@/types"
 
 const supabase = createClient()
@@ -9,12 +10,13 @@ const supabase = createClient()
 export function useSkillsInventory() {
   const [skills, setSkills] = useState<SkillInventoryItem[]>([])
   const [loading, setLoading] = useState(true)
+  const { user, loading: authLoading } = useAuth()
 
   useEffect(() => {
-    const fetchSkills = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) { setLoading(false); return }
+    if (authLoading) return
+    if (!user) { setLoading(false); return }
 
+    const fetchSkills = async () => {
       const { data } = await supabase
         .from("skills_inventory")
         .select("*")
@@ -25,7 +27,7 @@ export function useSkillsInventory() {
       setLoading(false)
     }
     fetchSkills()
-  }, [])
+  }, [user, authLoading])
 
   return { skills, loading }
 }

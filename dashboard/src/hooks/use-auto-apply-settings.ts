@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react"
 import { createClient } from "@/lib/supabase/client"
+import { useAuth } from "@/contexts/auth-context"
 
 const supabase = createClient()
 
@@ -28,12 +29,13 @@ export interface AutoApplySettings {
 export function useAutoApplySettings() {
   const [settings, setSettings] = useState<AutoApplySettings | null>(null)
   const [loading, setLoading] = useState(true)
+  const { user, loading: authLoading } = useAuth()
 
   useEffect(() => {
-    const fetchSettings = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) { setLoading(false); return }
+    if (authLoading) return
+    if (!user) { setLoading(false); return }
 
+    const fetchSettings = async () => {
       let { data } = await supabase
         .from("auto_apply_settings")
         .select("*")
@@ -53,7 +55,7 @@ export function useAutoApplySettings() {
       setLoading(false)
     }
     fetchSettings()
-  }, [])
+  }, [user, authLoading])
 
   const updateSettings = useCallback(async (updates: Partial<AutoApplySettings>) => {
     if (!settings) return
