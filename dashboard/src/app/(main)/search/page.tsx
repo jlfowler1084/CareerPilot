@@ -36,7 +36,7 @@ import { scoreJob } from "@/lib/fit-scoring"
 import { logActivity } from "@/hooks/use-activity-log"
 import { AlertCircle, SearchX, Clock, CheckCircle2, Info, X, Mail, ListChecks } from "lucide-react"
 import { format, isToday, isYesterday } from "date-fns"
-import type { Job, FitScore } from "@/types"
+import type { Job, FitScore, ScanMetadata } from "@/types"
 
 const HIDDEN_PROFILES_KEY = "careerpilot_hidden_profiles"
 const SELECTED_PROFILES_KEY = "careerpilot_selected_profiles"
@@ -198,6 +198,22 @@ export default function SearchPage() {
       }
     }
   }, [searchComplete, loading, fitScores, autoQueueEnabled]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // CAR-83: Morning scan awareness
+  const [scanMeta, setScanMeta] = useState<ScanMetadata | null>(null)
+  const [scanNewCount, setScanNewCount] = useState(0)
+  useEffect(() => {
+    const today = new Date().toISOString().slice(0, 10)
+    fetch(`/api/scan-results?date=${today}&viewed=false`)
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => {
+        if (data) {
+          setScanNewCount(data.results?.length || 0)
+          setScanMeta(data.metadata || null)
+        }
+      })
+      .catch(() => {})
+  }, [])
 
   // CAR-81: Memoized fit scores for suggestions
   const suggestionScores = useMemo(() => {
@@ -579,7 +595,20 @@ export default function SearchPage() {
 
   return (
     <div className="p-6 space-y-6">
-      <h2 className="text-lg font-bold">Job Search</h2>
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-bold">Job Search</h2>
+        {scanMeta && (
+          <div className="flex items-center gap-2 text-xs text-zinc-500">
+            <Clock size={12} />
+            <span>
+              Last scan: {scanMeta.scan_date === new Date().toISOString().slice(0, 10)
+                ? `Today ${new Date(scanMeta.started_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`
+                : scanMeta.scan_date
+              } — {scanMeta.new_results} new jobs
+            </span>
+          </div>
+        )}
+      </div>
 
       {/* CAR-78: Tab row */}
       <div className="flex items-center gap-0 border-b border-zinc-200 dark:border-zinc-700">
@@ -593,6 +622,11 @@ export default function SearchPage() {
           }`}
         >
           Search
+          {scanNewCount > 0 && (
+            <span className="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700">
+              {scanNewCount} scan
+            </span>
+          )}
         </button>
         <button
           type="button"

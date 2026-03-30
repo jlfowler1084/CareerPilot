@@ -23,6 +23,9 @@ data/calendar_token.json
 # Google credentials (downloaded from Cloud Console)
 config/google_credentials.json
 
+# CareerPilot scan secrets
+config/scan.env
+
 # Logs
 *.log
 logs/

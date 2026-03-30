@@ -317,6 +317,51 @@ export interface AutoApplyQueueItem {
   updated_at: string
 }
 
+// ─── Scan Results (CAR-83) ───────────────────────────
+
+export interface ScanResult {
+  id: string
+  user_id: string
+  profile_id: string
+  profile_name: string
+  title: string
+  company: string
+  location: string | null
+  salary: string | null
+  job_url: string | null
+  source: "indeed" | "dice"
+  job_type: string | null
+  posted_date: string | null
+  easy_apply: boolean
+  fit_score: number
+  score_breakdown: {
+    title: number
+    skills: number
+    location: number
+    salary: number
+  }
+  scan_date: string
+  viewed: boolean
+  queued: boolean
+  dismissed: boolean
+  created_at: string
+}
+
+export interface ScanMetadata {
+  id: string
+  user_id: string
+  scan_date: string
+  started_at: string
+  completed_at: string | null
+  profiles_scanned: number
+  total_results: number
+  new_results: number
+  duplicates_skipped: number
+  auto_queued: number
+  errors: string[]
+  status: "running" | "completed" | "failed"
+}
+
 export type {
   Email,
   EmailCategory,

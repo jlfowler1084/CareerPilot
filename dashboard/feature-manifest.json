@@ -678,6 +678,22 @@
       "exports": [],
       "patterns": ["Auto-Apply Configuration", "Screening Answers", "Skills Inventory"],
       "area": "settings"
+    },
+    {
+      "ticket": "CAR-83",
+      "name": "Scan Results API",
+      "file": "src/app/api/scan-results/route.ts",
+      "exports": ["GET"],
+      "patterns": ["scan_results", "scan_date", "scan_metadata"],
+      "area": "search"
+    },
+    {
+      "ticket": "CAR-83",
+      "name": "Mark Viewed API",
+      "file": "src/app/api/scan-results/mark-viewed/route.ts",
+      "exports": ["POST"],
+      "patterns": ["viewed", "scan_results"],
+      "area": "search"
     }
   ]
 }
