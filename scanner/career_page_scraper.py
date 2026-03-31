@@ -390,7 +390,6 @@ def search_company(company: dict, conn=None, force: bool = False, cache_ttl: int
     if not ANTHROPIC_API_KEY:
         print(f"  ⚠ No ANTHROPIC_API_KEY set — skipping API search for {company['name']}")
         return [], False
->>>>>>> feature/scrum-154-scraper-cache
 
     role_list = ", ".join(ROLE_KEYWORDS[:10])
     queries_list = "\n".join(f"  - {q}" for q in company["search_queries"])

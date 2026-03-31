@@ -227,6 +227,7 @@ function Invoke-DiceSearch {
         -Headers @{
             'x-api-key'         = $AnthropicKey
             'anthropic-version' = '2023-06-01'
+            'anthropic-beta'    = 'mcp-client-2025-04-04'
             'Content-Type'      = 'application/json'
         } -Body $body -TimeoutSec 60
 
@@ -307,6 +308,7 @@ function Invoke-IndeedSearch {
         -Headers @{
             'x-api-key'         = $AnthropicKey
             'anthropic-version' = '2023-06-01'
+            'anthropic-beta'    = 'mcp-client-2025-04-04'
             'Content-Type'      = 'application/json'
         } -Body $body -TimeoutSec 60
 
@@ -420,7 +422,7 @@ try {
 # Load search profiles
 $profiles = @()
 try {
-    $profiles = Invoke-RestMethod -Uri "$SupabaseUrl/rest/v1/search_profiles?user_id=eq.$UserId&select=*" `
+    $profiles = Invoke-RestMethod -Uri "$SupabaseUrl/rest/v1/search_profiles?select=*&order=sort_order" `
         -Headers @{ 'apikey' = $SupabaseKey; 'Authorization' = "Bearer $SupabaseKey" } -Method Get
     Write-Log "Loaded $($profiles.Count) search profiles"
 } catch {
@@ -540,36 +542,9 @@ foreach ($profile in $profiles) {
 
             Write-Log "  + $($job.title) @ $($job.company) -- Score: $($score.total) [T:$($score.breakdown.title) S:$($score.breakdown.skills) L:$($score.breakdown.location) SAL:$($score.breakdown.salary)]"
 
-            # Auto-queue high scorers with Easy Apply
-            if ($score.total -ge 80 -and $job.easy_apply) {
-                try {
-                    # Check if already in queue
-                    $existing = Invoke-RestMethod -Uri "$SupabaseUrl/rest/v1/auto_apply_queue?user_id=eq.$UserId&job_title=ilike.$([uri]::EscapeDataString($job.title))&company=ilike.$([uri]::EscapeDataString($job.company))&select=id&limit=1" `
-                        -Headers @{ 'apikey' = $SupabaseKey; 'Authorization' = "Bearer $SupabaseKey" } -Method Get
-
-                    if ($existing.Count -eq 0) {
-                        $queueBody = @{
-                            user_id         = $UserId
-                            job_title       = $job.title
-                            company         = $job.company
-                            location        = $job.location
-                            salary          = $job.salary
-                            job_url         = $job.job_url
-                            source          = $job.source
-                            easy_apply      = $true
-                            fit_score       = $score.total
-                            score_breakdown = $score.breakdown
-                            status          = 'pending'
-                        } | ConvertTo-Json -Depth 5
-
-                        Invoke-RestMethod -Uri "$SupabaseUrl/rest/v1/auto_apply_queue" `
-                            -Headers $Headers -Method Post -Body $queueBody -ErrorAction Stop | Out-Null
-                        $autoQueued++
-                        Write-Log "  >> Auto-queued: $($job.title) (score $($score.total))"
-                    }
-                } catch {
-                    Write-Log "  Auto-queue failed for $($job.title): $_" -Level 'WARN'
-                }
+            # Auto-queue tracking (actual queuing handled by Update-CPAutoApplyQueue at end)
+            if ($score.total -ge 60 -and $job.easy_apply) {
+                $autoQueued++
             }
         } catch {
             if ($_ -match 'duplicate key|unique constraint|23505') {
@@ -612,6 +587,20 @@ Write-Log "  Profiles scanned: $profilesScanned"
 Write-Log "  Total results: $totalResults"
 Write-Log "  New results: $newResults"
 Write-Log "  Duplicates skipped: $duplicatesSkipped"
-Write-Log "  Auto-queued: $autoQueued"
+Write-Log "  Queue-eligible (score >= 60, Easy Apply): $autoQueued"
 Write-Log "  Errors: $($errors.Count)"
 Write-Log "=========================================="
+
+# --- Auto-populate queue from scan results ──────────────────────────────────
+
+if ($newResults -gt 0) {
+    Write-Host "`n--- Auto-populating queue ---" -ForegroundColor Cyan
+    $queueScript = Join-Path (Split-Path -Parent $MyInvocation.MyCommand.Path) 'Update-CPAutoApplyQueue.ps1'
+    if (Test-Path $queueScript) {
+        & $queueScript -MinScore 60 -DaysBack 1
+    } else {
+        Write-Log "Update-CPAutoApplyQueue.ps1 not found at $queueScript" -Level 'WARN'
+    }
+} else {
+    Write-Log "No new results — skipping auto-queue step"
+}
