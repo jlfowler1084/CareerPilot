@@ -231,7 +231,14 @@ function Invoke-DiceSearch {
             'Content-Type'      = 'application/json'
         } -Body $body -TimeoutSec 60
 
-    $text = ($resp.content | Where-Object { $_.type -eq 'text' } | ForEach-Object { $_.text }) -join "`n"
+    # Prefer raw mcp_tool_result (preserves easyApply, jobLocation, isRemote)
+    # Fall back to text block (AI summary) if no tool result
+    $toolResult = $resp.content | Where-Object { $_.type -eq 'mcp_tool_result' -and -not $_.is_error } | Select-Object -First 1
+    if ($toolResult -and $toolResult.content) {
+        $text = ($toolResult.content | Where-Object { $_.type -eq 'text' } | ForEach-Object { $_.text }) -join "`n"
+    } else {
+        $text = ($resp.content | Where-Object { $_.type -eq 'text' } | ForEach-Object { $_.text }) -join "`n"
+    }
     return Parse-DiceResults $text
 }
 
@@ -239,55 +246,76 @@ function Parse-DiceResults {
     param([string]$Text)
     $jobs = @()
 
-    # Try to find JSON array with job data
-    if ($Text -match '\{[\s\S]*"data"\s*:\s*\[[\s\S]*\]') {
-        try {
-            $jsonMatch = [regex]::Match($Text, '\{[\s\S]*"data"\s*:\s*\[[\s\S]*?\]\s*\}')
-            if ($jsonMatch.Success) {
-                $parsed = $jsonMatch.Value | ConvertFrom-Json
-                $items = if ($parsed.data) { $parsed.data } else { @() }
-                foreach ($item in $items) {
-                    $title = if ($item.title) { $item.title } elseif ($item.jobTitle) { $item.jobTitle } else { '' }
-                    if (-not $title) { continue }
-                    $jobs += @{
-                        title       = $title
-                        company     = if ($item.companyName) { $item.companyName } elseif ($item.company) { $item.company } else { 'Unknown' }
-                        location    = if ($item.jobLocation) { $item.jobLocation.displayName } elseif ($item.location) { $item.location } else { '' }
-                        salary      = if ($item.salary) { $item.salary } elseif ($item.compensation) { $item.compensation } else { 'Not listed' }
-                        job_url     = if ($item.detailsPageUrl) { $item.detailsPageUrl } elseif ($item.url) { $item.url } else { '' }
-                        posted_date = if ($item.postedDate) { $item.postedDate } else { '' }
-                        job_type    = if ($item.employmentType) { $item.employmentType } elseif ($item.type) { $item.type } else { '' }
-                        easy_apply  = if ($null -ne $item.easyApply) { [bool]$item.easyApply } else { $false }
-                        source      = 'dice'
-                    }
+    # Extract the "data" array from Dice JSON using bracket-depth tracking.
+    # The raw Dice response is {"_links":...,"data":[...jobs...],"meta":{...huge facets...}}
+    # The meta section is often truncated, so we isolate just the data array.
+    $items = @()
+    $dataIdx = $Text.IndexOf('"data"')
+    if ($dataIdx -ge 0) {
+        $bracketStart = $Text.IndexOf('[', $dataIdx)
+        if ($bracketStart -ge 0) {
+            $depth = 0
+            $bracketEnd = -1
+            for ($i = $bracketStart; $i -lt $Text.Length; $i++) {
+                $c = $Text[$i]
+                if ($c -eq '[') { $depth++ }
+                elseif ($c -eq ']') { $depth--; if ($depth -eq 0) { $bracketEnd = $i; break } }
+            }
+            if ($bracketEnd -gt $bracketStart) {
+                $arrayJson = $Text.Substring($bracketStart, $bracketEnd - $bracketStart + 1)
+                try {
+                    $items = @($arrayJson | ConvertFrom-Json)
+                } catch {
+                    Write-Log "Dice data array parse error: $_" -Level 'WARN'
                 }
             }
-        } catch { Write-Log "Dice JSON parse error: $_" -Level 'WARN' }
+        }
     }
 
-    # Fallback: try generic JSON array
-    if ($jobs.Count -eq 0 -and $Text -match '\[[\s\S]*\{[\s\S]*"title"') {
-        try {
-            $arrMatch = [regex]::Match($Text, '\[[\s\S]*\]')
-            if ($arrMatch.Success) {
-                $items = $arrMatch.Value | ConvertFrom-Json
-                foreach ($item in $items) {
-                    $title = if ($item.title) { $item.title } else { '' }
-                    if (-not $title) { continue }
-                    $jobs += @{
-                        title       = $title
-                        company     = if ($item.company) { $item.company } elseif ($item.companyName) { $item.companyName } else { 'Unknown' }
-                        location    = if ($item.location) { $item.location } else { '' }
-                        salary      = if ($item.salary) { $item.salary } else { 'Not listed' }
-                        job_url     = if ($item.url) { $item.url } else { '' }
-                        posted_date = if ($item.postedDate) { $item.postedDate } elseif ($item.posted) { $item.posted } else { '' }
-                        job_type    = if ($item.type) { $item.type } elseif ($item.employmentType) { $item.employmentType } else { '' }
-                        easy_apply  = $false
-                        source      = 'dice'
-                    }
+    # Fallback: try any JSON array containing "title"
+    if ($items.Count -eq 0 -and $Text -match '\[[\s\S]*"title"') {
+        $bracketStart = $Text.IndexOf('[')
+        if ($bracketStart -ge 0) {
+            $depth = 0
+            $bracketEnd = -1
+            for ($i = $bracketStart; $i -lt $Text.Length; $i++) {
+                $c = $Text[$i]
+                if ($c -eq '[') { $depth++ }
+                elseif ($c -eq ']') { $depth--; if ($depth -eq 0) { $bracketEnd = $i; break } }
+            }
+            if ($bracketEnd -gt $bracketStart) {
+                try {
+                    $items = @($Text.Substring($bracketStart, $bracketEnd - $bracketStart + 1) | ConvertFrom-Json)
+                } catch {
+                    Write-Log "Dice fallback array parse error: $_" -Level 'WARN'
                 }
             }
-        } catch { Write-Log "Dice fallback parse error: $_" -Level 'WARN' }
+        }
+    }
+
+    foreach ($item in $items) {
+        $title = if ($item.title) { $item.title } elseif ($item.jobTitle) { $item.jobTitle } else { '' }
+        if (-not $title) { continue }
+
+        $loc = if ($item.jobLocation -and $item.jobLocation.displayName) {
+            $item.jobLocation.displayName
+        } elseif ($item.location) {
+            $item.location
+        } elseif ($item.isRemote -eq $true) {
+            'Remote'
+        } else { '' }
+
+        $jobs += @{
+            title       = $title
+            company     = if ($item.companyName) { $item.companyName } elseif ($item.company) { $item.company } else { 'Unknown' }
+            location    = $loc
+            salary      = if ($item.salary) { $item.salary } elseif ($item.compensation) { $item.compensation } else { 'Not listed' }
+            job_url     = if ($item.detailsPageUrl) { $item.detailsPageUrl } elseif ($item.url) { $item.url } else { '' }
+            posted_date = if ($item.postedDate) { $item.postedDate } else { '' }
+            job_type    = if ($item.employmentType) { $item.employmentType } elseif ($item.type) { $item.type } else { '' }
+            easy_apply  = if ($null -ne $item.easyApply) { [bool]$item.easyApply } else { $false }
+            source      = 'dice'
+        }
     }
 
     return $jobs
@@ -312,7 +340,13 @@ function Invoke-IndeedSearch {
             'Content-Type'      = 'application/json'
         } -Body $body -TimeoutSec 60
 
-    $text = ($resp.content | Where-Object { $_.type -eq 'text' } | ForEach-Object { $_.text }) -join "`n"
+    # Prefer raw mcp_tool_result over AI text summary
+    $toolResult = $resp.content | Where-Object { $_.type -eq 'mcp_tool_result' -and -not $_.is_error } | Select-Object -First 1
+    if ($toolResult -and $toolResult.content) {
+        $text = ($toolResult.content | Where-Object { $_.type -eq 'text' } | ForEach-Object { $_.text }) -join "`n"
+    } else {
+        $text = ($resp.content | Where-Object { $_.type -eq 'text' } | ForEach-Object { $_.text }) -join "`n"
+    }
     return Parse-IndeedResults $text
 }
 
