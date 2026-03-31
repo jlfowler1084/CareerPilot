@@ -134,7 +134,7 @@ function AutoApplyContent() {
       return
     }
     setQueue((prev) => prev.map((q) => q.id === id ? { ...q, status: status as AutoApplyQueueItem["status"], updated_at: new Date().toISOString() } : q))
-    toast.success(`Job ${status === "approved" ? "approved" : status === "skipped" ? "skipped" : "updated"}`)
+    toast.success(`Job ${status === "approved" ? "approved" : status === "applied" ? "marked as applied" : status === "skipped" ? "skipped" : "updated"}`)
   }, [])
 
   const sorted = useMemo(() => sortQueue(queue), [queue])
@@ -244,7 +244,7 @@ function QueueTable({
             <th className="px-4 py-3 text-xs font-bold text-zinc-500 uppercase tracking-wider w-20">Source</th>
             <th className="px-4 py-3 text-xs font-bold text-zinc-500 uppercase tracking-wider w-24">Status</th>
             <th className="px-4 py-3 text-xs font-bold text-zinc-500 uppercase tracking-wider">URL</th>
-            <th className="px-4 py-3 text-xs font-bold text-zinc-500 uppercase tracking-wider w-32 text-right">Actions</th>
+            <th className="px-4 py-3 text-xs font-bold text-zinc-500 uppercase tracking-wider w-44 text-right">Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -334,13 +334,22 @@ function QueueTable({
                       </>
                     )}
                     {item.status === "approved" && (
-                      <button
-                        type="button"
-                        onClick={() => onUpdateStatus(item.id, "skipped")}
-                        className="inline-flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-md text-zinc-500 hover:text-red-600 hover:bg-red-50 border border-zinc-200 hover:border-red-200 transition-colors"
-                      >
-                        <X size={12} /> Skip
-                      </button>
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => onUpdateStatus(item.id, "applied")}
+                          className="inline-flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-md bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 transition-colors"
+                        >
+                          <Check size={12} /> Mark Applied
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onUpdateStatus(item.id, "skipped")}
+                          className="inline-flex items-center gap-1 text-xs font-semibold px-3 py-1.5 rounded-md text-zinc-500 hover:text-red-600 hover:bg-red-50 border border-zinc-200 hover:border-red-200 transition-colors"
+                        >
+                          <X size={12} /> Skip
+                        </button>
+                      </>
                     )}
                   </div>
                 </td>

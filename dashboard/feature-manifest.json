@@ -700,7 +700,7 @@
       "name": "Auto-Apply Page",
       "file": "src/app/(main)/auto-apply/page.tsx",
       "exports": [],
-      "patterns": ["Auto-Apply Queue", "Ready to Apply", "Pending Review", "Cowork"],
+      "patterns": ["Auto-Apply Queue", "Ready to Apply", "Pending Review", "Cowork", "Mark Applied"],
       "area": "auto-apply"
     },
     {
