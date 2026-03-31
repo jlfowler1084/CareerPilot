@@ -3,19 +3,54 @@
 import { useState, useMemo } from "react"
 import { useConversations, useConversationPatterns } from "@/hooks/use-conversations"
 import { ConversationList } from "@/components/conversations/conversation-list"
+import { ConversationFormModal } from "@/components/conversations/conversation-form-modal"
 import { PatternInsights } from "@/components/conversations/pattern-insights"
 import { CONVERSATION_TYPES } from "@/lib/constants"
-import { Search, Sparkles } from "lucide-react"
-import type { ConversationType } from "@/types"
+import { Search, Sparkles, Plus } from "lucide-react"
+import { toast } from "sonner"
+import type { Conversation, ConversationType } from "@/types"
 
 export default function ConversationsPage() {
-  const { conversations, loading, deleteConversation } = useConversations()
+  const { conversations, loading, addConversation, updateConversation, deleteConversation } =
+    useConversations()
   const { patterns, loading: patternsLoading, error: patternsError, fetchPatterns } =
     useConversationPatterns()
 
   const [searchQuery, setSearchQuery] = useState("")
   const [typeFilter, setTypeFilter] = useState<ConversationType | null>(null)
   const [showPatterns, setShowPatterns] = useState(false)
+  const [formOpen, setFormOpen] = useState(false)
+  const [editingConversation, setEditingConversation] = useState<Conversation | null>(null)
+
+  async function handleSave(data: Record<string, unknown>) {
+    const result = await addConversation(data)
+    if (result.error) {
+      toast.error(result.error)
+      return { data: null, error: result.error }
+    }
+    toast.success("Conversation logged — analyzing...")
+    return { data: result.data, error: null }
+  }
+
+  async function handleUpdate(id: string, data: Record<string, unknown>) {
+    const result = await updateConversation(id, data)
+    if (result.error) {
+      toast.error(result.error)
+      return { data: null, error: result.error }
+    }
+    toast.success("Conversation updated — re-analyzing...")
+    return { data: result.data, error: null }
+  }
+
+  function handleEdit(conversation: Conversation) {
+    setEditingConversation(conversation)
+    setFormOpen(true)
+  }
+
+  function handleFormOpenChange(open: boolean) {
+    setFormOpen(open)
+    if (!open) setEditingConversation(null)
+  }
 
   const filtered = useMemo(() => {
     let list = [...conversations]
@@ -56,20 +91,34 @@ export default function ConversationsPage() {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-bold">Conversations</h2>
-        <button
-          onClick={() => {
-            setShowPatterns(!showPatterns)
-            if (!showPatterns && !patterns) fetchPatterns()
-          }}
-          className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors ${
-            showPatterns
-              ? "bg-amber-50 border-amber-300 text-amber-700"
-              : "border-zinc-200 text-zinc-500 hover:text-amber-600 hover:border-amber-300"
-          }`}
-        >
-          <Sparkles size={12} />
-          Patterns
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              setShowPatterns(!showPatterns)
+              if (!showPatterns && !patterns) fetchPatterns()
+            }}
+            className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border transition-colors ${
+              showPatterns
+                ? "bg-amber-50 border-amber-300 text-amber-700"
+                : "border-zinc-200 text-zinc-500 hover:text-amber-600 hover:border-amber-300"
+            }`}
+          >
+            <Sparkles size={12} />
+            Patterns
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setEditingConversation(null)
+              setFormOpen(true)
+            }}
+            className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border bg-amber-500 border-amber-500 text-white hover:bg-amber-600 transition-colors"
+          >
+            <Plus size={12} />
+            Add Conversation
+          </button>
+        </div>
       </div>
 
       {/* Pattern Insights Panel */}
@@ -136,17 +185,27 @@ export default function ConversationsPage() {
         <ConversationList
           conversations={filtered}
           onDelete={deleteConversation}
+          onEdit={handleEdit}
           showCompany
         />
       ) : (
         <div className="bg-white rounded-xl border border-zinc-200 p-8 text-center">
           <p className="text-sm text-zinc-500">
             {conversations.length === 0
-              ? "No conversations logged yet. Open an application and add your first conversation."
+              ? "No conversations logged yet. Click \"Add Conversation\" to log your first one."
               : "No conversations match your filters."}
           </p>
         </div>
       )}
+
+      {/* Form Modal */}
+      <ConversationFormModal
+        open={formOpen}
+        onOpenChange={handleFormOpenChange}
+        onSave={handleSave}
+        onUpdate={handleUpdate}
+        conversation={editingConversation}
+      />
     </div>
   )
 }

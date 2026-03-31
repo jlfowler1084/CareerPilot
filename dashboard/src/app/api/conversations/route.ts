@@ -95,11 +95,11 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json()
-    const { application_id, conversation_type, date } = body
+    const { conversation_type, date } = body
 
-    if (!application_id || !conversation_type || !date) {
+    if (!conversation_type || !date) {
       return NextResponse.json(
-        { error: "application_id, conversation_type, and date are required" },
+        { error: "conversation_type and date are required" },
         { status: 400 }
       )
     }
@@ -114,7 +114,7 @@ export async function POST(req: NextRequest) {
       .from("conversations")
       .insert({
         user_id: user.id,
-        application_id,
+        application_id: body.application_id || null,
         conversation_type,
         date,
         title: body.title || null,

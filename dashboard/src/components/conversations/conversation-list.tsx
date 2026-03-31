@@ -2,12 +2,28 @@
 
 import { useState } from "react"
 import { CONVERSATION_TYPES } from "@/lib/constants"
-import { ChevronDown, ChevronRight, Trash2 } from "lucide-react"
+import { ChevronDown, ChevronRight, Trash2, Pencil, Loader2 } from "lucide-react"
 import type { Conversation } from "@/types"
+
+interface AIAnalysis {
+  topics?: string[]
+  strengths?: string[]
+  improvements?: Array<{
+    area: string
+    your_answer: string
+    coached_answer: string
+    study_tip: string
+  }>
+  patterns?: string[]
+  study_recommendations?: string[]
+  follow_up_suggestions?: string[]
+  overall_assessment?: string
+}
 
 interface ConversationListProps {
   conversations: Conversation[]
   onDelete: (id: string) => Promise<void>
+  onEdit?: (conversation: Conversation) => void
   showCompany?: boolean
 }
 
@@ -37,6 +53,7 @@ function formatDate(iso: string): string {
 export function ConversationList({
   conversations,
   onDelete,
+  onEdit,
   showCompany = false,
 }: ConversationListProps) {
   const [expandedId, setExpandedId] = useState<string | null>(null)
@@ -246,8 +263,26 @@ export function ConversationList({
                   </div>
                 )}
 
-                {/* Delete button */}
-                <div className="pt-2 flex justify-end">
+                {/* AI Coaching Insights */}
+                {c.ai_analysis ? (
+                  <AIInsights analysis={c.ai_analysis as AIAnalysis} />
+                ) : c.notes ? (
+                  <p className="text-[10px] text-zinc-400 italic flex items-center gap-1">
+                    <Loader2 size={10} className="animate-spin" /> Analysis pending...
+                  </p>
+                ) : null}
+
+                {/* Actions */}
+                <div className="pt-2 flex justify-end gap-2">
+                  {onEdit && (
+                    <button
+                      onClick={() => onEdit(c)}
+                      className="text-[10px] font-semibold px-2 py-1 rounded-md text-zinc-400 hover:text-amber-600 transition-colors flex items-center gap-1"
+                    >
+                      <Pencil size={10} />
+                      Edit
+                    </button>
+                  )}
                   <button
                     onClick={() => handleDelete(c.id)}
                     className={`text-[10px] font-semibold px-2 py-1 rounded-md transition-colors flex items-center gap-1 ${
@@ -265,6 +300,101 @@ export function ConversationList({
           </div>
         )
       })}
+    </div>
+  )
+}
+
+function AIInsights({ analysis }: { analysis: AIAnalysis }) {
+  const [showImprovements, setShowImprovements] = useState(false)
+
+  return (
+    <div className="border-t border-zinc-100 pt-3 space-y-2">
+      <p className="text-[10px] font-semibold text-zinc-500 uppercase">
+        Coaching Insights
+      </p>
+
+      {/* Overall Assessment */}
+      {analysis.overall_assessment && (
+        <p className="text-xs text-zinc-600 leading-relaxed">
+          {analysis.overall_assessment}
+        </p>
+      )}
+
+      {/* Strengths */}
+      {analysis.strengths && analysis.strengths.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {analysis.strengths.map((s, i) => (
+            <span
+              key={i}
+              className="text-[9px] font-medium px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200"
+            >
+              {s}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* Improvements */}
+      {analysis.improvements && analysis.improvements.length > 0 && (
+        <div>
+          <button
+            type="button"
+            onClick={() => setShowImprovements(!showImprovements)}
+            className="text-[10px] font-semibold text-orange-600 hover:text-orange-800 flex items-center gap-1"
+          >
+            {showImprovements ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
+            {analysis.improvements.length} area{analysis.improvements.length > 1 ? "s" : ""} to improve
+          </button>
+          {showImprovements && (
+            <div className="mt-1 space-y-2">
+              {analysis.improvements.map((imp, i) => (
+                <div key={i} className="bg-orange-50 rounded p-2 border border-orange-100 text-xs">
+                  <p className="font-semibold text-orange-800">{imp.area}</p>
+                  {imp.your_answer && (
+                    <p className="text-orange-600 mt-0.5">
+                      <span className="font-medium">You said:</span> {imp.your_answer}
+                    </p>
+                  )}
+                  {imp.coached_answer && (
+                    <p className="text-emerald-700 mt-0.5">
+                      <span className="font-medium">Better:</span> {imp.coached_answer}
+                    </p>
+                  )}
+                  {imp.study_tip && (
+                    <p className="text-zinc-500 mt-0.5 italic">{imp.study_tip}</p>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Study Recommendations */}
+      {analysis.study_recommendations && analysis.study_recommendations.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {analysis.study_recommendations.map((s, i) => (
+            <span
+              key={i}
+              className="text-[9px] font-medium px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200"
+            >
+              {s}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* Patterns */}
+      {analysis.patterns && analysis.patterns.length > 0 && (
+        <div>
+          <p className="text-[10px] text-zinc-400 mb-0.5">Patterns across conversations:</p>
+          <ul className="text-xs text-zinc-600 list-disc list-inside">
+            {analysis.patterns.map((p, i) => (
+              <li key={i}>{p}</li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   )
 }

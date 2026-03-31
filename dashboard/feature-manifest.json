@@ -710,6 +710,30 @@
       "exports": ["Sidebar"],
       "patterns": ["auto-apply", "useApprovedQueueCount", "Rocket"],
       "area": "auto-apply"
+    },
+    {
+      "ticket": "CAR-87",
+      "name": "Conversation Form Modal",
+      "file": "src/components/conversations/conversation-form-modal.tsx",
+      "exports": ["ConversationFormModal"],
+      "patterns": ["Log Conversation", "Edit Conversation", "Link to Application", "Save Conversation"],
+      "area": "conversations"
+    },
+    {
+      "ticket": "CAR-87",
+      "name": "Conversation AI Analysis API",
+      "file": "src/app/api/conversations/analyze/route.ts",
+      "exports": ["POST"],
+      "patterns": ["anthropic", "ai_analysis", "coach", "improvements"],
+      "area": "conversations"
+    },
+    {
+      "ticket": "CAR-87",
+      "name": "Conversation AI Insights Display",
+      "file": "src/components/conversations/conversation-list.tsx",
+      "exports": ["ConversationList"],
+      "patterns": ["Coaching Insights", "AIInsights", "onEdit"],
+      "area": "conversations"
     }
   ]
 }
