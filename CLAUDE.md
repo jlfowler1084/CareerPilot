@@ -1,5 +1,6 @@
 # CLAUDE.md — CareerPilot Project Context
-<!-- Global rules inherited from: ~/.claude/CLAUDE.md -->
+<!-- This file contains CareerPilot-specific rules only.
+     Shared conventions are inherited from ~/.claude/CLAUDE.md -->
 <!-- Global hooks inherited from: ~/.claude/settings.json -->
 
 ## Project Identity
@@ -77,8 +78,6 @@ CareerPilot/
 - **API keys:** In `.env`, never committed
 
 ## Project-Specific Mistakes to Avoid
-- Don't use bare `pip install` — use `python -m pip install` (targets MS Store Python 3.8)
-- Don't send emails without explicit user approval — draft-only mode
 - Don't skip OAuth token refresh handling
 - Don't use `list[str]` syntax — use `List[str]` from typing or `from __future__ import annotations`
 
