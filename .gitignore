@@ -65,3 +65,9 @@ data/cover_letters/
 
 # Vercel
 .vercel/
+
+# Git worktrees (INFRA-71)
+.worktrees/
+
+# Git worktrees (INFRA-71)
+.worktrees/
