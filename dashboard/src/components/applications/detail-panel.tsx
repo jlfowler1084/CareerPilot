@@ -10,11 +10,12 @@ import {
 } from "@/components/ui/sheet"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { STATUSES } from "@/lib/constants"
+import { STATUSES, CONVERSATION_TYPES } from "@/lib/constants"
 import { useApplicationEvents } from "@/hooks/use-application-events"
 import { TailorModal } from "@/components/applications/tailor-modal"
 import { ScheduleModal } from "@/components/applications/schedule-modal"
 import { CommunicationsSection } from "@/components/applications/communications-section"
+import { LinkConversationModal } from "@/components/applications/link-conversation-modal"
 import { formatDistanceToNow } from "date-fns"
 import {
   ExternalLink,
@@ -29,9 +30,14 @@ import {
   Phone,
   Loader2,
   Download,
+  MessageSquare,
 } from "lucide-react"
 import { toast } from "sonner"
-import type { Application, ApplicationStatus, ApplicationEvent } from "@/types"
+import { createClient } from "@/lib/supabase/client"
+import { useAuth } from "@/contexts/auth-context"
+import type { Application, ApplicationStatus, ApplicationEvent, Conversation } from "@/types"
+
+const supabase = createClient()
 
 // --- Event type icons ---
 const EVENT_ICONS: Record<string, string> = {
@@ -65,6 +71,142 @@ function Section({
         {title}
       </button>
       {open && <div className="px-4 pb-4">{children}</div>}
+    </div>
+  )
+}
+
+// --- Conversations Section ---
+function ConversationsSection({ application }: { application: Application }) {
+  const [open, setOpen] = useState(false)
+  const [conversations, setConversations] = useState<Conversation[]>([])
+  const [loading, setLoading] = useState(false)
+  const [linkModalOpen, setLinkModalOpen] = useState(false)
+  const { user } = useAuth()
+
+  const fetchConversations = useCallback(async () => {
+    if (!user) return
+    setLoading(true)
+    const { data } = await supabase
+      .from("conversations")
+      .select("*")
+      .eq("application_id", application.id)
+      .order("date", { ascending: false })
+    setConversations(data || [])
+    setLoading(false)
+  }, [application.id, user])
+
+  useEffect(() => {
+    if (open) fetchConversations()
+  }, [open, fetchConversations])
+
+  // Auto-open if conversations exist on first load
+  useEffect(() => {
+    async function checkCount() {
+      if (!user) return
+      const { count } = await supabase
+        .from("conversations")
+        .select("id", { count: "exact", head: true })
+        .eq("application_id", application.id)
+      if ((count ?? 0) > 0) setOpen(true)
+    }
+    checkCount()
+  }, [application.id, user])
+
+  function getTypeIcon(type: string): string {
+    const found = CONVERSATION_TYPES.find((ct) => ct.id === type)
+    return found ? found.icon : "\uD83D\uDCAC"
+  }
+
+  return (
+    <div className="border-t border-zinc-100">
+      <button
+        onClick={() => setOpen(!open)}
+        className="flex items-center gap-2 w-full py-3 px-4 text-left text-xs font-semibold text-zinc-700 hover:bg-zinc-50 transition-colors"
+      >
+        {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+        Conversations
+        {conversations.length > 0 && (
+          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-violet-50 text-violet-600">
+            {conversations.length}
+          </span>
+        )}
+      </button>
+
+      {open && (
+        <div className="px-4 pb-4 space-y-2">
+          {loading && (
+            <div className="flex items-center gap-2 py-3 justify-center">
+              <Loader2 size={14} className="text-violet-500 animate-spin" />
+              <span className="text-xs text-zinc-500">Loading conversations...</span>
+            </div>
+          )}
+
+          {!loading && conversations.length === 0 && (
+            <div className="text-center py-4 space-y-2">
+              <p className="text-xs text-zinc-400">No conversations linked yet</p>
+              <button
+                type="button"
+                onClick={() => setLinkModalOpen(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-violet-600 bg-violet-50 rounded-lg hover:bg-violet-100 transition-colors"
+              >
+                <MessageSquare size={12} /> Link Existing Conversation
+              </button>
+            </div>
+          )}
+
+          {!loading && conversations.map((conv) => (
+            <div
+              key={conv.id}
+              className="rounded-lg border border-zinc-100 px-3 py-2.5 space-y-1"
+            >
+              <div className="flex items-center gap-2">
+                <span className="text-sm leading-none">{getTypeIcon(conv.conversation_type)}</span>
+                <span className="text-xs font-medium text-zinc-700 truncate flex-1">
+                  {conv.title || "(no title)"}
+                </span>
+                <span className="text-[10px] text-zinc-400 flex-shrink-0">
+                  {formatDistanceToNow(new Date(conv.date), { addSuffix: true })}
+                </span>
+              </div>
+              {conv.sentiment !== null && (
+                <div className="flex items-center gap-0.5 pl-6">
+                  {Array.from({ length: 5 }).map((_, i) => (
+                    <span
+                      key={i}
+                      className={`text-[10px] ${i < (conv.sentiment ?? 0) ? "text-amber-400" : "text-zinc-200"}`}
+                    >
+                      ★
+                    </span>
+                  ))}
+                </div>
+              )}
+              {conv.notes && (
+                <p className="text-[11px] text-zinc-500 pl-6">
+                  {conv.notes.slice(0, 100)}{conv.notes.length > 100 ? "…" : ""}
+                </p>
+              )}
+            </div>
+          ))}
+
+          {!loading && conversations.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setLinkModalOpen(true)}
+              className="w-full text-center py-1.5 text-[10px] text-violet-500 hover:text-violet-700 transition-colors"
+            >
+              + Link another conversation
+            </button>
+          )}
+        </div>
+      )}
+
+      <LinkConversationModal
+        applicationId={application.id}
+        companyName={application.company}
+        open={linkModalOpen}
+        onClose={() => setLinkModalOpen(false)}
+        onLinked={fetchConversations}
+      />
     </div>
   )
 }
@@ -505,6 +647,9 @@ export function DetailPanel({
                 <p className="text-xs text-zinc-400">No activity yet.</p>
               )}
             </Section>
+
+            {/* ===== Section 5.5: Conversations ===== */}
+            <ConversationsSection application={application} />
 
             {/* ===== Section 6: Communications ===== */}
             <CommunicationsSection application={application} />

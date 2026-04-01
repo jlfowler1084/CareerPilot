@@ -78,6 +78,38 @@ Write-Host '  7:00 AM — CareerPilot-MorningScan: Dice/Indeed search → score 
 Write-Host '  7:30 AM — CareerPilot-SBAutoQueue: SecondBrain scores scan_results + email suggestions → queues best matches'
 Write-Host '  8:00 AM — Open dashboard: fresh results, scored, queued, ready for review'
 Write-Host ''
+# ============================================================
+# Task 3: CareerPilot-DashboardKeepAlive — every 15 minutes
+# Checks if the Next.js dev server is running on port 3000;
+# if not, starts it automatically.
+# ============================================================
+$Action3 = New-ScheduledTaskAction `
+    -Execute 'pwsh.exe' `
+    -Argument "-NoProfile -ExecutionPolicy Bypass -File `"F:\Projects\CareerPilot\scripts\Start-Dashboard.ps1`"" `
+    -WorkingDirectory 'F:\Projects\CareerPilot'
+
+# Trigger: every 15 minutes, indefinitely
+$Trigger3 = New-ScheduledTaskTrigger -Once -At (Get-Date) -RepetitionInterval (New-TimeSpan -Minutes 15)
+
+Register-ScheduledTask `
+    -TaskName 'CareerPilot-DashboardKeepAlive' `
+    -Action $Action3 `
+    -Trigger $Trigger3 `
+    -Settings $Settings `
+    -Principal $Principal `
+    -Description 'Every 15 min: checks port 3000, starts Next.js dev server if not running' `
+    -Force
+
+Write-Host "`n✅ Task 3 registered: CareerPilot-DashboardKeepAlive (every 15 minutes)"
+
+Write-Host ''
+Write-Host 'Full pipeline:'
+Write-Host '  Every 15 min — CareerPilot-DashboardKeepAlive: ensures dashboard dev server is running'
+Write-Host '  7:00 AM      — CareerPilot-MorningScan: Dice/Indeed search → score → dedup → store'
+Write-Host '  7:30 AM      — CareerPilot-SBAutoQueue: SecondBrain scores scan_results + email suggestions → queues best matches'
+Write-Host '  8:00 AM      — Open dashboard: fresh results, scored, queued, ready for review'
+Write-Host ''
 Write-Host 'Verify:'
 Write-Host '  Get-ScheduledTask -TaskName CareerPilot-MorningScan'
 Write-Host '  Get-ScheduledTask -TaskName CareerPilot-SBAutoQueue'
+Write-Host '  Get-ScheduledTask -TaskName CareerPilot-DashboardKeepAlive'

@@ -79,6 +79,36 @@ export function useEmails() {
       setLoading(false)
     }
     load()
+
+    // Real-time subscription
+    const channel = supabase
+      .channel("emails-changes")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "emails" },
+        (payload: { eventType: string; new: Record<string, unknown>; old: Record<string, unknown> }) => {
+          if (payload.eventType === "INSERT") {
+            setEmails((prev) => [payload.new as unknown as Email, ...prev])
+          } else if (payload.eventType === "UPDATE") {
+            setEmails((prev) =>
+              prev.map((e) =>
+                e.id === (payload.new as unknown as Email).id
+                  ? (payload.new as unknown as Email)
+                  : e
+              )
+            )
+          } else if (payload.eventType === "DELETE") {
+            setEmails((prev) =>
+              prev.filter((e) => e.id !== (payload.old as unknown as Email).id)
+            )
+          }
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
   }, [user, authLoading])
 
   // ── Scan-on-load trigger ───────────────────────────────────────
@@ -114,6 +144,7 @@ export function useEmails() {
     const since = forceSince || scanState.lastScan || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
     let pageToken: string | null = null
     const allNewEmails: Email[] = []
+    let scanSucceeded = false
 
     try {
       // Paginated fetch
@@ -159,15 +190,20 @@ export function useEmails() {
           }
         }
 
+        scanSucceeded = true
         pageToken = data.next_page_token
       } while (pageToken)
 
-      // Update scan timestamp
-      await supabase.from("user_settings").upsert(
-        { user_id: user.id, last_email_scan: new Date().toISOString() },
-        { onConflict: "user_id" }
-      )
-      setScanState((prev) => ({ ...prev, scanning: false, lastScan: new Date().toISOString() }))
+      // Update scan timestamp only if at least one page was fetched successfully
+      if (scanSucceeded) {
+        await supabase.from("user_settings").upsert(
+          { user_id: user.id, last_email_scan: new Date().toISOString() },
+          { onConflict: "user_id" }
+        )
+        setScanState((prev) => ({ ...prev, scanning: false, lastScan: new Date().toISOString() }))
+      } else {
+        setScanState((prev) => ({ ...prev, scanning: false }))
+      }
 
       // Classify new emails
       if (allNewEmails.length > 0) {

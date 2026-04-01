@@ -67,7 +67,7 @@ export function ConversationFormModal({
     supabase
       .from("applications")
       .select("id, company, title")
-      .order("created_at", { ascending: false })
+      .order("date_found", { ascending: false })
       .then(({ data }: { data: Pick<Application, "id" | "company" | "title">[] | null }) => {
         if (data) setApplications(data)
       })
