@@ -72,8 +72,3 @@ data/cover_letters/
 # Git worktrees (INFRA-71)
 .worktrees/
 
-# Git worktrees (INFRA-71)
-.worktrees/
-
-# Git worktrees (INFRA-71)
-.worktrees/
