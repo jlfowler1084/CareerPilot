@@ -734,6 +734,14 @@
       "exports": ["ConversationList"],
       "patterns": ["Coaching Insights", "AIInsights", "onEdit"],
       "area": "conversations"
+    },
+    {
+      "ticket": "CAR-92",
+      "name": "Thread-Level Email Linking",
+      "file": "src/components/applications/link-email-modal.tsx",
+      "exports": ["LinkEmailModal"],
+      "patterns": ["ThreadGroup", "buildThreadGroups", "thread_id", "All linked", "Link Emails"],
+      "area": "applications"
     }
   ]
 }
