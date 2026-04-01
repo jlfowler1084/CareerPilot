@@ -49,7 +49,10 @@ env/
 .pytest_cache/
 
 # Local Claude settings and plugin configs
-.claude/
+.claude/settings.local.json
+.claude/statsig/
+.claude/todos/
+.claude/projects/
 .playwright-mcp/
 .superpowers/
 
