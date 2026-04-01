@@ -73,21 +73,37 @@ export async function POST(req: NextRequest) {
     // web_search_20250305 is a server-side tool — Anthropic executes the search
     // automatically and returns the final response with text + search results in
     // a single call. No multi-turn loop needed.
-    const resp = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: process.env.MODEL_SONNET || "claude-sonnet-4-6",
-        max_tokens: 4096,
-        tools: [{ type: "web_search_20250305", name: "web_search" }],
-        messages: [{ role: "user", content: prompt }],
-      }),
-      signal: AbortSignal.timeout(120_000),
-    })
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 90_000)
+
+    let resp: Response
+    try {
+      resp = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
+        },
+        body: JSON.stringify({
+          model: process.env.MODEL_SONNET || "claude-sonnet-4-6",
+          max_tokens: 4096,
+          tools: [{ type: "web_search_20250305", name: "web_search" }],
+          messages: [{ role: "user", content: prompt }],
+        }),
+        signal: controller.signal,
+      })
+    } catch (err: unknown) {
+      clearTimeout(timeout)
+      if (err instanceof Error && err.name === "AbortError") {
+        return NextResponse.json(
+          { error: "Generation timed out after 90s. Click Retry to try again." },
+          { status: 504 }
+        )
+      }
+      throw err
+    }
+    clearTimeout(timeout)
 
     if (!resp.ok) {
       const errBody = await resp.text()

@@ -180,16 +180,30 @@ export function InterviewPrepSection({ application }: InterviewPrepSectionProps)
   const [copied, setCopied] = useState(false)
   const [debriefOpen, setDebriefOpen] = useState(false)
 
-  const generateRef = useRef(generatePrep)
-  generateRef.current = generatePrep
+  // Track whether auto-generation was already attempted for this application+stage
+  // Uses ref to avoid re-render triggers that cause the loop
+  const autoGenAttempted = useRef<string | null>(null)
 
-  // Auto-trigger generation when entering a prep stage with no existing prep
+  // Auto-trigger generation ONCE when entering a prep stage with no existing prep
   useEffect(() => {
-    if (isPrepStage(application.status) && !prep[application.status] && !generating) {
-      generateRef.current(application.status)
+    const stageKey = `${application.id}:${application.status}`
+    if (
+      isPrepStage(application.status) &&
+      !prep[application.status] &&
+      !generating &&
+      !error &&
+      autoGenAttempted.current !== stageKey
+    ) {
+      autoGenAttempted.current = stageKey
+      generatePrep(application.status)
       toast("Generating prep materials...")
     }
-  }, [application.status, prep, generating])
+  }, [application.id, application.status, prep, generating, error, generatePrep])
+
+  // Reset attempt tracking when switching to a different application
+  useEffect(() => {
+    autoGenAttempted.current = null
+  }, [application.id])
 
   if (!isPrepStage(application.status)) return null
 
