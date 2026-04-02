@@ -12,7 +12,7 @@
       "name": "Sidebar Navigation",
       "file": "src/components/layout/sidebar.tsx",
       "exports": ["Sidebar"],
-      "patterns": ["Overview", "Inbox", "Job Search", "Applications", "Auto-Apply", "Analytics"],
+      "patterns": ["Overview", "Inbox", "Job Search", "Applications", "Auto-Apply", "Analytics", "Training"],
       "area": "layout"
     },
     {
@@ -742,6 +742,22 @@
       "exports": ["LinkEmailModal"],
       "patterns": ["ThreadGroup", "buildThreadGroups", "thread_id", "All linked", "Link Emails"],
       "area": "applications"
+    },
+    {
+      "ticket": "CAR-101",
+      "name": "Training Page",
+      "file": "src/app/(main)/training/page.tsx",
+      "exports": [],
+      "patterns": ["useTraining", "useCourseDetail", "GraduationCap", "TrainingPage"],
+      "area": "training"
+    },
+    {
+      "ticket": "CAR-101",
+      "name": "Training Data Hook",
+      "file": "src/hooks/use-training.ts",
+      "exports": ["useTraining", "useCourseDetail"],
+      "patterns": ["training_courses", "training_progress", "training_sessions"],
+      "area": "training"
     }
   ]
 }
