@@ -56,7 +56,12 @@ export async function POST(req: NextRequest) {
           .update({ status: "generating", updated_at: new Date().toISOString() })
           .eq("id", id)
 
-        const pdfMeta = { name: "Joseph Fowler", title: item.job_title, company: item.company }
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("full_name")
+          .eq("id", user.id)
+          .maybeSingle()
+        const pdfMeta = { name: profile?.full_name ?? "User", title: item.job_title, company: item.company }
         const company = sanitizeFilename(item.company)
         const title = sanitizeFilename(item.job_title)
         const timestamp = new Date().toISOString().slice(0, 10).replace(/-/g, "")

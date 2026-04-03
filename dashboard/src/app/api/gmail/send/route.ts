@@ -11,9 +11,9 @@ interface SendRequest {
   references?: string
 }
 
-function buildMimeMessage({ to, subject, body, inReplyTo, references }: Omit<SendRequest, "threadId">): string {
+function buildMimeMessage({ to, subject, body, inReplyTo, references, fromEmail }: Omit<SendRequest, "threadId"> & { fromEmail: string }): string {
   const lines: string[] = [
-    `From: jlfowler1084@gmail.com`,
+    `From: ${fromEmail}`,
     `To: ${to}`,
     `Subject: ${subject}`,
     `Content-Type: text/plain; charset=utf-8`,
@@ -55,7 +55,7 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    const mime = buildMimeMessage({ to, subject, body, inReplyTo, references })
+    const mime = buildMimeMessage({ to, subject, body, inReplyTo, references, fromEmail: user.email! })
     const raw = base64UrlEncode(mime)
 
     const gmail = getGmailClient()

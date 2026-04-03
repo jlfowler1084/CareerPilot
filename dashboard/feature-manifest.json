@@ -480,6 +480,14 @@
       "area": "auth"
     },
     {
+      "ticket": "CAR-110",
+      "name": "Middleware Session Refresh",
+      "file": "middleware.ts",
+      "exports": ["middleware", "config"],
+      "patterns": ["getUser", "PUBLIC_ROUTES", "/login", "_next/static"],
+      "area": "auth"
+    },
+    {
       "ticket": "CAR-64",
       "name": "Login Page",
       "file": "src/app/login/page.tsx",

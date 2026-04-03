@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { config } from "dotenv"
 import path from "path"
 
@@ -24,6 +25,12 @@ function detectSource(url: string): string {
 
 export async function POST(req: NextRequest) {
   try {
+    const supabase = await createServerSupabaseClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
     const { url } = await req.json()
 
     if (!url || typeof url !== "string") {
