@@ -766,6 +766,38 @@
       "exports": ["useTraining", "useCourseDetail"],
       "patterns": ["training_courses", "training_progress", "training_sessions"],
       "area": "training"
+    },
+    {
+      "ticket": "CAR-112",
+      "name": "Supabase Generated Types",
+      "file": "src/types/database.types.ts",
+      "exports": ["Database", "Json"],
+      "patterns": ["Tables", "Row", "Insert", "Update"],
+      "area": "types"
+    },
+    {
+      "ticket": "CAR-112",
+      "name": "Supabase Convenience Types",
+      "file": "src/types/supabase.ts",
+      "exports": ["ApplicationRow", "EmailRow", "ConversationRow"],
+      "patterns": ["Database", "database.types"],
+      "area": "types"
+    },
+    {
+      "ticket": "CAR-112",
+      "name": "Typed Browser Client",
+      "file": "src/lib/supabase/client.ts",
+      "exports": ["createClient"],
+      "patterns": ["Database", "createBrowserClient"],
+      "area": "types"
+    },
+    {
+      "ticket": "CAR-112",
+      "name": "Typed Server Client",
+      "file": "src/lib/supabase/server.ts",
+      "exports": ["createServerSupabaseClient"],
+      "patterns": ["Database", "createServerClient"],
+      "area": "types"
     }
   ]
 }
