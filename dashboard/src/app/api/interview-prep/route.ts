@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
       .select("id, title, company, url, salary_range, interview_prep, status, notes")
       .eq("id", applicationId)
       .eq("user_id", user.id)
-      .single()
+      .maybeSingle()
 
     if (appError || !app) {
       return NextResponse.json({ error: "Application not found" }, { status: 404 })

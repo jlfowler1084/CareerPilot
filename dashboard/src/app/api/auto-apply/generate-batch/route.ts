@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
           .select("*")
           .eq("id", id)
           .eq("user_id", user.id)
-          .single()
+          .maybeSingle()
 
         if (loadError || !item) {
           results.push({ id, status: "error", error: "Queue item not found" })

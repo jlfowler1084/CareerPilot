@@ -33,7 +33,7 @@ export async function GET(
       .select('id')
       .eq('id', applicationId)
       .eq('user_id', user.id)
-      .single()
+      .maybeSingle()
 
     if (appError || !application) {
       return NextResponse.json(

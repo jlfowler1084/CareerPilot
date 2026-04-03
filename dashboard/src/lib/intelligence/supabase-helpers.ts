@@ -159,7 +159,7 @@ export async function updateDebrief(
     .update(updates)
     .eq('id', id)
     .select()
-    .single()
+    .maybeSingle()
 
   return { data: data as DebriefRow | null, error }
 }

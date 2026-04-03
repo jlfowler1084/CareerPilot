@@ -54,7 +54,7 @@ export async function GET(
       .select("*, application:applications(id, title, company)")
       .eq("id", id)
       .eq("user_id", user.id)
-      .single()
+      .maybeSingle()
 
     if (error || !data) {
       return NextResponse.json({ error: "Not found" }, { status: 404 })
@@ -89,7 +89,7 @@ export async function PATCH(
         .select("notes")
         .eq("id", id)
         .eq("user_id", user.id)
-        .single()
+        .maybeSingle()
 
       if (existing && existing.notes !== body.notes) {
         body.topics = await extractTopics(body.notes)
@@ -102,7 +102,7 @@ export async function PATCH(
       .eq("id", id)
       .eq("user_id", user.id)
       .select("*, application:applications(id, title, company)")
-      .single()
+      .maybeSingle()
 
     if (error) {
       console.error("Conversation update error:", error.message)

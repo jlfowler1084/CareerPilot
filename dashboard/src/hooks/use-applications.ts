@@ -184,7 +184,7 @@ export function useApplications() {
         .update(updates)
         .eq("id", id)
         .select()
-        .single()
+        .maybeSingle()
 
       if (error) {
         // Revert optimistic update
@@ -194,6 +194,15 @@ export function useApplications() {
           )
         }
         toast.error("Failed to update application")
+      }
+
+      if (!error && !data) {
+        // Row was deleted — revert optimistic update
+        if (current) {
+          setApplications((prev) =>
+            prev.map((a) => (a.id === id ? current : a))
+          )
+        }
       }
 
       if (!error && data) {
@@ -317,7 +326,7 @@ export function useApplications() {
         .update(contact)
         .eq("id", id)
         .select()
-        .single()
+        .maybeSingle()
 
       if (error) {
         toast.error("Failed to save contact info")
@@ -344,7 +353,7 @@ export function useApplications() {
         .update({ notes })
         .eq("id", id)
         .select()
-        .single()
+        .maybeSingle()
 
       if (error) {
         toast.error("Failed to save notes")
@@ -371,7 +380,7 @@ export function useApplications() {
         .update({ job_description })
         .eq("id", id)
         .select()
-        .single()
+        .maybeSingle()
 
       return { data, error }
     },

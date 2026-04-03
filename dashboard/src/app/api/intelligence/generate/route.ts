@@ -71,7 +71,7 @@ export async function POST(request: Request) {
       .select('id, title, company, job_description, status')
       .eq('id', application_id)
       .eq('user_id', user.id)
-      .single()
+      .maybeSingle()
 
     if (appError || !application) {
       return NextResponse.json(

@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
       .from("email_job_suggestions")
       .select("*")
       .eq("id", id)
-      .single()
+      .maybeSingle()
 
     if (error || !suggestion) {
       return NextResponse.json({ error: "Suggestion not found" }, { status: 404 })
@@ -77,7 +77,7 @@ export async function POST(req: NextRequest) {
       .from("email_job_suggestions")
       .select("job_url")
       .eq("id", id)
-      .single()
+      .maybeSingle()
 
     if (!suggestion?.job_url) {
       return NextResponse.json({ error: "No job URL available — search manually" }, { status: 404 })

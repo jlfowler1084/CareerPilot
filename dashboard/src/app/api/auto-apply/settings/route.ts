@@ -52,10 +52,14 @@ export async function PUT(req: NextRequest) {
       .update(updates)
       .eq("user_id", user.id)
       .select()
-      .single()
+      .maybeSingle()
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 })
+    }
+
+    if (!data) {
+      return NextResponse.json({ error: "Settings not found" }, { status: 404 })
     }
 
     return NextResponse.json({ settings: data })
