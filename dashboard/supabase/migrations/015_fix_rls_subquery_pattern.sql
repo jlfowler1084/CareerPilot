@@ -101,7 +101,8 @@ CREATE POLICY "Users can manage their own settings" ON public.auto_apply_setting
 -- ── auto_apply_queue ────────────────────────────────────────────────
 -- Used in: use-auto-apply-queue.ts, auto-apply/generate-batch, session, stats
 -- Operations: SELECT, INSERT, UPDATE, DELETE
-ALTER TABLE public.auto_apply_queue ENABLE ROW LEVEL SECURITY;
+-- RLS already enabled via dashboard; policy exists but uses bare auth.uid()
+DROP POLICY IF EXISTS "Users can manage their own queue" ON public.auto_apply_queue;
 CREATE POLICY "Users own queue items" ON public.auto_apply_queue
   FOR ALL
   USING (user_id = (SELECT auth.uid()))
@@ -110,16 +111,22 @@ CREATE POLICY "Users own queue items" ON public.auto_apply_queue
 -- ── email_job_suggestions ───────────────────────────────────────────
 -- Used in: use-suggestions.ts, suggestions/extract, suggestions/action
 -- Operations: SELECT, INSERT, UPDATE
-ALTER TABLE public.email_job_suggestions ENABLE ROW LEVEL SECURITY;
+-- RLS already enabled via dashboard; existing policies use USING (true) — no enforcement.
+-- Table has no user_id column; ownership chains through email_id → emails.user_id.
+DROP POLICY IF EXISTS "suggestions_select" ON public.email_job_suggestions;
+DROP POLICY IF EXISTS "suggestions_insert" ON public.email_job_suggestions;
+DROP POLICY IF EXISTS "suggestions_update" ON public.email_job_suggestions;
+DROP POLICY IF EXISTS "suggestions_delete" ON public.email_job_suggestions;
 CREATE POLICY "Users own suggestions" ON public.email_job_suggestions
   FOR ALL
-  USING (user_id = (SELECT auth.uid()))
-  WITH CHECK (user_id = (SELECT auth.uid()));
+  USING (email_id IN (SELECT id FROM public.emails WHERE user_id = (SELECT auth.uid())))
+  WITH CHECK (email_id IN (SELECT id FROM public.emails WHERE user_id = (SELECT auth.uid())));
 
 -- ── company_briefs ──────────────────────────────────────────────────
 -- Used in: supabase-helpers.ts (getCompanyBrief, upsertCompanyBrief)
 -- Operations: SELECT, INSERT, UPDATE (via UPSERT)
-ALTER TABLE public.company_briefs ENABLE ROW LEVEL SECURITY;
+-- RLS already enabled via dashboard; policy exists but uses bare auth.uid()
+DROP POLICY IF EXISTS "Users own company_briefs" ON public.company_briefs;
 CREATE POLICY "Users own briefs" ON public.company_briefs
   FOR ALL
   USING (user_id = (SELECT auth.uid()))
@@ -128,7 +135,8 @@ CREATE POLICY "Users own briefs" ON public.company_briefs
 -- ── interview_prep ──────────────────────────────────────────────────
 -- Used in: supabase-helpers.ts (getInterviewPrep, upsertInterviewPrep)
 -- Operations: SELECT, INSERT, UPDATE (via UPSERT)
-ALTER TABLE public.interview_prep ENABLE ROW LEVEL SECURITY;
+-- RLS already enabled via dashboard; policy exists but uses bare auth.uid()
+DROP POLICY IF EXISTS "Users own interview_prep" ON public.interview_prep;
 CREATE POLICY "Users own prep" ON public.interview_prep
   FOR ALL
   USING (user_id = (SELECT auth.uid()))
@@ -137,7 +145,8 @@ CREATE POLICY "Users own prep" ON public.interview_prep
 -- ── debriefs ────────────────────────────────────────────────────────
 -- Used in: supabase-helpers.ts (getDebriefs, createDebrief, updateDebrief)
 -- Operations: SELECT, INSERT, UPDATE
-ALTER TABLE public.debriefs ENABLE ROW LEVEL SECURITY;
+-- RLS already enabled via dashboard; policy exists but uses bare auth.uid()
+DROP POLICY IF EXISTS "Users own debriefs" ON public.debriefs;
 CREATE POLICY "Users own debriefs" ON public.debriefs
   FOR ALL
   USING (user_id = (SELECT auth.uid()))
@@ -146,7 +155,8 @@ CREATE POLICY "Users own debriefs" ON public.debriefs
 -- ── skill_mentions ──────────────────────────────────────────────────
 -- Used in: supabase-helpers.ts (getSkillMentions, upsertSkillMention)
 -- Operations: SELECT, INSERT, UPDATE (via UPSERT)
-ALTER TABLE public.skill_mentions ENABLE ROW LEVEL SECURITY;
+-- RLS already enabled via dashboard; policy exists but uses bare auth.uid()
+DROP POLICY IF EXISTS "Users own skill_mentions" ON public.skill_mentions;
 CREATE POLICY "Users own skill mentions" ON public.skill_mentions
   FOR ALL
   USING (user_id = (SELECT auth.uid()))
