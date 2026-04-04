@@ -42,14 +42,29 @@ export function sanitizeJsonResponse(raw: string): string {
 export function parseJsonResponse<T = unknown>(raw: string): T {
   const sanitized = sanitizeJsonResponse(raw)
 
-  // Check for truncated response (incomplete JSON)
+  // Check for truncated response via brace balance
+  // Note: the sanitizer trims to the last } or ], so a simple last-char check
+  // won't catch truncation. Brace counting detects incomplete nested structures.
   const trimmed = sanitized.trim()
   if (trimmed.length > 0) {
-    const lastChar = trimmed[trimmed.length - 1]
-    if (lastChar !== "}" && lastChar !== "]") {
+    let braces = 0
+    let brackets = 0
+    let inString = false
+    let escape = false
+    for (let i = 0; i < trimmed.length; i++) {
+      const ch = trimmed[i]
+      if (escape) { escape = false; continue }
+      if (ch === "\\") { escape = true; continue }
+      if (ch === '"') { inString = !inString; continue }
+      if (inString) continue
+      if (ch === "{") braces++
+      else if (ch === "}") braces--
+      else if (ch === "[") brackets++
+      else if (ch === "]") brackets--
+    }
+    if (braces !== 0 || brackets !== 0) {
       throw new Error(
-        "AI response appears truncated (does not end with } or ]). " +
-        "The response may have exceeded the token limit. " +
+        `AI response appears truncated (unbalanced JSON: ${braces} unclosed braces, ${brackets} unclosed brackets). ` +
         `Preview: ${trimmed.substring(0, 200)}...`
       )
     }

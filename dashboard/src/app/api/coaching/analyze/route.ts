@@ -80,6 +80,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Haiku: structured extraction from interview transcript (classification-level task)
+    // 8192 max_tokens: full transcripts (~15K input tokens) produce ~7K output tokens for detailed per-question analysis
     const resp = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
@@ -89,11 +90,11 @@ export async function POST(req: NextRequest) {
       },
       body: JSON.stringify({
         model: process.env.MODEL_HAIKU || "claude-haiku-4-5-20251001",
-        max_tokens: 4096,
+        max_tokens: 8192,
         system: COACHING_SYSTEM_PROMPT,
         messages: [{ role: "user", content: contextParts.join("\n") }],
       }),
-      signal: AbortSignal.timeout(60_000),
+      signal: AbortSignal.timeout(120_000),
     })
 
     if (!resp.ok) {
@@ -103,6 +104,16 @@ export async function POST(req: NextRequest) {
     }
 
     const data = await resp.json()
+
+    // Check for truncation before attempting to parse
+    if (data.stop_reason === "max_tokens") {
+      console.error("Claude response truncated: used", data.usage?.output_tokens, "output tokens")
+      return NextResponse.json(
+        { error: "AI response was truncated — the transcript may be too long for analysis. Try a shorter excerpt." },
+        { status: 502 }
+      )
+    }
+
     const textBlock = data.content?.find((c: { type: string }) => c.type === "text")
     const finalText = textBlock?.text || ""
 
