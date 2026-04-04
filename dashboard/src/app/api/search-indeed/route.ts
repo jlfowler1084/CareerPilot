@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { parseIndeedResults } from "@/lib/parsers/indeed"
+import { badGateway } from "@/lib/api-errors"
 
 export async function POST(req: NextRequest) {
   try {
@@ -77,11 +78,6 @@ export async function POST(req: NextRequest) {
     })
   } catch (error) {
     console.error("Indeed web search error:", error)
-    return NextResponse.json({
-      jobs: [],
-      source: "Indeed",
-      count: 0,
-      info: "Indeed search temporarily unavailable",
-    })
+    return badGateway("Indeed service temporarily unavailable", { service: "indeed" })
   }
 }

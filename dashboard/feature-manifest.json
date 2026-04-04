@@ -846,6 +846,14 @@
       "exports": ["default"],
       "patterns": ["not found", "Back to Overview"],
       "area": "layout"
+    },
+    {
+      "ticket": "CAR-114",
+      "name": "API Error Response Utilities",
+      "file": "src/lib/api-errors.ts",
+      "exports": ["badRequest", "unauthorized", "notFound", "serverError", "badGateway"],
+      "patterns": ["ApiError", "BAD_REQUEST", "UNAUTHORIZED", "NOT_FOUND", "INTERNAL_ERROR", "BAD_GATEWAY"],
+      "area": "api"
     }
   ]
 }

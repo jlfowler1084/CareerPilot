@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { parseDiceResults } from "@/lib/parsers/dice"
 import { searchDiceDirect } from "@/lib/mcp-client"
+import { badGateway } from "@/lib/api-errors"
 
 export async function POST(req: NextRequest) {
   try {
@@ -38,9 +39,6 @@ export async function POST(req: NextRequest) {
     })
   } catch (error) {
     console.error("Dice search error:", error)
-    return NextResponse.json(
-      { jobs: [], source: "Dice", count: 0, error: "MCP timeout" },
-      { status: 200 }
-    )
+    return badGateway("Dice MCP service timeout", { service: "dice" })
   }
 }

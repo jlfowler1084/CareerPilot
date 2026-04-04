@@ -69,23 +69,28 @@ async function callSearchApi(
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ keyword, location }),
       })
-      const data = await res.json()
-      if (data.jobs && Array.isArray(data.jobs)) {
-        results.push(
-          ...data.jobs.map((j: Job) => ({
-            ...j,
-            source: "Indeed" as const,
-            profileId,
-            profileLabel,
-          }))
-        )
-      }
-      if (data.info) {
-        indeedInfo = data.info as string
-      } else if (data.error) {
-        warnings.push({ profileId, message: `Indeed: ${data.error}` })
-      } else if (!data.jobs || data.jobs.length === 0) {
-        warnings.push({ profileId, message: "Indeed returned no results" })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        warnings.push({ profileId, message: `Indeed: ${data.error || `service unavailable (${res.status})`}` })
+      } else {
+        const data = await res.json()
+        if (data.jobs && Array.isArray(data.jobs)) {
+          results.push(
+            ...data.jobs.map((j: Job) => ({
+              ...j,
+              source: "Indeed" as const,
+              profileId,
+              profileLabel,
+            }))
+          )
+        }
+        if (data.info) {
+          indeedInfo = data.info as string
+        } else if (data.error) {
+          warnings.push({ profileId, message: `Indeed: ${data.error}` })
+        } else if (!data.jobs || data.jobs.length === 0) {
+          warnings.push({ profileId, message: "Indeed returned no results" })
+        }
       }
     } catch (err) {
       warnings.push({ profileId, message: `Indeed: ${err instanceof Error ? err.message : "request failed"}` })
@@ -99,16 +104,20 @@ async function callSearchApi(
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ keyword, location, contractOnly }),
       })
-      const data = await res.json()
-      if (data.jobs && Array.isArray(data.jobs)) {
-        results.push(
-          ...data.jobs.map((j: Job) => ({
-            ...j,
-            source: "Dice" as const,
-            profileId,
-            profileLabel,
-          }))
-        )
+      if (!res.ok) {
+        warnings.push({ profileId, message: `Dice: service unavailable (${res.status})` })
+      } else {
+        const data = await res.json()
+        if (data.jobs && Array.isArray(data.jobs)) {
+          results.push(
+            ...data.jobs.map((j: Job) => ({
+              ...j,
+              source: "Dice" as const,
+              profileId,
+              profileLabel,
+            }))
+          )
+        }
       }
     } catch (err) {
       warnings.push({ profileId, message: `Dice: ${err instanceof Error ? err.message : "request failed"}` })

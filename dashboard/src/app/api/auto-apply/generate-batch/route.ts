@@ -35,6 +35,12 @@ export async function POST(req: NextRequest) {
     const ids = queueIds.slice(0, 10)
     const results: BatchResult[] = []
 
+    // Extract cookies once for internal API calls
+    const cookies = req.headers.get("cookie")
+    if (!cookies) {
+      console.warn("Cookie header missing for internal API calls in generate-batch")
+    }
+
     for (const id of ids) {
       try {
         // Load queue item
@@ -87,7 +93,7 @@ export async function POST(req: NextRequest) {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
-              cookie: req.headers.get("cookie") || "",
+              ...(cookies ? { cookie: cookies } : {}),
             },
             body: JSON.stringify({
               title: item.job_title,
@@ -99,6 +105,8 @@ export async function POST(req: NextRequest) {
           if (tailorResp.ok) {
             const tailorData = await tailorResp.json()
             resumeText = tailorData.tailoredResume || null
+          } else {
+            console.error(`Internal tailor-resume call failed with status ${tailorResp.status} for queue item ${id}`)
           }
         }
 
@@ -135,7 +143,7 @@ export async function POST(req: NextRequest) {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
-              cookie: req.headers.get("cookie") || "",
+              ...(cookies ? { cookie: cookies } : {}),
             },
             body: JSON.stringify({
               title: item.job_title,
@@ -147,6 +155,8 @@ export async function POST(req: NextRequest) {
           if (clResp.ok) {
             const clData = await clResp.json()
             coverLetterText = clData.coverLetter || null
+          } else {
+            console.error(`Internal cover-letter call failed with status ${clResp.status} for queue item ${id}`)
           }
         }
 

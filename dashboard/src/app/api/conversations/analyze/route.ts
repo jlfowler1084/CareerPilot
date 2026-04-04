@@ -26,22 +26,24 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Conversation not found" }, { status: 404 })
     }
 
-    // 2. Fetch prior conversations for pattern detection (limit to recent 20)
+    // 2. Fetch prior conversations for pattern detection (reduced from 20 to 10, only need topics)
     const { data: priorConversations } = await supabase
       .from("conversations")
-      .select("id, title, topics, conversation_type, date, sentiment")
+      .select("id, topics")
       .eq("user_id", user.id)
       .neq("id", conversationId)
       .order("date", { ascending: false })
-      .limit(20)
+      .limit(10)
 
     // 3. Build prompt context
     const appContext = conversation.application
       ? `\n- Job: ${conversation.application.company} — ${conversation.application.title}${conversation.application.job_description ? `\n- Job Description: ${conversation.application.job_description.slice(0, 1500)}` : ""}`
       : ""
 
-    const priorTopics = priorConversations?.length
-      ? `\n- Previous conversation topics: ${priorConversations.flatMap((c: { topics: string[] | null }) => c.topics || []).filter(Boolean).join(", ")}`
+    const allTopics = priorConversations?.flatMap((c: { topics: string[] | null }) => c.topics || []).filter(Boolean) || []
+    const uniqueTopics = [...new Set(allTopics)].slice(0, 30)
+    const priorTopics = uniqueTopics.length
+      ? `\n- Previous conversation topics: ${uniqueTopics.join(", ")}`
       : ""
 
     const prompt = `You are an interview coach analyzing a job search conversation. Given the notes, questions asked, and answers provided, generate a structured analysis.
@@ -93,7 +95,7 @@ Return ONLY valid JSON with this structure:
 
     if (!aiResp.ok) {
       console.error("Anthropic API error:", aiResp.status)
-      return NextResponse.json({ success: false, error: "Analysis failed" })
+      return NextResponse.json({ success: false, error: "Analysis failed" }, { status: 502 })
     }
 
     const aiData = await aiResp.json()
@@ -129,13 +131,13 @@ Return ONLY valid JSON with this structure:
 
     if (updateError) {
       console.error("Analysis update error:", updateError.message)
-      return NextResponse.json({ success: false, error: "Failed to save analysis" })
+      return NextResponse.json({ success: false, error: "Failed to save analysis" }, { status: 500 })
     }
 
     return NextResponse.json({ success: true, analysis })
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error)
     console.error("Conversation analyze error:", message)
-    return NextResponse.json({ success: false, error: "Analysis failed" })
+    return NextResponse.json({ success: false, error: "Analysis failed" }, { status: 500 })
   }
 }
