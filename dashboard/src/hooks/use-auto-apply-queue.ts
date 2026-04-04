@@ -1,16 +1,18 @@
 "use client"
 
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useState, useCallback, useRef } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { useAuth } from "@/contexts/auth-context"
 import type { AutoApplyQueueItem, AutoApplyStatus, FitScore, Job } from "@/types"
 
 const supabase = createClient()
+const DEBOUNCE_MS = 500
 
 export function useAutoApplyQueue() {
   const [queue, setQueue] = useState<AutoApplyQueueItem[]>([])
   const [loading, setLoading] = useState(true)
   const { user, loading: authLoading } = useAuth()
+  const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const fetchQueue = useCallback(async (statusFilter?: AutoApplyStatus) => {
     if (!user) { setLoading(false); return }
@@ -30,22 +32,30 @@ export function useAutoApplyQueue() {
     setLoading(false)
   }, [user])
 
+  const debouncedFetch = useCallback(() => {
+    if (debounceTimer.current) clearTimeout(debounceTimer.current)
+    debounceTimer.current = setTimeout(() => fetchQueue(), DEBOUNCE_MS)
+  }, [fetchQueue])
+
   useEffect(() => {
     if (authLoading) return
     fetchQueue()
 
-    // Real-time subscription
+    // Real-time subscription with debounced refetch (OOM fix)
     const channel = supabase
       .channel("auto-apply-queue-changes")
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "auto_apply_queue" },
-        () => { fetchQueue() }
+        () => { debouncedFetch() }
       )
       .subscribe()
 
-    return () => { supabase.removeChannel(channel) }
-  }, [fetchQueue, authLoading])
+    return () => {
+      if (debounceTimer.current) clearTimeout(debounceTimer.current)
+      supabase.removeChannel(channel)
+    }
+  }, [fetchQueue, debouncedFetch, authLoading])
 
   const addToQueue = useCallback(async (job: Job, fitScore: FitScore) => {
     if (!user) return

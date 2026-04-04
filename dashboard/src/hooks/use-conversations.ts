@@ -1,14 +1,17 @@
 "use client"
 
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useState, useCallback, useRef } from "react"
 import { createClient } from "@/lib/supabase/client"
 import type { Conversation, ConversationPattern } from "@/types"
 
 const supabase = createClient()
+const DEBOUNCE_MS = 500
 
-export function useConversations(applicationId?: string) {
+export function useConversations(applicationId?: string, enabled: boolean = true) {
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [loading, setLoading] = useState(true)
+  const hasFetched = useRef(false)
+  const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const fetchConversations = useCallback(async () => {
     const params = new URLSearchParams()
@@ -22,8 +25,26 @@ export function useConversations(applicationId?: string) {
     setLoading(false)
   }, [applicationId])
 
+  const debouncedFetch = useCallback(() => {
+    if (debounceTimer.current) clearTimeout(debounceTimer.current)
+    debounceTimer.current = setTimeout(fetchConversations, DEBOUNCE_MS)
+  }, [fetchConversations])
+
+  // Reset fetch tracking when applicationId changes
   useEffect(() => {
-    fetchConversations()
+    hasFetched.current = false
+  }, [applicationId])
+
+  useEffect(() => {
+    if (!enabled) {
+      setLoading(false)
+      return
+    }
+
+    if (!hasFetched.current) {
+      hasFetched.current = true
+      fetchConversations()
+    }
 
     // Real-time subscription
     const filter = applicationId
@@ -41,16 +62,18 @@ export function useConversations(applicationId?: string) {
           ...(filter ? { filter } : {}),
         },
         () => {
-          // Refetch to get joined application data
-          fetchConversations()
+          // Debounced refetch — prevents burst of DB changes from
+          // triggering parallel full-dataset reloads (OOM fix)
+          debouncedFetch()
         }
       )
       .subscribe()
 
     return () => {
+      if (debounceTimer.current) clearTimeout(debounceTimer.current)
       supabase.removeChannel(channel)
     }
-  }, [applicationId, fetchConversations])
+  }, [applicationId, enabled, fetchConversations, debouncedFetch])
 
   const addConversation = useCallback(
     async (conversation: Partial<Conversation>) => {

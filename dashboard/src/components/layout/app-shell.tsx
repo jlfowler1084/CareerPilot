@@ -6,6 +6,7 @@ import { useAuth } from "@/contexts/auth-context"
 import { Header } from "@/components/layout/header"
 
 const ACTIVE_STATUSES = ["interested", "applied", "phone_screen", "interview"]
+const POLL_INTERVAL_MS = 30_000
 
 function useHeaderStats() {
   const { user } = useAuth()
@@ -33,16 +34,12 @@ function useHeaderStats() {
     }
     fetchCounts()
 
-    const channel = supabase
-      .channel("header-counts")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "applications" },
-        () => fetchCounts()
-      )
-      .subscribe()
+    // Poll instead of realtime subscription — header counts are low-priority
+    // and the applications table already has a realtime listener in use-applications.ts.
+    // This avoids a duplicate subscription that was contributing to OOM.
+    const interval = setInterval(fetchCounts, POLL_INTERVAL_MS)
 
-    return () => { supabase.removeChannel(channel) }
+    return () => { clearInterval(interval) }
   }, [user])
 
   return { activeCount, totalCount }

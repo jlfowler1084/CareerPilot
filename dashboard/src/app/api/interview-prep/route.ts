@@ -64,15 +64,14 @@ export async function POST(req: NextRequest) {
         break
     }
 
-    // Call Claude with web_search tool
+    // Interview prep does NOT use web_search — that's for Company Brief only.
+    // Prep uses existing context: resume summary, JD, company brief (if available), debriefs.
+    // This keeps generation fast (<30s) and within Vercel's timeout limits.
     const apiKey = process.env.ANTHROPIC_API_KEY
     if (!apiKey) {
       return NextResponse.json({ error: "ANTHROPIC_API_KEY not configured" }, { status: 500 })
     }
 
-    // web_search_20250305 is a server-side tool — Anthropic executes the search
-    // automatically and returns the final response with text + search results in
-    // a single call. No multi-turn loop needed.
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), 90_000)
 
@@ -88,7 +87,6 @@ export async function POST(req: NextRequest) {
         body: JSON.stringify({
           model: process.env.MODEL_SONNET || "claude-sonnet-4-6",
           max_tokens: 4096,
-          tools: [{ type: "web_search_20250305", name: "web_search" }],
           messages: [{ role: "user", content: prompt }],
         }),
         signal: controller.signal,
@@ -108,13 +106,14 @@ export async function POST(req: NextRequest) {
     if (!resp.ok) {
       const errBody = await resp.text()
       console.error("Claude API error:", resp.status, errBody)
-      return NextResponse.json({ error: "AI generation failed" }, { status: 502 })
+      return NextResponse.json(
+        { error: `AI generation failed (${resp.status}): ${errBody.slice(0, 200)}` },
+        { status: 502 }
+      )
     }
 
     const data = await resp.json()
 
-    // Extract text from response — may contain web_search_tool_result blocks
-    // alongside the final text block
     const textBlock = data.content?.find((c: { type: string }) => c.type === "text")
     const finalText = textBlock?.text || ""
 

@@ -1,3 +1,8 @@
+// CAR-99: Conversations, intelligence, and interview prep data are lazy-loaded
+// on row expansion only. This prevents the N+1 query storm that previously
+// crashed Node.js with OOM when all rows fetched independently on mount.
+// The `enabled` parameter on each hook gates the actual fetch — hooks are
+// still called unconditionally per React rules.
 "use client"
 
 import { useState } from "react"
@@ -14,7 +19,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { useIntelligence } from "@/hooks/use-intelligence"
 import { STATUSES } from "@/lib/constants"
 import { RelativeTime } from "@/components/ui/relative-time"
-import { ExternalLink, Trash2, Save, Mail, Sparkles, FileCheck, CalendarDays, CalendarCheck, FileText, BrainCircuit } from "lucide-react"
+import { ExternalLink, Trash2, Save, Mail, Sparkles, FileCheck, CalendarDays, CalendarCheck, FileText, BrainCircuit, ChevronDown, ChevronRight } from "lucide-react"
 import type { Application, ApplicationStatus } from "@/types"
 
 const SCHEDULABLE_STATUSES: ApplicationStatus[] = ["applied", "phone_screen", "interview", "offer"]
@@ -42,7 +47,8 @@ export function ApplicationRow({
   const [coverLetterOpen, setCoverLetterOpen] = useState(false)
   const [scheduleOpen, setScheduleOpen] = useState(false)
   const [statusUpdating, setStatusUpdating] = useState(false)
-  const { hasData: hasIntelligence } = useIntelligence(application.id)
+  const [isExpanded, setIsExpanded] = useState(false)
+  const { hasData: hasIntelligence } = useIntelligence(application.id, isExpanded)
 
   async function handleStatusChange(e: React.ChangeEvent<HTMLSelectElement>) {
     setStatusUpdating(true)
@@ -78,11 +84,12 @@ export function ApplicationRow({
       <div className="flex items-start justify-between gap-3">
         <div
           className="flex-1 min-w-0 cursor-pointer"
-          onClick={onClick}
+          onClick={() => setIsExpanded(!isExpanded)}
           tabIndex={0}
-          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick?.() } }}
+          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setIsExpanded(!isExpanded) } }}
         >
           <div className="flex items-center gap-2 mb-1">
+            {isExpanded ? <ChevronDown size={12} className="text-zinc-400 flex-shrink-0" /> : <ChevronRight size={12} className="text-zinc-400 flex-shrink-0" />}
             <span className="font-bold text-sm text-zinc-900 leading-tight truncate">
               {application.title}
             </span>
@@ -256,7 +263,8 @@ export function ApplicationRow({
         }}
       />
 
-      {/* Tab navigation */}
+      {/* Tab navigation — only rendered when expanded */}
+      {isExpanded && (
       <div className="mt-3 pt-3 border-t border-zinc-100" onClick={(e) => e.stopPropagation()}>
         <Tabs defaultValue="details">
           <TabsList variant="line" className="w-full justify-start gap-0 h-7 mb-2">
@@ -324,6 +332,7 @@ export function ApplicationRow({
           </TabsContent>
         </Tabs>
       </div>
+      )}
     </div>
   )
 }

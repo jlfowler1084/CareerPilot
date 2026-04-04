@@ -67,10 +67,7 @@ Candidate Resume Summary:
 ${RESUME_CONTEXT}
 ${formatConversations(conversations)}
 
-Use your web_search tool to:
-1. Look up current information about ${app.company} (recent news, culture, tech stack)
-2. Research current salary ranges for "${app.title}" roles${app.salary_range ? ` (listed range: ${app.salary_range})` : ""}
-${app.url ? `3. Visit the job posting at ${app.url} to understand requirements` : ""}
+Based on the information provided above, generate interview prep using only the context available (resume, job details, and any conversation notes).
 
 Return ONLY a JSON object with these exact keys:
 {
@@ -97,9 +94,6 @@ ${formatJobDetails(app)}
 Candidate Resume Summary:
 ${RESUME_CONTEXT}
 ${formatConversations(conversations)}${formatDebriefs(debriefs)}
-
-Use your web_search tool to research ${app.company}'s tech stack and interview style.
-${app.url ? `Visit the job posting at ${app.url} to understand technical requirements.` : ""}
 
 Map STAR stories from this real experience at Venable LLP:
 - SolarWinds monitoring redesign (replaced Nagios, improved alert response time)
@@ -134,9 +128,7 @@ Candidate Resume Summary:
 ${RESUME_CONTEXT}
 ${formatConversations(conversations)}${formatDebriefs(debriefs)}
 
-Use your web_search tool to:
-1. Research current market salary data for "${app.title}" roles in the candidate's area
-2. Look up ${app.company}'s Glassdoor reviews, benefits reputation, and compensation data
+Based on the information provided above, generate offer evaluation and negotiation prep using only the context available.
 
 Return ONLY a JSON object with these exact keys:
 {

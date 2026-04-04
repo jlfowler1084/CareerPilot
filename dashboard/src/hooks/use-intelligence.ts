@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useState, useCallback, useRef } from "react"
 import type {
   CompanyBriefRow,
   InterviewPrepRow,
@@ -15,7 +15,7 @@ interface IntelligenceData {
   skillMentions: SkillMentionRow[]
 }
 
-export function useIntelligence(applicationId: string | null) {
+export function useIntelligence(applicationId: string | null, enabled: boolean = true) {
   const [data, setData] = useState<IntelligenceData>({
     brief: null,
     preps: [],
@@ -25,8 +25,17 @@ export function useIntelligence(applicationId: string | null) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [loadCount, setLoadCount] = useState(0)
+  const hasFetched = useRef(false)
 
-  const refetch = useCallback(() => setLoadCount((c) => c + 1), [])
+  const refetch = useCallback(() => {
+    hasFetched.current = false
+    setLoadCount((c) => c + 1)
+  }, [])
+
+  // Reset fetch tracking when applicationId changes
+  useEffect(() => {
+    hasFetched.current = false
+  }, [applicationId])
 
   useEffect(() => {
     if (!applicationId) {
@@ -34,6 +43,12 @@ export function useIntelligence(applicationId: string | null) {
       setLoading(false)
       return
     }
+
+    if (!enabled || hasFetched.current) {
+      if (!enabled) setLoading(false)
+      return
+    }
+    hasFetched.current = true
 
     let cancelled = false
 
@@ -73,7 +88,7 @@ export function useIntelligence(applicationId: string | null) {
     return () => {
       cancelled = true
     }
-  }, [applicationId, loadCount])
+  }, [applicationId, enabled, loadCount])
 
   const hasData = !!(data.brief || data.preps.length || data.debriefs.length)
 
