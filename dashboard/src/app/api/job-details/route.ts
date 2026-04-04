@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createServerSupabaseClient } from "@/lib/supabase/server"
+import { sanitizeJsonResponse } from "@/lib/json-utils"
 
 interface JobDetailsRequest {
   url: string
@@ -180,11 +181,11 @@ Return ONLY valid JSON, no markdown fences, no commentary.`,
         )
         .join("\n") || ""
 
-    // Try to parse JSON from response
-    const jsonMatch = allText.match(/\{[\s\S]*\}/)
-    if (!jsonMatch) return fallback
+    // Sanitize LLM artifacts then parse JSON from response
+    const sanitized = sanitizeJsonResponse(allText)
+    if (!sanitized.startsWith("{")) return fallback
 
-    const parsed = JSON.parse(jsonMatch[0])
+    const parsed = JSON.parse(sanitized)
     return {
       title: parsed.title || fallback.title,
       company: parsed.company || fallback.company,

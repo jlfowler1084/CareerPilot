@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { createServerSupabaseClient } from "@/lib/supabase/server"
+import { parseJsonResponse } from "@/lib/json-utils"
 
 export async function GET() {
   try {
@@ -85,32 +86,17 @@ Analyze recurring questions asked by interviewers across companies, topics that 
     const data = await resp.json()
     const text = data.content?.[0]?.text || ""
 
-    // Parse JSON from response
-    const stripped = text
-      .replace(/^```(?:json)?\s*\n?/gim, "")
-      .replace(/\n?```\s*$/gim, "")
-      .trim()
-
+    // Parse JSON from response (sanitize LLM artifacts first)
     try {
-      const patterns = JSON.parse(stripped)
+      const patterns = parseJsonResponse(text)
       return NextResponse.json({ patterns })
     } catch {
-      // Try extracting JSON object
-      const match = stripped.match(/\{[\s\S]*\}/)
-      if (match) {
-        try {
-          const patterns = JSON.parse(match[0])
-          return NextResponse.json({ patterns })
-        } catch {
-          // Fall through
-        }
-      }
       return NextResponse.json({
         patterns: {
           recurring_questions: [],
           strongest_topics: [],
           weak_areas: [],
-          this_week: stripped || "Unable to analyze patterns at this time.",
+          this_week: text.slice(0, 300) || "Unable to analyze patterns at this time.",
         },
       })
     }

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createServerSupabaseClient } from "@/lib/supabase/server"
+import { sanitizeJsonResponse } from "@/lib/json-utils"
 
 export async function POST(req: NextRequest) {
   const supabase = await createServerSupabaseClient()
@@ -44,8 +45,7 @@ export async function POST(req: NextRequest) {
 
     const data = await resp.json()
     const text = data.content?.[0]?.type === "text" ? data.content[0].text : ""
-    const jsonStr = text.replace(/```json?\n?/g, "").replace(/```/g, "").trim()
-    const jobs = JSON.parse(jsonStr)
+    const jobs = JSON.parse(sanitizeJsonResponse(text))
 
     return NextResponse.json({
       jobs: Array.isArray(jobs) ? jobs.map((j: Record<string, string>) => ({

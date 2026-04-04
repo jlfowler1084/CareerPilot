@@ -6,6 +6,7 @@ import {
   buildOfferPrompt,
   PREP_STAGES,
 } from "@/lib/interview-prep-prompts"
+import { parseJsonResponse } from "@/lib/json-utils"
 import type { InterviewPrep, PrepStageKey } from "@/types"
 
 export async function POST(req: NextRequest) {
@@ -122,17 +123,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "No response generated" }, { status: 502 })
     }
 
-    // Parse JSON from response
-    const match = finalText.match(/\{[\s\S]*\}/)
-    if (!match) {
-      return NextResponse.json({ error: "Could not parse structured response" }, { status: 502 })
-    }
-
+    // Parse JSON from response (sanitize LLM artifacts first)
     let content: unknown
     try {
-      content = JSON.parse(match[0])
-    } catch {
-      return NextResponse.json({ error: "Invalid JSON in response" }, { status: 502 })
+      content = parseJsonResponse(finalText)
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Failed to parse AI response"
+      return NextResponse.json({ error: msg }, { status: 502 })
     }
 
     // Store in interview_prep

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createServerSupabaseClient } from "@/lib/supabase/server"
+import { sanitizeJsonResponse } from "@/lib/json-utils"
 import type { ClassificationResult } from "@/types/email"
 
 const CLASSIFY_SYSTEM_PROMPT = `You are an email classifier for a job search dashboard. Classify the email into exactly one category and extract metadata.
@@ -130,10 +131,9 @@ async function handleSingle(email: EmailInput): Promise<NextResponse> {
 
   const data = await resp.json()
   const text = data.content?.[0]?.text || ""
-  const jsonStr = text.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim()
 
   try {
-    const parsed = JSON.parse(jsonStr) as ClassificationResult
+    const parsed = JSON.parse(sanitizeJsonResponse(text)) as ClassificationResult
     return NextResponse.json(validateResult(parsed))
   } catch {
     return NextResponse.json(FALLBACK_RESULT)
@@ -173,10 +173,10 @@ async function handleBatch(emails: EmailInput[]): Promise<NextResponse> {
 
   const data = await resp.json()
   const text = data.content?.[0]?.text || ""
-  const jsonStr = text.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim()
 
   try {
-    const match = jsonStr.match(/\[[\s\S]*\]/)
+    const sanitized = sanitizeJsonResponse(text)
+    const match = sanitized.match(/\[[\s\S]*\]/)
     if (!match) throw new Error("No array found")
 
     const parsed = JSON.parse(match[0]) as ClassificationResult[]

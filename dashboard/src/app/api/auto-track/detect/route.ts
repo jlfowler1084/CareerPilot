@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createServerSupabaseClient } from "@/lib/supabase/server"
+import { sanitizeJsonResponse } from "@/lib/json-utils"
 import {
   detectApplicationConfirmation,
   extractFromHints,
@@ -148,8 +149,7 @@ async function aiExtract(email: { subject: string | null; body_preview: string |
     if (!resp.ok) return null
     const data = await resp.json()
     const text = data.content?.[0]?.text || ""
-    const jsonStr = text.replace(/```json?\s*/g, "").replace(/```/g, "").trim()
-    const parsed = JSON.parse(jsonStr)
+    const parsed = JSON.parse(sanitizeJsonResponse(text))
 
     if (!parsed.company || !parsed.title) return null
 

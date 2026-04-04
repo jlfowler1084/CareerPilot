@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createServerSupabaseClient } from "@/lib/supabase/server"
+import { parseJsonResponse } from "@/lib/json-utils"
 
 export async function POST(req: NextRequest) {
   try {
@@ -86,16 +87,12 @@ Return ONLY valid JSON. No markdown, no backticks, no preamble.`
     const textBlock = data.content?.find((c: { type: string }) => c.type === "text")
     const finalText = textBlock?.text || ""
 
-    const match = finalText.match(/\{[\s\S]*\}/)
-    if (!match) {
-      return NextResponse.json({ error: "Could not parse response" }, { status: 502 })
-    }
-
     let result: { questions: unknown[] }
     try {
-      result = JSON.parse(match[0])
-    } catch {
-      return NextResponse.json({ error: "Invalid JSON in response" }, { status: 502 })
+      result = parseJsonResponse(finalText)
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Failed to parse AI response"
+      return NextResponse.json({ error: msg }, { status: 502 })
     }
 
     return NextResponse.json({ questions: result.questions || [] })

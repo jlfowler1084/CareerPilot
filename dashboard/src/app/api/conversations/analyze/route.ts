@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createServerSupabaseClient } from "@/lib/supabase/server"
+import { parseJsonResponse } from "@/lib/json-utils"
 import type { Json } from "@/types/database.types"
 
 export async function POST(req: NextRequest) {
@@ -102,17 +103,13 @@ Return ONLY valid JSON with this structure:
     const aiData = await aiResp.json()
     const text = aiData.content?.[0]?.text || ""
 
-    // 5. Parse JSON from response (handle potential markdown wrapping)
+    // 5. Parse JSON from response (sanitize LLM artifacts first)
     let analysis: Record<string, unknown> = {}
     try {
-      // Try direct parse first
-      analysis = JSON.parse(text)
+      analysis = parseJsonResponse(text)
     } catch {
-      // Try extracting JSON from markdown code blocks
-      const jsonMatch = text.match(/\{[\s\S]*\}/)
-      if (jsonMatch) {
-        analysis = JSON.parse(jsonMatch[0])
-      }
+      // Non-fatal: continue with empty analysis rather than failing
+      console.error("Conversation analysis JSON parse failed, continuing with empty result")
     }
 
     // 6. Update conversation with analysis results

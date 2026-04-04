@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { analyzeFillersAndPatterns } from "@/lib/coaching/patterns"
+import { parseJsonResponse } from "@/lib/json-utils"
 
 const EVAL_SYSTEM_PROMPT = `You are an interview performance coach evaluating a single answer from Joseph Fowler, a systems administrator/engineer with 20+ years of experience.
 
@@ -83,16 +84,12 @@ export async function POST(req: NextRequest) {
     const textBlock = data.content?.find((c: { type: string }) => c.type === "text")
     const finalText = textBlock?.text || ""
 
-    const match = finalText.match(/\{[\s\S]*\}/)
-    if (!match) {
-      return NextResponse.json({ error: "Could not parse response" }, { status: 502 })
-    }
-
     let evaluation: Record<string, unknown>
     try {
-      evaluation = JSON.parse(match[0])
-    } catch {
-      return NextResponse.json({ error: "Invalid JSON in response" }, { status: 502 })
+      evaluation = parseJsonResponse(finalText)
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Failed to parse AI response"
+      return NextResponse.json({ error: msg }, { status: 502 })
     }
 
     return NextResponse.json({ evaluation, patterns })

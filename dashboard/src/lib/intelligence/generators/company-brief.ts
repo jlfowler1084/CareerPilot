@@ -1,5 +1,6 @@
 import { getModelConfig } from '../model-config'
 import { RESUME_SUMMARY } from '../resume-context'
+import { sanitizeJsonResponse } from '@/lib/json-utils'
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -114,24 +115,15 @@ IMPORTANT RULES:
     .map((block: { type: string; text: string }) => block.text)
     .join('')
 
-  // Strip citation tags and markdown fencing from response
-  const cleanJson = textContent
-    .replace(/<cite[^>]*>|<\/cite>/g, '')
-    .replace(/```json\s*/g, '')
-    .replace(/```\s*/g, '')
-    .trim()
+  // Strip citation tags (web search artifacts) then sanitize LLM response
+  const noCites = textContent.replace(/<cite[^>]*>|<\/cite>/g, '')
 
   let briefData: CompanyBriefData
   try {
-    briefData = JSON.parse(cleanJson)
+    briefData = JSON.parse(sanitizeJsonResponse(noCites))
   } catch {
-    // If JSON parse fails, try to extract JSON from the response
-    const jsonMatch = cleanJson.match(/\{[\s\S]*\}/)
-    if (jsonMatch) {
-      briefData = JSON.parse(jsonMatch[0])
-    } else {
-      throw new Error('Failed to parse company brief JSON from AI response')
-    }
+    console.error('Failed to parse company brief JSON. Raw:', textContent.slice(0, 500))
+    throw new Error('Failed to parse company brief JSON from AI response')
   }
 
   // Validate and fill defaults for any missing fields

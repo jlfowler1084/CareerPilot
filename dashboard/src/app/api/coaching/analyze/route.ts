@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { analyzeFillersAndPatterns } from "@/lib/coaching/patterns"
+import { parseJsonResponse } from "@/lib/json-utils"
 import type { Json } from "@/types/database.types"
 
 const COACHING_SYSTEM_PROMPT = `You are an interview performance coach analyzing a candidate's interview performance. The candidate is Joseph Fowler, a systems administrator/engineer with 20+ years of experience.
 
-Analyze the provided interview content and return a JSON object with:
+Analyze the provided interview content. Respond with raw JSON only. No markdown formatting, no code fences, no preamble, no explanation.
+
+Return a JSON object with:
 {
   "summary": "2-3 sentence overall assessment",
   "overall_score": <1-10>,
@@ -76,7 +79,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "ANTHROPIC_API_KEY not configured" }, { status: 500 })
     }
 
-    // Sonnet: deep comprehension + nuanced professional rewriting
+    // Haiku: structured extraction from interview transcript (classification-level task)
     const resp = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
@@ -85,7 +88,7 @@ export async function POST(req: NextRequest) {
         "anthropic-version": "2023-06-01",
       },
       body: JSON.stringify({
-        model: process.env.MODEL_SONNET || "claude-sonnet-4-20250514",
+        model: process.env.MODEL_HAIKU || "claude-haiku-4-5-20251001",
         max_tokens: 2000,
         system: COACHING_SYSTEM_PROMPT,
         messages: [{ role: "user", content: contextParts.join("\n") }],
@@ -107,17 +110,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "No response generated" }, { status: 502 })
     }
 
-    // Parse JSON from response
-    const match = finalText.match(/\{[\s\S]*\}/)
-    if (!match) {
-      return NextResponse.json({ error: "Could not parse structured response" }, { status: 502 })
-    }
-
+    // Parse JSON from response (sanitize LLM artifacts first)
     let analysis: Record<string, unknown>
     try {
-      analysis = JSON.parse(match[0])
-    } catch {
-      return NextResponse.json({ error: "Invalid JSON in response" }, { status: 502 })
+      analysis = parseJsonResponse(finalText)
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Failed to parse AI response"
+      return NextResponse.json({ error: msg }, { status: 502 })
     }
 
     // Step 5: Merge AI analysis with pattern analysis
