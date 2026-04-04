@@ -6,9 +6,17 @@
 export function sanitizeJsonResponse(raw: string): string {
   let cleaned = raw.trim()
 
-  // Strip markdown code fences
-  cleaned = cleaned.replace(/^```(?:json)?\s*\n?/i, "")
-  cleaned = cleaned.replace(/\n?\s*```$/i, "")
+  // Strip markdown code fences (handle leading whitespace, newlines, case variations)
+  cleaned = cleaned.replace(/^\s*```(?:json)?\s*\n?/im, "")
+  cleaned = cleaned.replace(/\n?\s*```\s*$/im, "")
+
+  // Fallback: if fences survived the regex, brute-force strip
+  if (cleaned.trimStart().startsWith("```")) {
+    const lines = cleaned.split("\n")
+    if (lines[0].trim().startsWith("```")) lines.shift()
+    if (lines[lines.length - 1]?.trim() === "```") lines.pop()
+    cleaned = lines.join("\n")
+  }
 
   // Strip any preamble before the first { or [
   const jsonStart = cleaned.search(/[\[{]/)
@@ -33,6 +41,20 @@ export function sanitizeJsonResponse(raw: string): string {
  */
 export function parseJsonResponse<T = unknown>(raw: string): T {
   const sanitized = sanitizeJsonResponse(raw)
+
+  // Check for truncated response (incomplete JSON)
+  const trimmed = sanitized.trim()
+  if (trimmed.length > 0) {
+    const lastChar = trimmed[trimmed.length - 1]
+    if (lastChar !== "}" && lastChar !== "]") {
+      throw new Error(
+        "AI response appears truncated (does not end with } or ]). " +
+        "The response may have exceeded the token limit. " +
+        `Preview: ${trimmed.substring(0, 200)}...`
+      )
+    }
+  }
+
   try {
     return JSON.parse(sanitized) as T
   } catch {

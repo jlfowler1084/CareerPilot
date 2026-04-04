@@ -89,7 +89,7 @@ export async function POST(req: NextRequest) {
       },
       body: JSON.stringify({
         model: process.env.MODEL_HAIKU || "claude-haiku-4-5-20251001",
-        max_tokens: 2000,
+        max_tokens: 4096,
         system: COACHING_SYSTEM_PROMPT,
         messages: [{ role: "user", content: contextParts.join("\n") }],
       }),
