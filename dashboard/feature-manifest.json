@@ -1089,10 +1089,10 @@
     },
     {
       "ticket": "CAR-62",
-      "name": "Application Detail Panel",
+      "name": "Application Detail Side Panel",
       "file": "src/components/applications/detail-panel.tsx",
       "exports": ["DetailPanel"],
-      "patterns": ["Intelligence", "Communications", "Conversations"],
+      "patterns": ["Sheet", "CommunicationsSection", "ConversationsSection"],
       "area": "applications"
     },
     {
@@ -1140,7 +1140,7 @@
       "name": "Schedule Interview Modal",
       "file": "src/components/applications/schedule-modal.tsx",
       "exports": ["ScheduleModal"],
-      "patterns": ["ScheduleModal", "schedule"],
+      "patterns": ["ScheduleModal", "CalendarAction", "handleSchedule"],
       "area": "applications"
     },
     {
