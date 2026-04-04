@@ -65,12 +65,16 @@ export function useApplications() {
     fetchApps()
 
     // Real-time subscription
+    // isActive guard prevents state updates after effect cleanup (CAR-115 Bug 3)
+    let isActive = true
+
     const channel = supabase
       .channel("applications-changes")
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "applications" },
         (payload: { eventType: string; new: Record<string, unknown>; old: Record<string, unknown> }) => {
+          if (!isActive) return
           if (payload.eventType === "INSERT") {
             setApplications((prev) => [payload.new as unknown as Application, ...prev])
           } else if (payload.eventType === "UPDATE") {
@@ -91,6 +95,7 @@ export function useApplications() {
       .subscribe()
 
     return () => {
+      isActive = false
       supabase.removeChannel(channel)
     }
   }, [user, authLoading])

@@ -13,6 +13,7 @@ const BATCH_SIZE = 10
 const BATCH_DELAY_MS = 1000
 const MAX_CLASSIFY_ATTEMPTS = 3
 const STATUS_UPDATE_WINDOW_DAYS = 90
+const MAX_EMAILS_IN_STATE = 500
 
 const CATEGORY_TO_STATUS: Record<string, ApplicationStatus> = {
   rejection: "rejected",
@@ -54,6 +55,8 @@ export function useEmails() {
     lastScan: null,
   })
   const classifyAttemptsRef = useRef<Record<string, number>>({})
+  const hasAutoScanned = useRef(false)
+  const classifyInFlight = useRef(false)
   const { user, loading: authLoading } = useAuth()
 
   // ── Load cached data on mount ──────────────────────────────────
@@ -63,7 +66,7 @@ export function useEmails() {
 
     const load = async () => {
       const [emailsRes, linksRes, appsRes, settingsRes] = await Promise.all([
-        supabase.from("emails").select("*").eq("user_id", user.id).order("received_at", { ascending: false }),
+        supabase.from("emails").select("*").eq("user_id", user.id).order("received_at", { ascending: false }).limit(MAX_EMAILS_IN_STATE),
         supabase.from("email_application_links").select("*").eq("user_id", user.id),
         supabase.from("applications").select("id, title, company, status").eq("user_id", user.id),
         supabase.from("user_settings").select("last_email_scan").eq("user_id", user.id).maybeSingle(),
@@ -88,7 +91,7 @@ export function useEmails() {
         { event: "*", schema: "public", table: "emails" },
         (payload: { eventType: string; new: Record<string, unknown>; old: Record<string, unknown> }) => {
           if (payload.eventType === "INSERT") {
-            setEmails((prev) => [payload.new as unknown as Email, ...prev])
+            setEmails((prev) => [payload.new as unknown as Email, ...prev].slice(0, MAX_EMAILS_IN_STATE))
           } else if (payload.eventType === "UPDATE") {
             setEmails((prev) =>
               prev.map((e) =>
@@ -112,28 +115,38 @@ export function useEmails() {
   }, [user, authLoading])
 
   // ── Scan-on-load trigger ───────────────────────────────────────
+  // Uses a ref guard to ensure autoScan runs exactly once after initial load.
+  // Reading emails/scanState from the current state via functional access
+  // instead of closing over them prevents the dependency cycle (CAR-115 Bug 1).
   useEffect(() => {
-    if (loading) return
-    autoScan()
+    if (loading || hasAutoScanned.current) return
+    hasAutoScanned.current = true
+
+    const runAutoScan = async () => {
+      // Read current emails from state setter to avoid stale closure
+      let currentEmails: Email[] = []
+      setEmails((prev) => { currentEmails = prev; return prev })
+
+      // Check for orphaned unclassified emails first
+      const orphans = currentEmails.filter((e) => e.category === "unclassified")
+      if (orphans.length > 0) {
+        await classifyEmails(orphans)
+        return
+      }
+
+      // Cooldown check — read lastScan from state setter
+      let lastScan: string | null = null
+      setScanState((prev) => { lastScan = prev.lastScan; return prev })
+      if (lastScan) {
+        const elapsed = Date.now() - new Date(lastScan).getTime()
+        if (elapsed < SCAN_COOLDOWN_MS) return
+      }
+
+      await runScan()
+    }
+    runAutoScan()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading])
-
-  const autoScan = useCallback(async () => {
-    // Check for orphaned unclassified emails first
-    const orphans = emails.filter((e) => e.category === "unclassified")
-    if (orphans.length > 0) {
-      await classifyEmails(orphans)
-      return
-    }
-
-    // Cooldown check
-    if (scanState.lastScan) {
-      const elapsed = Date.now() - new Date(scanState.lastScan).getTime()
-      if (elapsed < SCAN_COOLDOWN_MS) return
-    }
-
-    await runScan()
-  }, [emails, scanState.lastScan])
 
   // ── Scan Gmail for new emails ──────────────────────────────────
   const runScan = useCallback(async (forceSince?: string) => {
@@ -186,7 +199,7 @@ export function useEmails() {
 
           if (inserted) {
             allNewEmails.push(...inserted)
-            setEmails((prev) => [...inserted, ...prev])
+            setEmails((prev) => [...inserted, ...prev].slice(0, MAX_EMAILS_IN_STATE))
           }
         }
 
@@ -291,6 +304,11 @@ export function useEmails() {
 
   // ── Classify emails in batches ─────────────────────────────────
   const classifyEmails = useCallback(async (toClassify: Email[]) => {
+    // Re-entry guard: prevent concurrent invocations that would corrupt state (CAR-115 Bug 2)
+    if (classifyInFlight.current) return
+    classifyInFlight.current = true
+
+    try {
     setScanState((prev) => ({
       ...prev,
       classifying: true,
@@ -524,6 +542,9 @@ export function useEmails() {
     }
 
     setScanState((prev) => ({ ...prev, classifying: false }))
+    } finally {
+      classifyInFlight.current = false
+    }
   }, [applications, autoUpdateApplicationStatuses])
 
   // ── Suggestion computation ─────────────────────────────────────

@@ -854,6 +854,14 @@
       "exports": ["badRequest", "unauthorized", "notFound", "serverError", "badGateway"],
       "patterns": ["ApiError", "BAD_REQUEST", "UNAUTHORIZED", "NOT_FOUND", "INTERNAL_ERROR", "BAD_GATEWAY"],
       "area": "api"
+    },
+    {
+      "ticket": "CAR-115",
+      "name": "Shared Async Operation Hook",
+      "file": "src/hooks/use-async-operation.ts",
+      "exports": ["useAsyncOperation"],
+      "patterns": ["operationInFlight", "mountedRef", "AbortController", "AsyncState"],
+      "area": "hooks"
     }
   ]
 }

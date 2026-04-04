@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { DEFAULT_SEARCH_PROFILES } from "@/lib/constants"
 
@@ -22,6 +22,9 @@ type CreateProfileInput = Omit<SearchProfile, "id" | "is_default" | "sort_order"
 export function useSearchProfiles() {
   const [profiles, setProfiles] = useState<SearchProfile[]>([])
   const [loading, setLoading] = useState(true)
+  // Ref to avoid profiles dependency in callbacks, preventing infinite re-creation (CAR-115 Bug 4)
+  const profilesRef = useRef(profiles)
+  profilesRef.current = profiles
 
   const fetchProfiles = useCallback(async () => {
     try {
@@ -72,7 +75,7 @@ export function useSearchProfiles() {
 
   const createProfile = useCallback(
     async (input: CreateProfileInput) => {
-      const maxSort = profiles.reduce((max, p) => Math.max(max, p.sort_order), 0)
+      const maxSort = profilesRef.current.reduce((max, p) => Math.max(max, p.sort_order), 0)
       const newProfile: Partial<SearchProfile> = {
         name: input.name,
         keyword: input.keyword,
@@ -110,7 +113,7 @@ export function useSearchProfiles() {
         prev.map((p) => (p.id === optimisticId ? (data as SearchProfile) : p))
       )
     },
-    [profiles]
+    []
   )
 
   const updateProfile = useCallback(
@@ -135,7 +138,7 @@ export function useSearchProfiles() {
 
   const deleteProfile = useCallback(
     async (id: string) => {
-      const target = profiles.find((p) => p.id === id)
+      const target = profilesRef.current.find((p) => p.id === id)
       if (!target || target.is_default) return
 
       // Optimistic update
@@ -150,7 +153,7 @@ export function useSearchProfiles() {
         await fetchProfiles()
       }
     },
-    [profiles, fetchProfiles]
+    [fetchProfiles]
   )
 
   const refreshProfiles = useCallback(async () => {
