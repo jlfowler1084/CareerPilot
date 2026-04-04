@@ -6,6 +6,7 @@ import {
   buildExtractionPrompt,
   type ExtractionResult,
 } from "@/lib/auto-track"
+import type { Json } from "@/types/database.types"
 
 export async function POST(req: NextRequest) {
   const supabase = await createServerSupabaseClient()
@@ -89,7 +90,7 @@ export async function POST(req: NextRequest) {
     if (detection.confidence < 0.85 && !force) {
       await supabase.from("emails").update({
         auto_track_status: "prompted",
-        auto_track_data: extraction,
+        auto_track_data: extraction as unknown as Json,
       }).eq("id", email.id)
       results.push({
         email_id: email.id,
@@ -226,11 +227,12 @@ async function createOrLinkApplication(
 async function handleStatusUpdate(
   supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>,
   userId: string,
-  email: { id: string; from_domain: string | null; classification_json: { company?: string | null } | null },
+  email: { id: string; from_domain: string | null; classification_json: Json | null },
   status: "rejected"
 ): Promise<boolean> {
-  const company = email.classification_json?.company
-  if (!company) return false
+  const cj = email.classification_json
+  const company = typeof cj === "object" && cj !== null && !Array.isArray(cj) ? (cj as Record<string, unknown>).company : null
+  if (!company || typeof company !== "string") return false
 
   // Find matching application
   const { data: apps } = await supabase

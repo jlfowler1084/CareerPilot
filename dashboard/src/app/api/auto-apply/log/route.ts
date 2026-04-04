@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createServerSupabaseClient } from "@/lib/supabase/server"
+import type { Json } from "@/types/database.types"
 
 // POST — Log a single action during the apply process
 export async function POST(req: NextRequest) {
@@ -29,7 +30,7 @@ export async function POST(req: NextRequest) {
         queue_id: queueId || null,
         application_id: applicationId || null,
         action,
-        details: details || {},
+        details: (details || {}) as Json,
         success: success !== false, // default true
       })
 

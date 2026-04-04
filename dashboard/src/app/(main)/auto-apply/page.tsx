@@ -42,7 +42,8 @@ function isLocalLocation(location: string | null): boolean {
   return lower.includes("indianapolis") || lower.includes("indy") || lower.includes("sheridan") || lower.includes(", in")
 }
 
-function scoreColor(score: number): string {
+function scoreColor(score: number | null): string {
+  if (score == null) return "text-zinc-500 bg-zinc-50 border-zinc-200"
   if (score >= 85) return "text-emerald-700 bg-emerald-50 border-emerald-200"
   if (score >= 70) return "text-amber-700 bg-amber-50 border-amber-200"
   return "text-red-700 bg-red-50 border-red-200"
@@ -80,7 +81,7 @@ function sortQueue(items: AutoApplyQueueItem[]): AutoApplyQueueItem[] {
     if (la !== lb) return la - lb
 
     // Score descending
-    return b.fit_score - a.fit_score
+    return (b.fit_score ?? 0) - (a.fit_score ?? 0)
   })
 }
 
@@ -100,7 +101,7 @@ function AutoApplyContent() {
       .eq("user_id", user.id)
       .in("status", ["approved", "pending"])
       .order("fit_score", { ascending: false })
-    setQueue(data || [])
+    setQueue((data as AutoApplyQueueItem[]) || [])
     setLoading(false)
   }, [user])
 

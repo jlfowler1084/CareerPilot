@@ -19,14 +19,14 @@ export default function SettingsPage() {
   // Screening answers
   const [answers, setAnswers] = useState<Array<{
     id: string; question_pattern: string; answer_value: string;
-    answer_type: string; category: string; priority: number
+    answer_type: string | null; category: string | null; priority: number | null
   }>>([])
   const [answersLoading, setAnswersLoading] = useState(true)
 
   // Skills inventory
   const [skills, setSkills] = useState<Array<{
     id: string; skill_name: string; category: string;
-    weight: number; years_experience: number | null; aliases: string[]
+    weight: number | null; years_experience: number | null; aliases: string[] | null
   }>>([])
   const [skillsLoading, setSkillsLoading] = useState(true)
 
@@ -383,7 +383,7 @@ export default function SettingsPage() {
                         {s.category}
                       </span>
                     </td>
-                    <td className="py-2 px-2 font-mono text-zinc-600">{s.weight.toFixed(1)}</td>
+                    <td className="py-2 px-2 font-mono text-zinc-600">{(s.weight ?? 0).toFixed(1)}</td>
                     <td className="py-2 px-2 text-zinc-600">{s.years_experience ?? "—"}</td>
                     <td className="py-2 px-2 text-zinc-500 max-w-[150px] truncate">{(s.aliases || []).join(", ") || "—"}</td>
                     <td className="py-2 px-2">

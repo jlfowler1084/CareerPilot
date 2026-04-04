@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { analyzeFillersAndPatterns } from "@/lib/coaching/patterns"
+import type { Json } from "@/types/database.types"
 
 const COACHING_SYSTEM_PROMPT = `You are an interview performance coach analyzing a candidate's interview performance. The candidate is Joseph Fowler, a systems administrator/engineer with 20+ years of experience.
 
@@ -136,11 +137,11 @@ export async function POST(req: NextRequest) {
           summary: analysis.summary || "",
           question_analyses: analysis.question_analyses || [],
           top_3_focus_areas: analysis.top_3_focus_areas || [],
-        },
+        } as unknown as Json,
         overall_score: overallScore,
-        strong_points: strongPoints,
-        improvements,
-        patterns_detected: patterns,
+        strong_points: strongPoints as unknown as Json,
+        improvements: improvements as unknown as Json,
+        patterns_detected: patterns as unknown as Json,
       })
       .select()
       .single()

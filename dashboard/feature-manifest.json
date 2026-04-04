@@ -1,8 +1,8 @@
 {
   "_meta": {
     "project": "CareerPilot",
-    "generated": "2026-03-29",
-    "audit_score": "103/110 (93.6%)",
+    "generated": "2026-04-04",
+    "audit_score": "178/178 (100%)",
     "description": "Feature manifest for automated regression checks. Each entry maps a shipped feature to its file path, key exports, and verification patterns. The regression-check skill reads this file and verifies every entry still exists in the codebase."
   },
   "base_path": "dashboard",
@@ -862,6 +862,574 @@
       "exports": ["useAsyncOperation"],
       "patterns": ["operationInFlight", "mountedRef", "AbortController", "AsyncState"],
       "area": "hooks"
+    },
+    {
+      "ticket": "CAR-84",
+      "name": "Auth Context Provider",
+      "file": "src/contexts/auth-context.tsx",
+      "exports": ["AuthProvider", "useAuth"],
+      "patterns": ["onAuthStateChange", "user", "loading"],
+      "area": "auth"
+    },
+    {
+      "ticket": "",
+      "name": "Root Layout",
+      "file": "src/app/layout.tsx",
+      "exports": ["default"],
+      "patterns": ["AuthProvider", "Toaster", "TooltipProvider", "Career Pilot"],
+      "area": "layout"
+    },
+    {
+      "ticket": "CAR-84",
+      "name": "App Shell with Header Stats",
+      "file": "src/components/layout/app-shell.tsx",
+      "exports": ["AppShell"],
+      "patterns": ["useHeaderStats", "POLL_INTERVAL_MS", "activeCount", "totalCount"],
+      "area": "layout"
+    },
+    {
+      "ticket": "CAR-84",
+      "name": "Header Component",
+      "file": "src/components/layout/header.tsx",
+      "exports": ["Header"],
+      "patterns": ["activeCount", "totalCount", "VIEW_TITLES"],
+      "area": "layout"
+    },
+    {
+      "ticket": "",
+      "name": "Error Boundary Component",
+      "file": "src/components/error-boundary.tsx",
+      "exports": ["ErrorBoundary"],
+      "patterns": ["getDerivedStateFromError", "componentDidCatch"],
+      "area": "layout"
+    },
+    {
+      "ticket": "",
+      "name": "Stats Computation Hook",
+      "file": "src/hooks/use-stats.ts",
+      "exports": ["computeStats", "useStats"],
+      "patterns": ["by_status", "response_rate", "source_distribution"],
+      "area": "analytics"
+    },
+    {
+      "ticket": "",
+      "name": "Coaching Hook",
+      "file": "src/hooks/use-coaching.ts",
+      "exports": ["useCoaching"],
+      "patterns": ["CoachingSession", "practicing", "evaluating"],
+      "area": "coaching"
+    },
+    {
+      "ticket": "CAR-96",
+      "name": "Interview Prep Hook",
+      "file": "src/hooks/use-interview-prep.ts",
+      "exports": ["isPrepStage", "useInterviewPrep", "useSkillGaps"],
+      "patterns": ["phone_screen", "interview", "offer", "DebriefInput"],
+      "area": "intelligence"
+    },
+    {
+      "ticket": "",
+      "name": "Job Details Hook",
+      "file": "src/hooks/use-job-details.ts",
+      "exports": ["useJobDetails"],
+      "patterns": ["JobDetails", "requirements", "niceToHaves", "fetchDetails"],
+      "area": "search"
+    },
+    {
+      "ticket": "",
+      "name": "Communications Hook",
+      "file": "src/hooks/use-communications.ts",
+      "exports": ["useCommunications"],
+      "patterns": ["GroupedThread", "thread_id", "totalEmails"],
+      "area": "applications"
+    },
+    {
+      "ticket": "CAR-87",
+      "name": "Conversations Hook",
+      "file": "src/hooks/use-conversations.ts",
+      "exports": ["useConversations", "useConversationPatterns"],
+      "patterns": ["ConversationPattern", "DEBOUNCE_MS", "fetchConversations"],
+      "area": "conversations"
+    },
+    {
+      "ticket": "",
+      "name": "Activity Log Hook",
+      "file": "src/hooks/use-activity-log.ts",
+      "exports": ["logActivity", "fetchRecentActivity"],
+      "patterns": ["activity_log", "ActivityEntry"],
+      "area": "analytics"
+    },
+    {
+      "ticket": "",
+      "name": "Application Events Hook",
+      "file": "src/hooks/use-application-events.ts",
+      "exports": ["useApplicationEvents"],
+      "patterns": ["ApplicationEvent", "application_events"],
+      "area": "applications"
+    },
+    {
+      "ticket": "CAR-97",
+      "name": "Gmail Scan API",
+      "file": "src/app/api/gmail/scan/route.ts",
+      "exports": ["POST"],
+      "patterns": ["getGmailClient", "extractDomain", "Unauthorized"],
+      "area": "inbox"
+    },
+    {
+      "ticket": "",
+      "name": "Gmail Message API",
+      "file": "src/app/api/gmail/message/route.ts",
+      "exports": ["POST"],
+      "patterns": ["gmail", "message"],
+      "area": "inbox"
+    },
+    {
+      "ticket": "CAR-92",
+      "name": "Gmail Thread API",
+      "file": "src/app/api/gmail/thread/route.ts",
+      "exports": ["POST"],
+      "patterns": ["ThreadMessage", "extractBody", "thread_id"],
+      "area": "inbox"
+    },
+    {
+      "ticket": "",
+      "name": "Gmail Classify API",
+      "file": "src/app/api/gmail/classify/route.ts",
+      "exports": ["POST"],
+      "patterns": ["ClassificationResult", "recruiter_outreach", "job_alert", "rejection"],
+      "area": "inbox"
+    },
+    {
+      "ticket": "",
+      "name": "Gmail Draft Reply API",
+      "file": "src/app/api/gmail/draft-reply/route.ts",
+      "exports": ["POST"],
+      "patterns": ["draft", "reply"],
+      "area": "inbox"
+    },
+    {
+      "ticket": "",
+      "name": "Gmail Send API",
+      "file": "src/app/api/gmail/send/route.ts",
+      "exports": ["POST"],
+      "patterns": ["send", "gmail"],
+      "area": "inbox"
+    },
+    {
+      "ticket": "CAR-87",
+      "name": "Conversations CRUD API",
+      "file": "src/app/api/conversations/route.ts",
+      "exports": ["GET", "POST"],
+      "patterns": ["conversations", "user_id"],
+      "area": "conversations"
+    },
+    {
+      "ticket": "",
+      "name": "Conversation Detail API",
+      "file": "src/app/api/conversations/[id]/route.ts",
+      "exports": ["GET", "PATCH", "DELETE"],
+      "patterns": ["conversations"],
+      "area": "conversations"
+    },
+    {
+      "ticket": "CAR-87",
+      "name": "Conversation Patterns API",
+      "file": "src/app/api/conversations/patterns/route.ts",
+      "exports": ["GET"],
+      "patterns": ["ANTHROPIC_API_KEY", "conversations"],
+      "area": "conversations"
+    },
+    {
+      "ticket": "CAR-28",
+      "name": "Coaching Practice API",
+      "file": "src/app/api/coaching/practice/route.ts",
+      "exports": ["POST"],
+      "patterns": ["applicationId", "jobDescription"],
+      "area": "coaching"
+    },
+    {
+      "ticket": "CAR-28",
+      "name": "Coaching Practice Evaluate API",
+      "file": "src/app/api/coaching/practice-evaluate/route.ts",
+      "exports": ["POST"],
+      "patterns": ["evaluate", "score"],
+      "area": "coaching"
+    },
+    {
+      "ticket": "CAR-28",
+      "name": "Coaching Analyze API",
+      "file": "src/app/api/coaching/analyze/route.ts",
+      "exports": ["POST"],
+      "patterns": ["analyzeFillersAndPatterns", "COACHING_SYSTEM_PROMPT", "overall_score"],
+      "area": "coaching"
+    },
+    {
+      "ticket": "CAR-96",
+      "name": "Interview Prep Generate API",
+      "file": "src/app/api/interview-prep/route.ts",
+      "exports": ["POST"],
+      "patterns": ["buildPhoneScreenPrompt", "buildInterviewPrompt", "buildOfferPrompt", "PREP_STAGES"],
+      "area": "intelligence"
+    },
+    {
+      "ticket": "CAR-87",
+      "name": "Interview Prep Debrief API",
+      "file": "src/app/api/interview-prep/debrief/route.ts",
+      "exports": ["POST"],
+      "patterns": ["debrief", "round"],
+      "area": "intelligence"
+    },
+    {
+      "ticket": "",
+      "name": "Job Details Extract API",
+      "file": "src/app/api/job-details/route.ts",
+      "exports": ["POST"],
+      "patterns": ["JobDetailsRequest", "title", "company", "description"],
+      "area": "search"
+    },
+    {
+      "ticket": "CAR-62",
+      "name": "Application Detail Panel",
+      "file": "src/components/applications/detail-panel.tsx",
+      "exports": ["DetailPanel"],
+      "patterns": ["Intelligence", "Communications", "Conversations"],
+      "area": "applications"
+    },
+    {
+      "ticket": "CAR-62",
+      "name": "Application Add Form",
+      "file": "src/components/applications/add-form.tsx",
+      "exports": ["AddForm"],
+      "patterns": ["onAdd", "company", "title"],
+      "area": "applications"
+    },
+    {
+      "ticket": "CAR-62",
+      "name": "Kanban Summary",
+      "file": "src/components/applications/kanban-summary.tsx",
+      "exports": ["KanbanSummary"],
+      "patterns": ["KanbanSummary"],
+      "area": "applications"
+    },
+    {
+      "ticket": "",
+      "name": "URL Import Component",
+      "file": "src/components/applications/url-import.tsx",
+      "exports": ["UrlImport"],
+      "patterns": ["onSave", "existingUrls"],
+      "area": "applications"
+    },
+    {
+      "ticket": "",
+      "name": "Tailor Resume Modal",
+      "file": "src/components/applications/tailor-modal.tsx",
+      "exports": ["TailorModal"],
+      "patterns": ["TailorModal", "tailor-resume"],
+      "area": "applications"
+    },
+    {
+      "ticket": "",
+      "name": "Cover Letter Modal",
+      "file": "src/components/applications/cover-letter-modal.tsx",
+      "exports": ["CoverLetterModal"],
+      "patterns": ["CoverLetterModal", "cover-letter"],
+      "area": "applications"
+    },
+    {
+      "ticket": "",
+      "name": "Schedule Interview Modal",
+      "file": "src/components/applications/schedule-modal.tsx",
+      "exports": ["ScheduleModal"],
+      "patterns": ["ScheduleModal", "schedule"],
+      "area": "applications"
+    },
+    {
+      "ticket": "CAR-92",
+      "name": "Link Conversation Modal",
+      "file": "src/components/applications/link-conversation-modal.tsx",
+      "exports": ["LinkConversationModal"],
+      "patterns": ["LinkConversationModal", "unlinked"],
+      "area": "applications"
+    },
+    {
+      "ticket": "CAR-96",
+      "name": "Interview Prep Section",
+      "file": "src/components/applications/interview-prep-section.tsx",
+      "exports": ["InterviewPrepSection"],
+      "patterns": ["InterviewPrepSection"],
+      "area": "intelligence"
+    },
+    {
+      "ticket": "CAR-87",
+      "name": "Debrief Form",
+      "file": "src/components/applications/debrief-form.tsx",
+      "exports": ["DebriefForm"],
+      "patterns": ["rating", "questions", "nextRound"],
+      "area": "intelligence"
+    },
+    {
+      "ticket": "CAR-87",
+      "name": "Conversation Form",
+      "file": "src/components/conversations/conversation-form.tsx",
+      "exports": ["ConversationForm"],
+      "patterns": ["ConversationForm", "action_items"],
+      "area": "conversations"
+    },
+    {
+      "ticket": "",
+      "name": "Conversation Section",
+      "file": "src/components/conversations/conversation-section.tsx",
+      "exports": ["ConversationSection"],
+      "patterns": ["ConversationSection", "application"],
+      "area": "conversations"
+    },
+    {
+      "ticket": "CAR-87",
+      "name": "Pattern Insights",
+      "file": "src/components/conversations/pattern-insights.tsx",
+      "exports": ["PatternInsights"],
+      "patterns": ["PatternInsights", "patterns"],
+      "area": "conversations"
+    },
+    {
+      "ticket": "CAR-34",
+      "name": "Email List Component",
+      "file": "src/components/inbox/email-list.tsx",
+      "exports": ["EmailList"],
+      "patterns": ["EmailList"],
+      "area": "inbox"
+    },
+    {
+      "ticket": "CAR-34",
+      "name": "Email Card Component",
+      "file": "src/components/inbox/email-card.tsx",
+      "exports": ["EmailCard"],
+      "patterns": ["EmailCard", "subject", "from"],
+      "area": "inbox"
+    },
+    {
+      "ticket": "",
+      "name": "Inbox Bulk Actions",
+      "file": "src/components/inbox/bulk-actions.tsx",
+      "exports": ["BulkActions"],
+      "patterns": ["BulkActions"],
+      "area": "inbox"
+    },
+    {
+      "ticket": "CAR-34",
+      "name": "Category Badge",
+      "file": "src/components/inbox/category-badge.tsx",
+      "exports": ["CategoryBadge"],
+      "patterns": ["CategoryBadge", "EmailCategory"],
+      "area": "inbox"
+    },
+    {
+      "ticket": "CAR-77",
+      "name": "Inbox Filter Chips",
+      "file": "src/components/inbox/filter-chips.tsx",
+      "exports": ["FilterChips", "ALL_FILTER_IDS"],
+      "patterns": ["CATEGORY_FILTERS"],
+      "area": "inbox"
+    },
+    {
+      "ticket": "CAR-18",
+      "name": "Apply Flow Component",
+      "file": "src/components/search/apply-flow.tsx",
+      "exports": ["ApplyFlow"],
+      "patterns": ["ApplyFlow"],
+      "area": "search"
+    },
+    {
+      "ticket": "",
+      "name": "Job Detail Pane",
+      "file": "src/components/search/job-detail-pane.tsx",
+      "exports": ["JobDetailPane"],
+      "patterns": ["JobDetailPane", "description"],
+      "area": "search"
+    },
+    {
+      "ticket": "CAR-63",
+      "name": "Pipeline Chart",
+      "file": "src/components/dashboard/pipeline-chart.tsx",
+      "exports": ["PipelineChart"],
+      "patterns": ["PipelineChart", "byStatus"],
+      "area": "analytics"
+    },
+    {
+      "ticket": "CAR-63",
+      "name": "Weekly Activity Chart",
+      "file": "src/components/dashboard/weekly-chart.tsx",
+      "exports": ["WeeklyChart"],
+      "patterns": ["WeeklyChart"],
+      "area": "analytics"
+    },
+    {
+      "ticket": "",
+      "name": "Activity Feed",
+      "file": "src/components/dashboard/activity-feed.tsx",
+      "exports": ["ActivityFeed"],
+      "patterns": ["ActivityFeed"],
+      "area": "analytics"
+    },
+    {
+      "ticket": "",
+      "name": "Skill Gaps Widget",
+      "file": "src/components/dashboard/skill-gaps-widget.tsx",
+      "exports": ["SkillGapsWidget"],
+      "patterns": ["SkillGapsWidget"],
+      "area": "analytics"
+    },
+    {
+      "ticket": "CAR-113",
+      "name": "Pipeline Funnel Chart",
+      "file": "src/components/analytics/pipeline-funnel.tsx",
+      "exports": ["PipelineFunnel"],
+      "patterns": ["PipelineFunnel", "byStatus"],
+      "area": "analytics"
+    },
+    {
+      "ticket": "CAR-113",
+      "name": "Source Distribution Chart",
+      "file": "src/components/analytics/source-chart.tsx",
+      "exports": ["SourceChart"],
+      "patterns": ["SourceChart"],
+      "area": "analytics"
+    },
+    {
+      "ticket": "CAR-113",
+      "name": "Timeline Chart",
+      "file": "src/components/analytics/timeline-chart.tsx",
+      "exports": ["TimelineChart"],
+      "patterns": ["TimelineChart"],
+      "area": "analytics"
+    },
+    {
+      "ticket": "CAR-28",
+      "name": "Coaching Report",
+      "file": "src/components/coaching/coaching-report.tsx",
+      "exports": ["CoachingReport"],
+      "patterns": ["CoachingReport", "CoachingSession"],
+      "area": "coaching"
+    },
+    {
+      "ticket": "CAR-113",
+      "name": "KPI Card",
+      "file": "src/components/shared/kpi-card.tsx",
+      "exports": ["KpiCard"],
+      "patterns": ["KpiCard", "label", "value", "trend"],
+      "area": "overview"
+    },
+    {
+      "ticket": "CAR-113",
+      "name": "Empty State",
+      "file": "src/components/shared/empty-state.tsx",
+      "exports": ["EmptyState"],
+      "patterns": ["EmptyState", "title", "description"],
+      "area": "layout"
+    },
+    {
+      "ticket": "",
+      "name": "Relative Time Display",
+      "file": "src/components/ui/relative-time.tsx",
+      "exports": ["RelativeTime"],
+      "patterns": ["RelativeTime"],
+      "area": "layout"
+    },
+    {
+      "ticket": "",
+      "name": "Utility Functions",
+      "file": "src/lib/utils.ts",
+      "exports": ["cn"],
+      "patterns": ["ClassValue"],
+      "area": "lib"
+    },
+    {
+      "ticket": "",
+      "name": "Base Resume Template",
+      "file": "src/lib/base-resume.ts",
+      "exports": ["BASE_RESUME"],
+      "patterns": ["JOSEPH FOWLER"],
+      "area": "intelligence"
+    },
+    {
+      "ticket": "",
+      "name": "Gmail Auth Client",
+      "file": "src/lib/gmail/auth.ts",
+      "exports": ["getGmailClient"],
+      "patterns": ["getGmailClient"],
+      "area": "inbox"
+    },
+    {
+      "ticket": "",
+      "name": "Gmail Message Parser",
+      "file": "src/lib/gmail/parse.ts",
+      "exports": ["extractBody", "extractDomain", "extractPreview"],
+      "patterns": ["extractBody", "extractDomain"],
+      "area": "inbox"
+    },
+    {
+      "ticket": "",
+      "name": "Gmail Suggestions Helper",
+      "file": "src/lib/gmail/suggestions.ts",
+      "exports": ["extractSecondLevelDomain", "findDomainMatch"],
+      "patterns": ["extractSecondLevelDomain", "findDomainMatch"],
+      "area": "inbox"
+    },
+    {
+      "ticket": "",
+      "name": "Indeed Results Parser",
+      "file": "src/lib/parsers/indeed.ts",
+      "exports": ["parseIndeedResults"],
+      "patterns": ["parseIndeedResults", "ParsedJob"],
+      "area": "search"
+    },
+    {
+      "ticket": "",
+      "name": "Dice Results Parser",
+      "file": "src/lib/parsers/dice.ts",
+      "exports": ["parseDiceResults"],
+      "patterns": ["parseDiceResults"],
+      "area": "search"
+    },
+    {
+      "ticket": "CAR-96",
+      "name": "Interview Prep Prompts",
+      "file": "src/lib/interview-prep-prompts.ts",
+      "exports": ["PREP_STAGES", "buildPhoneScreenPrompt", "buildInterviewPrompt", "buildOfferPrompt"],
+      "patterns": ["RESUME_CONTEXT", "phone_screen", "interview", "offer"],
+      "area": "intelligence"
+    },
+    {
+      "ticket": "",
+      "name": "Coaching Patterns Analysis",
+      "file": "src/lib/coaching/patterns.ts",
+      "exports": ["analyzeFillersAndPatterns"],
+      "patterns": ["PatternAnalysis", "analyzeFillersAndPatterns"],
+      "area": "coaching"
+    },
+    {
+      "ticket": "",
+      "name": "Core App Types",
+      "file": "src/types/index.ts",
+      "exports": ["Job", "Application", "Conversation"],
+      "patterns": ["ApplicationStatus", "PrepStageKey", "AutoApplyStatus"],
+      "area": "types"
+    },
+    {
+      "ticket": "",
+      "name": "Coaching Types",
+      "file": "src/types/coaching.ts",
+      "exports": ["CoachingSession", "PracticeQuestion"],
+      "patterns": ["CoachingAnalysis", "QuestionAnalysis", "PatternAnalysis"],
+      "area": "types"
+    },
+    {
+      "ticket": "",
+      "name": "Email Types",
+      "file": "src/types/email.ts",
+      "exports": ["EmailCategory", "Email"],
+      "patterns": ["ClassificationResult", "EmailApplicationLink", "UserSettings"],
+      "area": "types"
     }
   ]
 }

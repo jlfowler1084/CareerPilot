@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createServerSupabaseClient } from "@/lib/supabase/server"
+import type { Json } from "@/types/database.types"
 
 export async function POST(req: NextRequest) {
   try {
@@ -20,7 +21,7 @@ export async function POST(req: NextRequest) {
       .select("*, application:applications(id, title, company, job_description)")
       .eq("id", conversationId)
       .eq("user_id", user.id)
-      .maybeSingle()
+      .maybeSingle() as { data: any; error: any }
 
     if (convError || !conversation) {
       return NextResponse.json({ error: "Conversation not found" }, { status: 404 })
@@ -122,7 +123,7 @@ Return ONLY valid JSON with this structure:
     const { error: updateError } = await supabase
       .from("conversations")
       .update({
-        ai_analysis: analysis,
+        ai_analysis: analysis as unknown as Json,
         topics: topics.length > 0 ? topics : conversation.topics,
         updated_at: new Date().toISOString(),
       })

@@ -86,7 +86,7 @@ export type PrepStageKey = "phone_screen" | "interview" | "offer"
 
 export interface Application {
   id: string
-  user_id: string
+  user_id: string | null
   title: string
   company: string
   location: string | null
@@ -293,21 +293,21 @@ export type AutoApplyStatus =
 
 export interface AutoApplyQueueItem {
   id: string
-  user_id: string
+  user_id: string | null
   job_title: string
   company: string
   location: string | null
   salary: string | null
   job_url: string | null
   source: string | null
-  easy_apply: boolean
-  fit_score: number
+  easy_apply: boolean | null
+  fit_score: number | null
   score_breakdown: {
     title: number
     skills: number
     location: number
     salary: number
-  }
+  } | null
   status: AutoApplyStatus
   tailored_resume_url: string | null
   cover_letter_url: string | null
