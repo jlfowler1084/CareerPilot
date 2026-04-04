@@ -62,7 +62,7 @@ export function LinkConversationModal({
 
       if (cancelled) return
 
-      setConversations(data || [])
+      setConversations((data || []) as unknown as Conversation[])
       setLoading(false)
     }
 

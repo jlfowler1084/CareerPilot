@@ -98,7 +98,8 @@ export function useSearchProfiles() {
 
       const { data, error } = await supabase
         .from("search_profiles")
-        .insert(newProfile)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .insert(newProfile as any)
         .select()
         .single()
 

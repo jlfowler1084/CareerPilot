@@ -51,7 +51,7 @@ export function useAutoApplySettings() {
         data = newSettings
       }
 
-      setSettings(data)
+      setSettings(data as unknown as AutoApplySettings | null)
       setLoading(false)
     }
     fetchSettings()

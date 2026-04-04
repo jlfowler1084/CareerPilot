@@ -309,11 +309,11 @@ function QueueCard({
 
   // Build a FitScore-like object for the badge
   const fitScore = {
-    total: item.fit_score,
-    breakdown: item.score_breakdown,
+    total: item.fit_score ?? 0,
+    breakdown: item.score_breakdown ?? { title: 0, skills: 0, location: 0, salary: 0 },
     matchedSkills: [] as string[],
     missingSkills: [] as string[],
-    easyApply: item.easy_apply,
+    easyApply: item.easy_apply ?? false,
   }
 
   const sourceColor = item.source === "Indeed" ? "#2557a7" : item.source === "Dice" ? "#0c7ff2" : "#6b7280"

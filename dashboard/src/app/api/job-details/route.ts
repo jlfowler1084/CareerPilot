@@ -62,7 +62,7 @@ export async function POST(req: NextRequest) {
       .maybeSingle()
 
     if (cached) {
-      return NextResponse.json({ ...cached.details, cached: true })
+      return NextResponse.json({ ...(cached.details as Record<string, unknown>), cached: true })
     }
 
     // --- Fetch details based on source ---
@@ -82,7 +82,7 @@ export async function POST(req: NextRequest) {
         job_url: body.url,
         source: body.source,
         job_id: body.jobId || null,
-        details,
+        details: details as unknown as import("@/types/database.types").Json,
         fetched_at: new Date().toISOString(),
       },
       { onConflict: "job_url" }

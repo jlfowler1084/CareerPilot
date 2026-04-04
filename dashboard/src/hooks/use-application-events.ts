@@ -26,7 +26,7 @@ export function useApplicationEvents(applicationId: string | null) {
         .eq("application_id", applicationId)
         .order("created_at", { ascending: false })
 
-      setEvents(data || [])
+      setEvents((data || []) as unknown as ApplicationEvent[])
       setLoading(false)
     }
     fetchEvents()

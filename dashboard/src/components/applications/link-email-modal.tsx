@@ -127,7 +127,7 @@ export function LinkEmailModal({
       if (cancelled) return
 
       setLinkedIds(alreadyLinked)
-      setEmails(emailData || [])
+      setEmails((emailData || []) as unknown as Email[])
       setLoading(false)
     }
 

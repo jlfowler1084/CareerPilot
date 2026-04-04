@@ -173,7 +173,7 @@ export function useSearch(options: UseSearchOptions = {}) {
       const allCached: Pick<Job, "title" | "company">[] = []
       for (const entry of data) {
         if (entry.results && Array.isArray(entry.results)) {
-          for (const job of entry.results as Job[]) {
+          for (const job of entry.results as unknown as Job[]) {
             allCached.push({ title: job.title, company: job.company })
           }
         }
@@ -259,12 +259,13 @@ export function useSearch(options: UseSearchOptions = {}) {
         if (user) {
           const { data: cached } = await supabase
             .from("search_cache")
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             .insert({
               user_id: user.id,
               profile_id: profile.id,
-              results: jobs,
+              results: jobs as unknown as import("@/types/database.types").Json,
               result_count: jobs.length,
-            })
+            } as any)
             .select("id")
             .single()
           if (cached) cacheIds.push(cached.id)

@@ -51,7 +51,7 @@ export function useSearchHistory() {
     const allJobs: Job[] = []
     for (const entry of data) {
       if (entry.results && Array.isArray(entry.results)) {
-        allJobs.push(...(entry.results as Job[]))
+        allJobs.push(...(entry.results as unknown as Job[]))
       }
     }
 

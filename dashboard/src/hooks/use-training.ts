@@ -112,7 +112,7 @@ export function useTraining() {
     if (err) {
       setError(err.message)
     } else {
-      setCourses(data || [])
+      setCourses((data || []) as unknown as TrainingCourse[])
     }
     setLoading(false)
   }, [user])
@@ -175,23 +175,24 @@ export function useCourseDetail(courseId: string | null, enabled: boolean = fals
       setError(null)
 
       try {
+        const activeCourseId = courseId!
         const [progressRes, sessionsRes, resourcesRes] = await Promise.all([
           supabase
             .from("training_progress")
             .select("*")
-            .eq("course_id", courseId)
+            .eq("course_id", activeCourseId)
             .order("module_number", { ascending: true })
             .order("section_number", { ascending: true }),
           supabase
             .from("training_sessions")
             .select("*")
-            .eq("course_id", courseId)
+            .eq("course_id", activeCourseId)
             .order("started_at", { ascending: false })
             .limit(5),
           supabase
             .from("training_resources")
             .select("*")
-            .eq("course_id", courseId)
+            .eq("course_id", activeCourseId)
             .order("section_number", { ascending: true }),
         ])
 
@@ -202,9 +203,9 @@ export function useCourseDetail(courseId: string | null, enabled: boolean = fals
         if (resourcesRes.error) throw resourcesRes.error
 
         setData({
-          progress: progressRes.data || [],
-          sessions: sessionsRes.data || [],
-          resources: resourcesRes.data || [],
+          progress: (progressRes.data || []) as unknown as TrainingProgress[],
+          sessions: (sessionsRes.data || []) as unknown as TrainingSession[],
+          resources: (resourcesRes.data || []) as unknown as TrainingResource[],
         })
       } catch (err) {
         if (cancelled) return

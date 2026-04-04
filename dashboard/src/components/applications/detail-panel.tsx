@@ -91,7 +91,7 @@ function ConversationsSection({ application }: { application: Application }) {
       .select("*")
       .eq("application_id", application.id)
       .order("date", { ascending: false })
-    setConversations(data || [])
+    setConversations((data || []) as unknown as Conversation[])
     setLoading(false)
   }, [application.id, user])
 

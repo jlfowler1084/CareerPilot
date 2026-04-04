@@ -72,8 +72,8 @@ export function useEmails() {
         supabase.from("user_settings").select("last_email_scan").eq("user_id", user.id).maybeSingle(),
       ])
 
-      setEmails(emailsRes.data || [])
-      setLinks(linksRes.data || [])
+      setEmails((emailsRes.data || []) as unknown as Email[])
+      setLinks((linksRes.data || []) as unknown as EmailApplicationLink[])
       setApplications((appsRes.data || []) as Pick<Application, "id" | "title" | "company" | "status">[])
       setScanState((prev) => ({
         ...prev,
@@ -198,8 +198,8 @@ export function useEmails() {
             .select()
 
           if (inserted) {
-            allNewEmails.push(...inserted)
-            setEmails((prev) => [...inserted, ...prev].slice(0, MAX_EMAILS_IN_STATE))
+            allNewEmails.push(...(inserted as unknown as Email[]))
+            setEmails((prev) => [...(inserted as unknown as Email[]), ...prev].slice(0, MAX_EMAILS_IN_STATE))
           }
         }
 
@@ -588,7 +588,7 @@ export function useEmails() {
       .single()
 
     if (data) {
-      setLinks((prev) => [...prev, data])
+      setLinks((prev) => [...prev, data as unknown as EmailApplicationLink])
     }
   }, [user])
 
@@ -637,7 +637,7 @@ export function useEmails() {
 
     const { data } = await supabase.from("email_application_links").insert(rows).select()
     if (data) {
-      setLinks((prev) => [...prev, ...data])
+      setLinks((prev) => [...prev, ...(data as unknown as EmailApplicationLink[])])
     }
   }, [user])
 

@@ -23,7 +23,7 @@ export function useSkillsInventory() {
         .eq("user_id", user.id)
         .order("weight", { ascending: false })
 
-      setSkills(data || [])
+      setSkills((data || []) as unknown as SkillInventoryItem[])
       setLoading(false)
     }
     fetchSkills()

@@ -45,22 +45,23 @@ export async function POST(req: NextRequest) {
       .eq("user_id", user.id)
       .order("date", { ascending: true })
 
-    const existingPrep: InterviewPrep = app.interview_prep || {}
+    const existingPrep: InterviewPrep = (app.interview_prep as unknown as InterviewPrep) || {}
     const debriefs = existingPrep.debriefs || []
     const convos = conversations || []
 
     // Build stage-specific prompt
     let prompt: string
     const typedStage = stage as PrepStageKey
+    const appCtx = { ...app, notes: app.notes ?? "" }
     switch (typedStage) {
       case "phone_screen":
-        prompt = buildPhoneScreenPrompt(app, convos)
+        prompt = buildPhoneScreenPrompt(appCtx, convos)
         break
       case "interview":
-        prompt = buildInterviewPrompt(app, convos, debriefs)
+        prompt = buildInterviewPrompt(appCtx, convos, debriefs)
         break
       case "offer":
-        prompt = buildOfferPrompt(app, convos, debriefs)
+        prompt = buildOfferPrompt(appCtx, convos, debriefs)
         break
     }
 
@@ -145,7 +146,7 @@ export async function POST(req: NextRequest) {
 
     const { error: updateError } = await supabase
       .from("applications")
-      .update({ interview_prep: updatedPrep })
+      .update({ interview_prep: updatedPrep as unknown as import("@/types/database.types").Json })
       .eq("id", applicationId)
       .eq("user_id", user.id)
 

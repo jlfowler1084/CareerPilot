@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Append debrief
-    const existingPrep: InterviewPrep = app.interview_prep || {}
+    const existingPrep: InterviewPrep = (app.interview_prep as unknown as InterviewPrep) || {}
     const now = new Date().toISOString()
     const debrief = {
       round: round || (existingPrep.debriefs?.length || 0) + 1,
@@ -66,7 +66,7 @@ export async function POST(req: NextRequest) {
     // Update application
     const { error: updateError } = await supabase
       .from("applications")
-      .update({ interview_prep: updatedPrep })
+      .update({ interview_prep: updatedPrep as unknown as import("@/types/database.types").Json })
       .eq("id", applicationId)
       .eq("user_id", user.id)
 
@@ -86,7 +86,7 @@ export async function POST(req: NextRequest) {
       .insert({
         user_id: user.id,
         application_id: applicationId,
-        conversation_type: statusToConversationType(app.status),
+        conversation_type: statusToConversationType(app.status as ApplicationStatus),
         date: now,
         title: `Round ${debrief.round} Debrief`,
         notes: noteParts.join("\n\n") || null,

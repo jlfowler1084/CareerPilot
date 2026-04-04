@@ -14,11 +14,11 @@ export async function GET() {
       return NextResponse.json({ error: "AI service not configured" }, { status: 500 })
     }
 
-    const { data: conversations, error } = await supabase
+    const { data: conversations, error } = await (supabase
       .from("conversations")
       .select("*, application:applications(id, title, company)")
       .eq("user_id", user.id)
-      .order("date", { ascending: false })
+      .order("date", { ascending: false }) as unknown as Promise<{ data: any[] | null; error: any }>)
 
     if (error) {
       console.error("Pattern fetch error:", error.message)

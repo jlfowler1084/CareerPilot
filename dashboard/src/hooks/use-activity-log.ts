@@ -24,5 +24,5 @@ export async function fetchRecentActivity(
     return []
   }
 
-  return data || []
+  return (data || []) as unknown as ActivityEntry[]
 }

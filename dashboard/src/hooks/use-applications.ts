@@ -59,7 +59,7 @@ export function useApplications() {
         .eq("user_id", user.id)
         .order("date_found", { ascending: false })
 
-      setApplications(data || [])
+      setApplications((data || []) as unknown as Application[])
       setLoading(false)
     }
     fetchApps()
@@ -111,6 +111,7 @@ export function useApplications() {
 
       const { data, error } = await supabase
         .from("applications")
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         .insert({
           user_id: user.id,
           title: "title" in job ? job.title : "",
@@ -136,7 +137,7 @@ export function useApplications() {
           notes: "",
           tailored_resume: "tailored_resume" in job ? (job as Partial<Application>).tailored_resume ?? null : null,
           cover_letter: "cover_letter" in job ? (job as Partial<Application>).cover_letter ?? null : null,
-        })
+        } as any)
         .select()
         .single()
 
@@ -186,7 +187,8 @@ export function useApplications() {
 
       const { data, error } = await supabase
         .from("applications")
-        .update(updates)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .update(updates as any)
         .eq("id", id)
         .select()
         .maybeSingle()
@@ -316,7 +318,7 @@ export function useApplications() {
         )
       }
 
-      return { data, error }
+      return { data: data as Application | null, error }
     },
     [user]
   )

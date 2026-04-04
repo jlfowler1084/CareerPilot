@@ -28,7 +28,7 @@ export function useAutoApplyQueue() {
     }
 
     const { data } = await query
-    setQueue(data || [])
+    setQueue((data || []) as unknown as AutoApplyQueueItem[])
     setLoading(false)
   }, [user])
 
@@ -88,7 +88,7 @@ export function useAutoApplyQueue() {
       .single()
 
     if (!error && data) {
-      setQueue((prev) => [data, ...prev])
+      setQueue((prev) => [data as unknown as AutoApplyQueueItem, ...prev])
     }
     return data
   }, [queue, user])
@@ -108,7 +108,7 @@ export function useAutoApplyQueue() {
   const rejectJob = useCallback((id: string) => updateStatus(id, "skipped"), [updateStatus])
 
   const approveAllAbove = useCallback(async (minScore: number) => {
-    const toApprove = queue.filter((q) => q.status === "pending" && q.fit_score >= minScore)
+    const toApprove = queue.filter((q) => q.status === "pending" && (q.fit_score ?? 0) >= minScore)
     for (const item of toApprove) {
       await approveJob(item.id)
     }
