@@ -28,6 +28,14 @@
       "name": "Overview Page",
       "file": "src/app/(main)/page.tsx",
       "exports": [],
+      "patterns": ["OverviewContent", "createServerSupabaseClient"],
+      "area": "overview"
+    },
+    {
+      "ticket": "CAR-113",
+      "name": "Overview Client Content",
+      "file": "src/app/(main)/overview-content.tsx",
+      "exports": ["default"],
       "patterns": ["Active Pipeline", "Response Rate", "Quick Actions", "Attention Needed"],
       "area": "overview"
     },
@@ -468,6 +476,14 @@
       "name": "Analytics Page",
       "file": "src/app/(main)/analytics/page.tsx",
       "exports": [],
+      "patterns": ["AnalyticsContent", "createServerSupabaseClient"],
+      "area": "analytics"
+    },
+    {
+      "ticket": "CAR-113",
+      "name": "Analytics Client Content",
+      "file": "src/app/(main)/analytics/analytics-content.tsx",
+      "exports": ["default"],
       "patterns": ["SourceChart", "PipelineFunnel"],
       "area": "analytics"
     },
@@ -798,6 +814,38 @@
       "exports": ["createServerSupabaseClient"],
       "patterns": ["Database", "createServerClient"],
       "area": "types"
+    },
+    {
+      "ticket": "CAR-113",
+      "name": "Root Loading Boundary",
+      "file": "src/app/loading.tsx",
+      "exports": ["default"],
+      "patterns": ["Loading"],
+      "area": "layout"
+    },
+    {
+      "ticket": "CAR-113",
+      "name": "Main Loading Boundary",
+      "file": "src/app/(main)/loading.tsx",
+      "exports": ["default"],
+      "patterns": ["Loading"],
+      "area": "layout"
+    },
+    {
+      "ticket": "CAR-113",
+      "name": "Root Error Boundary",
+      "file": "src/app/error.tsx",
+      "exports": ["default"],
+      "patterns": ["use client", "reset", "AlertTriangle"],
+      "area": "layout"
+    },
+    {
+      "ticket": "CAR-113",
+      "name": "Not Found Page",
+      "file": "src/app/not-found.tsx",
+      "exports": ["default"],
+      "patterns": ["not found", "Back to Overview"],
+      "area": "layout"
     }
   ]
 }
