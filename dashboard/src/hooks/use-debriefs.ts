@@ -102,7 +102,7 @@ export function useDebriefs(applicationId: string) {
 
   const updateDebriefAnalysis = useCallback((debriefId: string, analysis: Record<string, unknown>) => {
     const update = (prev: DebriefRecord[]) =>
-      prev.map((d) => d.id === debriefId ? { ...d, ai_analysis: analysis as DebriefRecord["ai_analysis"] } : d)
+      prev.map((d) => d.id === debriefId ? { ...d, ai_analysis: analysis as unknown as DebriefRecord["ai_analysis"] } : d)
     setDebriefs(update)
     setAllUserDebriefs(update)
   }, [])
