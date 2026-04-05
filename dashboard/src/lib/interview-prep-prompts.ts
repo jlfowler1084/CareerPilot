@@ -1,4 +1,5 @@
 import type { Debrief } from "@/types"
+import type { DebriefRecord } from "@/types/coaching"
 
 export const PREP_STAGES = ["phone_screen", "interview", "offer"] as const
 
@@ -53,6 +54,36 @@ function formatDebriefs(debriefs: Partial<Debrief>[]): string {
       `Round ${d.round}: Rating ${d.rating}/5. Went well: ${d.went_well || "N/A"}. Challenging: ${d.challenging || "N/A"}. Takeaways: ${d.takeaways || "N/A"}.`
   )
   return `\n\nPrior Interview Debriefs:\n${entries.join("\n")}`
+}
+
+export function formatDebriefRecords(debriefs: DebriefRecord[]): string {
+  if (!debriefs.length) return ""
+
+  const entries = debriefs.map((d) => {
+    const analysis = d.ai_analysis as Record<string, unknown> | null
+    const parts = [
+      `${d.stage} (${new Date(d.created_at).toLocaleDateString()})`,
+      `  What went well: ${d.went_well || "N/A"}`,
+      `  What was hard: ${d.was_hard || "N/A"}`,
+      `  Topics covered: ${(d.topics_covered || []).join(", ") || "N/A"}`,
+    ]
+    if (analysis) {
+      const improvements = (analysis.improvement_areas as string[]) || []
+      const studyRecs = (analysis.study_recommendations as string[]) || []
+      const nextFocus = analysis.next_round_focus as string
+      if (improvements.length) parts.push(`  AI-identified gaps: ${improvements.join(", ")}`)
+      if (studyRecs.length) parts.push(`  Study recommendations: ${studyRecs.join(", ")}`)
+      if (nextFocus) parts.push(`  Next round focus: ${nextFocus}`)
+    }
+    return parts.join("\n")
+  })
+
+  return `\n\nPrior Interview Debriefs (from structured debrief forms):\n${entries.join("\n\n")}
+
+Use these debrief insights to tailor the prep:
+- Address identified gaps with targeted practice questions
+- Reinforce strengths with expanded talking points
+- Focus on topics the interviewers emphasized`
 }
 
 export function buildPhoneScreenPrompt(

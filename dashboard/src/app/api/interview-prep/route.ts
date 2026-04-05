@@ -4,8 +4,10 @@ import {
   buildPhoneScreenPrompt,
   buildInterviewPrompt,
   buildOfferPrompt,
+  formatDebriefRecords,
   PREP_STAGES,
 } from "@/lib/interview-prep-prompts"
+import type { DebriefRecord } from "@/types/coaching"
 import { parseJsonResponse } from "@/lib/json-utils"
 import type { InterviewPrep, PrepStageKey } from "@/types"
 
@@ -46,6 +48,14 @@ export async function POST(req: NextRequest) {
       .eq("user_id", user.id)
       .order("date", { ascending: true })
 
+    // Fetch structured debriefs for this application (CAR-54 feedback loop)
+    const { data: debriefRecords } = await supabase
+      .from("debriefs")
+      .select("stage, went_well, was_hard, do_differently, key_takeaways, topics_covered, ai_analysis, created_at")
+      .eq("application_id", applicationId)
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: true })
+
     const existingPrep: InterviewPrep = (app.interview_prep as unknown as InterviewPrep) || {}
     const debriefs = existingPrep.debriefs || []
     const convos = conversations || []
@@ -64,6 +74,11 @@ export async function POST(req: NextRequest) {
       case "offer":
         prompt = buildOfferPrompt(appCtx, convos, debriefs)
         break
+    }
+
+    // Append structured debrief context if any exist (CAR-54 feedback loop)
+    if (debriefRecords && debriefRecords.length > 0) {
+      prompt += formatDebriefRecords(debriefRecords as unknown as DebriefRecord[])
     }
 
     // Interview prep does NOT use web_search — that's for Company Brief only.
