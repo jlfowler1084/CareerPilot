@@ -11,9 +11,11 @@ import {
 import { toast } from "sonner"
 import { useCoaching } from "@/hooks/use-coaching"
 import { useDebriefs } from "@/hooks/use-debriefs"
+import { useApplicationEvents } from "@/hooks/use-application-events"
 import { CoachingReport } from "@/components/coaching/coaching-report"
 import { PracticeMode } from "@/components/coaching/practice-mode"
 import { DebriefHistory } from "@/components/coaching/debrief-history"
+import { DebriefFormModal, type DebriefFormData } from "@/components/coaching/debrief-form-modal"
 import type { Application, DebriefRecord } from "@/types"
 
 interface CoachingSectionProps {
@@ -38,13 +40,51 @@ export function CoachingSection({ application }: CoachingSectionProps) {
     evaluateAnswer,
   } = useCoaching(application.id)
 
-  const { debriefs, loading: debriefsLoading, addDebrief } = useDebriefs(application.id)
+  const { debriefs, allUserDebriefs, loading: debriefsLoading, addDebrief, saveStructuredDebrief, updateDebriefAnalysis } = useDebriefs(application.id)
+  const { addEvent } = useApplicationEvents(application.id)
 
   const [open, setOpen] = useState(false)
   const [debriefOpen, setDebriefOpen] = useState(false)
   const [debriefText, setDebriefText] = useState("")
   const [reportOpen, setReportOpen] = useState(false)
   const [practiceOpen, setPracticeOpen] = useState(false)
+  const [formOpen, setFormOpen] = useState(false)
+  const [formSaving, setFormSaving] = useState(false)
+
+  async function handleStructuredDebrief(data: DebriefFormData) {
+    setFormSaving(true)
+    const debrief = await saveStructuredDebrief({
+      applicationId: application.id,
+      ...data,
+    })
+    if (debrief) {
+      toast.success("Debrief saved. AI analysis running...")
+      setFormOpen(false)
+
+      // Log application event
+      addEvent(application.id, "debrief_added", `Post-interview debrief logged for ${data.stage}`)
+
+      // Fire AI analysis in background
+      fetch("/api/debriefs/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ debriefId: debrief.id }),
+      })
+        .then((r) => r.json())
+        .then((result) => {
+          if (result.analysis) {
+            updateDebriefAnalysis(debrief.id, result.analysis)
+            toast.success("Analysis complete")
+          }
+        })
+        .catch(() => {
+          toast.error("AI analysis failed")
+        })
+    } else {
+      toast.error("Failed to save debrief")
+    }
+    setFormSaving(false)
+  }
 
   async function handleAnalyzeDebrief() {
     if (!debriefText.trim()) return
@@ -138,6 +178,12 @@ export function CoachingSection({ application }: CoachingSectionProps) {
           {/* Action buttons */}
           <div className="flex gap-2">
             <button
+              onClick={() => setFormOpen(true)}
+              className="text-[10px] font-semibold px-2.5 py-1.5 rounded-lg border border-zinc-200 text-zinc-600 hover:border-emerald-300 hover:text-emerald-600 transition-colors"
+            >
+              Add Debrief
+            </button>
+            <button
               onClick={() => setDebriefOpen(!debriefOpen)}
               className="text-[10px] font-semibold px-2.5 py-1.5 rounded-lg border border-zinc-200 text-zinc-600 hover:border-blue-300 hover:text-blue-600 transition-colors"
             >
@@ -204,6 +250,15 @@ export function CoachingSection({ application }: CoachingSectionProps) {
               evaluating={evaluating}
             />
           )}
+
+          {/* Structured debrief form modal (CAR-54) */}
+          <DebriefFormModal
+            open={formOpen}
+            onOpenChange={setFormOpen}
+            applicationStatus={application.status}
+            saving={formSaving}
+            onSave={handleStructuredDebrief}
+          />
         </div>
       )}
     </div>
