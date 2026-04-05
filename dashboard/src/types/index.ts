@@ -135,6 +135,7 @@ export type ApplicationEventType =
   | "cover_letter_generated"
   | "follow_up"
   | "tracked"
+  | "debrief_added"
 
 export interface ApplicationEvent {
   id: string

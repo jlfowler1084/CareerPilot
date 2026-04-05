@@ -61,8 +61,17 @@ export interface DebriefRecord {
   key_takeaways: string[] | null
   interviewer_names: string[] | null
   topics_covered: string[] | null
+  overall_rating: number | null
   ai_analysis: CoachingAnalysis | null
   model_used: string | null
   generation_cost_cents: number
   created_at: string
+}
+
+export interface DebriefAiAnalysis {
+  patterns: string[]
+  strengths: string[]
+  improvement_areas: string[]
+  study_recommendations: string[]
+  next_round_focus: string
 }
