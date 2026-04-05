@@ -85,8 +85,13 @@ export function DebriefHistory({ debriefs, loading, company, title }: DebriefHis
         {debriefs.map((debrief) => {
           const analysis = debrief.ai_analysis as Record<string, unknown> | null
           const score = (analysis?.overall_score as number) || 0
-          const summary = (analysis?.summary as string) || "No summary"
+          const summary = (analysis?.summary as string) || debrief.went_well || "No summary"
           const isExpanded = expandedId === debrief.id
+          const hasStructuredAnalysis: boolean = analysis != null && "patterns" in analysis
+          const saStrengths: string[] = (analysis != null && Array.isArray(analysis.strengths)) ? (analysis.strengths as string[]) : []
+          const saImprovements: string[] = (analysis != null && Array.isArray(analysis.improvement_areas)) ? (analysis.improvement_areas as string[]) : []
+          const saStudy: string[] = (analysis != null && Array.isArray(analysis.study_recommendations)) ? (analysis.study_recommendations as string[]) : []
+          const saNextFocus: string = (analysis != null && typeof analysis.next_round_focus === "string") ? analysis.next_round_focus : ""
 
           return (
             <div
@@ -123,6 +128,11 @@ export function DebriefHistory({ debriefs, loading, company, title }: DebriefHis
                       {score}/10
                     </span>
                   )}
+                  {!analysis && !!debrief.went_well && (
+                    <span className="text-[10px] font-medium text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded animate-pulse">
+                      Analyzing...
+                    </span>
+                  )}
                 </button>
                 <button
                   onClick={() => exportDebriefMarkdown(debrief, { company, title })}
@@ -140,10 +150,98 @@ export function DebriefHistory({ debriefs, loading, company, title }: DebriefHis
                 </p>
               )}
 
-              {/* Expanded: full coaching report */}
+              {/* Expanded content */}
               {isExpanded && (
                 <div className="px-3 pb-3 border-t border-zinc-100 pt-2">
-                  <CoachingReport session={debriefToSession(debrief)} />
+                  {/* Structured debrief fields (CAR-54) */}
+                  {!!debrief.went_well && (
+                    <div className="space-y-2 mb-3">
+                      <div>
+                        <span className="text-[10px] font-semibold text-zinc-500">What went well:</span>
+                        <p className="text-xs text-zinc-700 mt-0.5">{debrief.went_well}</p>
+                      </div>
+                      {debrief.was_hard && (
+                        <div>
+                          <span className="text-[10px] font-semibold text-zinc-500">What was hard:</span>
+                          <p className="text-xs text-zinc-700 mt-0.5">{debrief.was_hard}</p>
+                        </div>
+                      )}
+                      {debrief.do_differently && (
+                        <div>
+                          <span className="text-[10px] font-semibold text-zinc-500">What I&apos;d do differently:</span>
+                          <p className="text-xs text-zinc-700 mt-0.5">{debrief.do_differently}</p>
+                        </div>
+                      )}
+                      {debrief.topics_covered && debrief.topics_covered.length > 0 && (
+                        <div className="flex flex-wrap gap-1">
+                          {debrief.topics_covered.map((t, i) => (
+                            <span key={i} className="text-[10px] px-1.5 py-0.5 bg-blue-50 text-blue-600 rounded">
+                              {t}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      {debrief.key_takeaways && debrief.key_takeaways.length > 0 && (
+                        <div>
+                          <span className="text-[10px] font-semibold text-zinc-500">Key takeaways:</span>
+                          <ul className="mt-0.5">
+                            {debrief.key_takeaways.map((t, i) => (
+                              <li key={i} className="text-xs text-zinc-700">- {t}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {hasStructuredAnalysis
+                    ? (
+                    <div className="space-y-2 mb-3">
+                      {saStrengths.length > 0 && (
+                        <div>
+                          <span className="text-[10px] font-semibold text-emerald-600">Strengths:</span>
+                          <ul className="mt-0.5">
+                            {saStrengths.map((s, i) => (
+                              <li key={i} className="text-xs text-zinc-700">- {s}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      {saImprovements.length > 0 && (
+                        <div>
+                          <span className="text-[10px] font-semibold text-amber-600">Areas to improve:</span>
+                          <ul className="mt-0.5">
+                            {saImprovements.map((s, i) => (
+                              <li key={i} className="text-xs text-zinc-700">- {s}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      {saStudy.length > 0 && (
+                        <div>
+                          <span className="text-[10px] font-semibold text-blue-600">Study recommendations:</span>
+                          <ul className="mt-0.5">
+                            {saStudy.map((s, i) => (
+                              <li key={i} className="text-xs text-zinc-700">- {s}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      {!!saNextFocus && (
+                        <div>
+                          <span className="text-[10px] font-semibold text-purple-600">Next round focus:</span>
+                          <p className="text-xs text-zinc-700 mt-0.5">{saNextFocus}</p>
+                        </div>
+                      )}
+                    </div>
+                    )
+                    : null
+                  }
+
+                  {/* Full coaching report — conversation-log style analysis (original format) */}
+                  {analysis != null && Array.isArray(analysis.question_analyses) && (analysis.question_analyses as unknown[]).length > 0 && (
+                    <CoachingReport session={debriefToSession(debrief)} />
+                  )}
                 </div>
               )}
             </div>
