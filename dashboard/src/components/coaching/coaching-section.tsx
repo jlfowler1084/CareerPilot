@@ -16,6 +16,7 @@ import { CoachingReport } from "@/components/coaching/coaching-report"
 import { PracticeMode } from "@/components/coaching/practice-mode"
 import { DebriefHistory } from "@/components/coaching/debrief-history"
 import { DebriefFormModal, type DebriefFormData } from "@/components/coaching/debrief-form-modal"
+import { CrossAppPatterns } from "@/components/coaching/cross-app-patterns"
 import type { Application, DebriefRecord } from "@/types"
 
 interface CoachingSectionProps {
@@ -204,6 +205,9 @@ export function CoachingSection({ application }: CoachingSectionProps) {
             company={application.company}
             title={application.title}
           />
+
+          {/* Cross-application patterns (CAR-54) */}
+          <CrossAppPatterns allDebriefs={allUserDebriefs} />
 
           {/* Debrief textarea */}
           {debriefOpen && (
