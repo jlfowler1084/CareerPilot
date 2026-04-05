@@ -50,6 +50,33 @@ export function exportDebriefMarkdown(debrief: DebriefRecord, context: ExportCon
     lines.push("")
   }
 
+  // Structured debrief AI analysis (CAR-54 format)
+  const patterns = analysis?.patterns as string[] | undefined
+  if (patterns && patterns.length > 0) {
+    lines.push("## Patterns Detected")
+    for (const p of patterns) lines.push(`- ${p}`)
+    lines.push("")
+  }
+
+  const improvementAreas = analysis?.improvement_areas as string[] | undefined
+  if (improvementAreas && improvementAreas.length > 0) {
+    lines.push("## Improvement Areas")
+    for (const area of improvementAreas) lines.push(`- ${area}`)
+    lines.push("")
+  }
+
+  const studyRecs = analysis?.study_recommendations as string[] | undefined
+  if (studyRecs && studyRecs.length > 0) {
+    lines.push("## Study Recommendations")
+    for (const rec of studyRecs) lines.push(`- ${rec}`)
+    lines.push("")
+  }
+
+  const nextFocus = analysis?.next_round_focus as string | undefined
+  if (nextFocus) {
+    lines.push("## Next Round Focus", nextFocus, "")
+  }
+
   // Question analyses as patterns
   const questionAnalyses = analysis?.question_analyses as Array<{ question: string; score: number; feedback: string }> | undefined
   if (questionAnalyses && questionAnalyses.length > 0) {
@@ -64,6 +91,10 @@ export function exportDebriefMarkdown(debrief: DebriefRecord, context: ExportCon
   lines.push("## Raw Notes")
   if (debrief.went_well) lines.push(`**What went well:** ${debrief.went_well}`)
   if (debrief.was_hard) lines.push(`**What was hard:** ${debrief.was_hard}`)
+  if (debrief.do_differently) lines.push(`**What I'd do differently:** ${debrief.do_differently}`)
+  if (debrief.interviewer_names && debrief.interviewer_names.length > 0) {
+    lines.push(`**Interviewers:** ${debrief.interviewer_names.join(", ")}`)
+  }
   if (debrief.topics_covered && debrief.topics_covered.length > 0) {
     lines.push(`**Topics covered:** ${debrief.topics_covered.join(", ")}`)
   }
