@@ -11,8 +11,18 @@
       "ticket": "CAR-60",
       "name": "Sidebar Navigation",
       "file": "src/components/layout/sidebar.tsx",
-      "exports": ["Sidebar"],
-      "patterns": ["Overview", "Inbox", "Job Search", "Applications", "Auto-Apply", "Analytics", "Training"],
+      "exports": [
+        "Sidebar"
+      ],
+      "patterns": [
+        "Overview",
+        "Inbox",
+        "Job Search",
+        "Applications",
+        "Auto-Apply",
+        "Analytics",
+        "Training"
+      ],
       "area": "layout"
     },
     {
@@ -20,7 +30,9 @@
       "name": "App Layout",
       "file": "src/app/(main)/layout.tsx",
       "exports": [],
-      "patterns": ["Sidebar"],
+      "patterns": [
+        "Sidebar"
+      ],
       "area": "layout"
     },
     {
@@ -28,15 +40,25 @@
       "name": "Overview Page",
       "file": "src/app/(main)/page.tsx",
       "exports": [],
-      "patterns": ["OverviewContent", "createServerSupabaseClient"],
+      "patterns": [
+        "OverviewContent",
+        "createServerSupabaseClient"
+      ],
       "area": "overview"
     },
     {
       "ticket": "CAR-113",
       "name": "Overview Client Content",
       "file": "src/app/(main)/overview-content.tsx",
-      "exports": ["default"],
-      "patterns": ["Active Pipeline", "Response Rate", "Quick Actions", "Attention Needed"],
+      "exports": [
+        "default"
+      ],
+      "patterns": [
+        "Active Pipeline",
+        "Response Rate",
+        "Quick Actions",
+        "Attention Needed"
+      ],
       "area": "overview"
     },
     {
@@ -44,39 +66,65 @@
       "name": "Inbox Page",
       "file": "src/app/(main)/inbox/page.tsx",
       "exports": [],
-      "patterns": ["EmailList", "EmailDetail"],
+      "patterns": [
+        "EmailList",
+        "EmailDetail"
+      ],
       "area": "inbox"
     },
     {
       "ticket": "CAR-34",
       "name": "Gmail Integration Hook",
       "file": "src/hooks/use-emails.ts",
-      "exports": ["useEmails"],
-      "patterns": ["gmail/scan"],
+      "exports": [
+        "useEmails"
+      ],
+      "patterns": [
+        "gmail/scan"
+      ],
       "area": "inbox"
     },
     {
       "ticket": "CAR-40",
       "name": "Smart Contact Linking",
       "file": "src/components/inbox/email-detail.tsx",
-      "exports": ["EmailDetail"],
-      "patterns": ["Linked to"],
+      "exports": [
+        "EmailDetail"
+      ],
+      "patterns": [
+        "Linked to"
+      ],
       "area": "inbox"
     },
     {
       "ticket": "CAR-76",
       "name": "Auto-Track Detection Logic",
       "file": "src/lib/auto-track.ts",
-      "exports": ["detectApplicationConfirmation", "extractFromHints", "buildExtractionPrompt"],
-      "patterns": ["DOMAIN_BLOCKLIST", "isConfirmation", "confidence", "statusUpdate"],
+      "exports": [
+        "detectApplicationConfirmation",
+        "extractFromHints",
+        "buildExtractionPrompt"
+      ],
+      "patterns": [
+        "DOMAIN_BLOCKLIST",
+        "isConfirmation",
+        "confidence",
+        "statusUpdate"
+      ],
       "area": "inbox"
     },
     {
       "ticket": "CAR-76",
       "name": "Auto-Track API Route",
       "file": "src/app/api/auto-track/detect/route.ts",
-      "exports": ["POST"],
-      "patterns": ["auto-track", "createOrLinkApplication", "handleStatusUpdate"],
+      "exports": [
+        "POST"
+      ],
+      "patterns": [
+        "auto-track",
+        "createOrLinkApplication",
+        "handleStatusUpdate"
+      ],
       "area": "inbox"
     },
     {
@@ -84,247 +132,482 @@
       "name": "Job Search Page",
       "file": "src/app/(main)/search/page.tsx",
       "exports": [],
-      "patterns": ["SearchControls", "SearchHistory", "CustomSearchBar", "useSearchProfiles"],
+      "patterns": [
+        "SearchControls",
+        "SearchHistory",
+        "CustomSearchBar",
+        "useSearchProfiles"
+      ],
       "area": "search"
     },
     {
       "ticket": "CAR-58",
       "name": "Search Profiles",
       "file": "src/lib/constants.ts",
-      "exports": ["DEFAULT_SEARCH_PROFILES", "SEARCH_PROFILES"],
-      "patterns": ["sysadmin_local", "syseng_local", "devops_local", "powershell_remote"],
+      "exports": [
+        "DEFAULT_SEARCH_PROFILES",
+        "SEARCH_PROFILES"
+      ],
+      "patterns": [
+        "sysadmin_local",
+        "syseng_local",
+        "devops_local",
+        "powershell_remote"
+      ],
       "area": "search"
     },
     {
       "ticket": "CAR-58",
       "name": "Job Card Component",
       "file": "src/components/shared/job-card.tsx",
-      "exports": ["JobCard"],
-      "patterns": ["Easy Apply", "source"],
+      "exports": [
+        "JobCard"
+      ],
+      "patterns": [
+        "Easy Apply",
+        "source"
+      ],
       "area": "search"
     },
     {
       "ticket": "CAR-58",
       "name": "Search Controls",
       "file": "src/components/search/search-controls.tsx",
-      "exports": ["SearchControls"],
-      "patterns": ["Run Search", "Stop"],
+      "exports": [
+        "SearchControls"
+      ],
+      "patterns": [
+        "Run Search",
+        "Stop"
+      ],
       "area": "search"
     },
     {
       "ticket": "CAR-58",
       "name": "Search Hook",
       "file": "src/hooks/use-search.ts",
-      "exports": ["useSearch"],
-      "patterns": ["search_cache", "search-indeed", "search-dice"],
+      "exports": [
+        "useSearch"
+      ],
+      "patterns": [
+        "search_cache",
+        "search-indeed",
+        "search-dice"
+      ],
       "area": "search"
     },
     {
       "ticket": "CAR-58",
       "name": "Search Utilities",
       "file": "src/lib/search-utils.ts",
-      "exports": ["deduplicateJobs"],
-      "patterns": ["deduplicateJobs", "filterIrrelevant"],
+      "exports": [
+        "deduplicateJobs"
+      ],
+      "patterns": [
+        "deduplicateJobs",
+        "filterIrrelevant"
+      ],
       "area": "search"
     },
     {
       "ticket": "CAR-46",
       "name": "Search History Panel",
       "file": "src/components/search/search-history.tsx",
-      "exports": ["SearchHistory"],
-      "patterns": ["runs", "scans"],
+      "exports": [
+        "SearchHistory"
+      ],
+      "patterns": [
+        "runs",
+        "scans"
+      ],
       "area": "search"
     },
     {
       "ticket": "CAR-46",
       "name": "Search History Hook",
       "file": "src/hooks/use-search-history.ts",
-      "exports": ["useSearchHistory"],
-      "patterns": ["search_runs", "loadRunResults", "createRun"],
+      "exports": [
+        "useSearchHistory"
+      ],
+      "patterns": [
+        "search_runs",
+        "loadRunResults",
+        "createRun"
+      ],
       "area": "search"
     },
     {
       "ticket": "CAR-35",
       "name": "Dice MCP Direct Client",
       "file": "src/lib/mcp-client.ts",
-      "exports": ["searchDiceDirect"],
-      "patterns": ["mcp.dice.com"],
+      "exports": [
+        "searchDiceDirect"
+      ],
+      "patterns": [
+        "mcp.dice.com"
+      ],
       "area": "search"
     },
     {
       "ticket": "CAR-35",
       "name": "Indeed Search API Route",
       "file": "src/app/api/search-indeed/route.ts",
-      "exports": ["POST"],
-      "patterns": ["claude-haiku", "web_search"],
+      "exports": [
+        "POST"
+      ],
+      "patterns": [
+        "claude-haiku",
+        "web_search"
+      ],
       "area": "search"
     },
     {
       "ticket": "CAR-35",
       "name": "Dice Search API Route",
       "file": "src/app/api/search-dice/route.ts",
-      "exports": ["POST"],
-      "patterns": ["searchDiceDirect"],
+      "exports": [
+        "POST"
+      ],
+      "patterns": [
+        "searchDiceDirect"
+      ],
       "area": "search"
     },
     {
       "ticket": "CAR-72",
       "name": "Search Filters Bar",
       "file": "src/components/search/search-filters.tsx",
-      "exports": ["SearchFiltersBar", "DEFAULT_FILTERS"],
-      "patterns": ["source", "jobType", "hasSalary", "easyApplyOnly", "keyword"],
+      "exports": [
+        "SearchFiltersBar",
+        "DEFAULT_FILTERS"
+      ],
+      "patterns": [
+        "source",
+        "jobType",
+        "hasSalary",
+        "easyApplyOnly",
+        "keyword"
+      ],
       "area": "search"
     },
     {
       "ticket": "CAR-72",
       "name": "Search Filter Utilities",
       "file": "src/lib/search-filter-utils.ts",
-      "exports": ["applyFilters", "hasActiveFilters", "applyAdvancedFilters", "parseSalary", "parsePostedDate"],
-      "patterns": ["remote", "Not listed", "easyApply", "AdvancedFilters", "salaryMin", "datePosted"],
+      "exports": [
+        "applyFilters",
+        "hasActiveFilters",
+        "applyAdvancedFilters",
+        "parseSalary",
+        "parsePostedDate"
+      ],
+      "patterns": [
+        "remote",
+        "Not listed",
+        "easyApply",
+        "AdvancedFilters",
+        "salaryMin",
+        "datePosted"
+      ],
       "area": "search"
     },
     {
       "ticket": "CAR-72",
       "name": "Advanced Filters Panel",
       "file": "src/components/search/advanced-filters.tsx",
-      "exports": ["AdvancedFiltersPanel"],
-      "patterns": ["includeKeywords", "excludeKeywords", "salaryMin", "companyMode", "datePosted", "Clear Advanced Filters"],
+      "exports": [
+        "AdvancedFiltersPanel"
+      ],
+      "patterns": [
+        "includeKeywords",
+        "excludeKeywords",
+        "salaryMin",
+        "companyMode",
+        "datePosted",
+        "Clear Advanced Filters"
+      ],
       "area": "search"
     },
     {
       "ticket": "CAR-72",
       "name": "Query Parser",
       "file": "src/lib/query-parser.ts",
-      "exports": ["parseQuery", "applyQueryFilter", "serializeQuery"],
-      "patterns": ["ParsedQuery", "titleTerms", "excludeTerms", "tokenize", "salaryMin"],
+      "exports": [
+        "parseQuery",
+        "applyQueryFilter",
+        "serializeQuery"
+      ],
+      "patterns": [
+        "ParsedQuery",
+        "titleTerms",
+        "excludeTerms",
+        "tokenize",
+        "salaryMin"
+      ],
       "area": "search"
     },
     {
       "ticket": "CAR-72",
       "name": "Query Mode UI",
       "file": "src/components/search/query-mode.tsx",
-      "exports": ["QueryMode", "QueryModeToggle"],
-      "patterns": ["Query Mode", "Back to Filters", "SYNTAX_HELP", "recentQueries"],
+      "exports": [
+        "QueryMode",
+        "QueryModeToggle"
+      ],
+      "patterns": [
+        "Query Mode",
+        "Back to Filters",
+        "SYNTAX_HELP",
+        "recentQueries"
+      ],
       "area": "search"
     },
     {
       "ticket": "CAR-72",
       "name": "Search Profiles Hook",
       "file": "src/hooks/use-search-profiles.ts",
-      "exports": ["useSearchProfiles"],
-      "patterns": ["search_profiles", "createProfile", "deleteProfile", "fetchProfiles"],
+      "exports": [
+        "useSearchProfiles"
+      ],
+      "patterns": [
+        "search_profiles",
+        "createProfile",
+        "deleteProfile",
+        "fetchProfiles"
+      ],
       "area": "search"
     },
     {
       "ticket": "CAR-72",
       "name": "Custom Search Bar",
       "file": "src/components/search/custom-search-bar.tsx",
-      "exports": ["CustomSearchBar"],
-      "patterns": ["Quick Search", "Save as Profile", "ICON_OPTIONS"],
+      "exports": [
+        "CustomSearchBar"
+      ],
+      "patterns": [
+        "Quick Search",
+        "Save as Profile",
+        "ICON_OPTIONS"
+      ],
       "area": "search"
     },
     {
       "ticket": "CAR-72",
       "name": "Profile Management",
       "file": "src/components/search/profile-chips.tsx",
-      "exports": ["ProfileChips"],
-      "patterns": ["Edit", "Delete", "Duplicate", "DropdownMenu", "hiddenProfiles"],
+      "exports": [
+        "ProfileChips"
+      ],
+      "patterns": [
+        "Edit",
+        "Delete",
+        "Duplicate",
+        "DropdownMenu",
+        "hiddenProfiles"
+      ],
       "area": "search"
     },
     {
       "ticket": "CAR-77",
       "name": "Inbox Filter Utilities",
       "file": "src/lib/inbox-filter-utils.ts",
-      "exports": ["applyInboxQuickFilters", "applyInboxAdvancedFilters", "hasActiveInboxQuickFilters", "hasActiveInboxAdvancedFilters", "parseEmailDate"],
-      "patterns": ["InboxQuickFilters", "InboxAdvancedFilters", "DEFAULT_INBOX_QUICK_FILTERS", "DEFAULT_INBOX_ADVANCED_FILTERS", "dateRange", "linkedStatus", "senderInclude", "domainInclude"],
+      "exports": [
+        "applyInboxQuickFilters",
+        "applyInboxAdvancedFilters",
+        "hasActiveInboxQuickFilters",
+        "hasActiveInboxAdvancedFilters",
+        "parseEmailDate"
+      ],
+      "patterns": [
+        "InboxQuickFilters",
+        "InboxAdvancedFilters",
+        "DEFAULT_INBOX_QUICK_FILTERS",
+        "DEFAULT_INBOX_ADVANCED_FILTERS",
+        "dateRange",
+        "linkedStatus",
+        "senderInclude",
+        "domainInclude"
+      ],
       "area": "inbox"
     },
     {
       "ticket": "CAR-77",
       "name": "Inbox Query Parser",
       "file": "src/lib/inbox-query-parser.ts",
-      "exports": ["parseInboxQuery", "applyInboxQueryFilter"],
-      "patterns": ["ParsedInboxQuery", "subjectTerms", "fromTerms", "domainTerms", "categoryTerms", "linkedFilter", "autoTrackFilter", "CATEGORY_MAP"],
+      "exports": [
+        "parseInboxQuery",
+        "applyInboxQueryFilter"
+      ],
+      "patterns": [
+        "ParsedInboxQuery",
+        "subjectTerms",
+        "fromTerms",
+        "domainTerms",
+        "categoryTerms",
+        "linkedFilter",
+        "autoTrackFilter",
+        "CATEGORY_MAP"
+      ],
       "area": "inbox"
     },
     {
       "ticket": "CAR-77",
       "name": "Inbox Quick Filters",
       "file": "src/components/inbox/inbox-quick-filters.tsx",
-      "exports": ["InboxQuickFiltersBar"],
-      "patterns": ["Search emails", "Date", "Linked", "Track", "Auto-tracked", "Needs Review"],
+      "exports": [
+        "InboxQuickFiltersBar"
+      ],
+      "patterns": [
+        "Search emails",
+        "Date",
+        "Linked",
+        "Track",
+        "Auto-tracked",
+        "Needs Review"
+      ],
       "area": "inbox"
     },
     {
       "ticket": "CAR-77",
       "name": "Inbox Advanced Filters",
       "file": "src/components/inbox/inbox-advanced-filters.tsx",
-      "exports": ["InboxAdvancedFiltersPanel"],
-      "patterns": ["Advanced Filters", "senderInclude", "domainInclude", "subjectInclude", "Body Keywords", "Clear Advanced Filters"],
+      "exports": [
+        "InboxAdvancedFiltersPanel"
+      ],
+      "patterns": [
+        "Advanced Filters",
+        "senderInclude",
+        "domainInclude",
+        "subjectInclude",
+        "Body Keywords",
+        "Clear Advanced Filters"
+      ],
       "area": "inbox"
     },
     {
       "ticket": "CAR-77",
       "name": "Inbox Query Mode",
       "file": "src/components/inbox/inbox-query-mode.tsx",
-      "exports": ["InboxQueryMode", "InboxQueryModeToggle"],
-      "patterns": ["Query Mode", "Back to Filters", "SYNTAX_HELP", "recentQueries", "subject:interview"],
+      "exports": [
+        "InboxQueryMode",
+        "InboxQueryModeToggle"
+      ],
+      "patterns": [
+        "Query Mode",
+        "Back to Filters",
+        "SYNTAX_HELP",
+        "recentQueries",
+        "subject:interview"
+      ],
       "area": "inbox"
     },
     {
       "ticket": "CAR-78",
       "name": "Suggestion Extraction Logic",
       "file": "src/lib/extract-suggestions.ts",
-      "exports": ["extractSuggestionsFromEmail", "parseSubjectForJobs", "detectSource", "extractJobsWithAI"],
-      "patterns": ["ExtractedSuggestion", "DOMAIN_TO_SOURCE", "parseIndeedSubject", "parseGlassdoorSubject", "parseLinkedInSubject"],
+      "exports": [
+        "extractSuggestionsFromEmail",
+        "parseSubjectForJobs",
+        "detectSource",
+        "extractJobsWithAI"
+      ],
+      "patterns": [
+        "ExtractedSuggestion",
+        "DOMAIN_TO_SOURCE",
+        "parseIndeedSubject",
+        "parseGlassdoorSubject",
+        "parseLinkedInSubject"
+      ],
       "area": "search"
     },
     {
       "ticket": "CAR-78",
       "name": "Suggestions Extract API",
       "file": "src/app/api/suggestions/extract/route.ts",
-      "exports": ["POST"],
-      "patterns": ["email_job_suggestions", "suggestions_extracted", "job_alert"],
+      "exports": [
+        "POST"
+      ],
+      "patterns": [
+        "email_job_suggestions",
+        "suggestions_extracted",
+        "job_alert"
+      ],
       "area": "search"
     },
     {
       "ticket": "CAR-78",
       "name": "Suggestions AI Extract API",
       "file": "src/app/api/suggestions/ai-extract/route.ts",
-      "exports": ["POST"],
-      "patterns": ["anthropic", "Extract all individual job listings"],
+      "exports": [
+        "POST"
+      ],
+      "patterns": [
+        "anthropic",
+        "Extract all individual job listings"
+      ],
       "area": "search"
     },
     {
       "ticket": "CAR-78",
       "name": "Suggestions Action API",
       "file": "src/app/api/suggestions/action/route.ts",
-      "exports": ["POST"],
-      "patterns": ["dismiss", "track", "bulk_dismiss", "email_job_suggestions"],
+      "exports": [
+        "POST"
+      ],
+      "patterns": [
+        "dismiss",
+        "track",
+        "bulk_dismiss",
+        "email_job_suggestions"
+      ],
       "area": "search"
     },
     {
       "ticket": "CAR-78",
       "name": "Suggestions Hook",
       "file": "src/hooks/use-suggestions.ts",
-      "exports": ["useSuggestions"],
-      "patterns": ["extractSuggestions", "dismissSuggestion", "trackSuggestion", "bulkDismiss", "newCount"],
+      "exports": [
+        "useSuggestions"
+      ],
+      "patterns": [
+        "extractSuggestions",
+        "dismissSuggestion",
+        "trackSuggestion",
+        "bulkDismiss",
+        "newCount"
+      ],
       "area": "search"
     },
     {
       "ticket": "CAR-78",
       "name": "Suggestions Feed",
       "file": "src/components/search/suggestions-feed.tsx",
-      "exports": ["SuggestionsFeed"],
-      "patterns": ["Job Suggestions from Email", "SuggestionCard", "SOURCE_COLORS", "Alert", "Dismiss Read"],
+      "exports": [
+        "SuggestionsFeed"
+      ],
+      "patterns": [
+        "Job Suggestions from Email",
+        "SuggestionCard",
+        "SOURCE_COLORS",
+        "Alert",
+        "Dismiss Read"
+      ],
       "area": "search"
     },
     {
       "ticket": "CAR-81",
       "name": "Suggestions Fit Scoring",
       "file": "src/components/search/suggestions-feed.tsx",
-      "exports": ["SuggestionsFeed"],
-      "patterns": ["FitScoreBadge", "getFitScore", "onAddToQueue", "isInQueue", "fit_score"],
+      "exports": [
+        "SuggestionsFeed"
+      ],
+      "patterns": [
+        "FitScoreBadge",
+        "getFitScore",
+        "onAddToQueue",
+        "isInQueue",
+        "fit_score"
+      ],
       "area": "search"
     },
     {
@@ -332,7 +615,13 @@
       "name": "Suggestions Auto-Queue",
       "file": "src/app/(main)/search/page.tsx",
       "exports": [],
-      "patterns": ["suggestionScores", "getSuggestionFitScore", "handleSuggestionQueue", "isSuggestionInQueue", "lastAutoQueuedSuggestionsRef"],
+      "patterns": [
+        "suggestionScores",
+        "getSuggestionFitScore",
+        "handleSuggestionQueue",
+        "isSuggestionInQueue",
+        "lastAutoQueuedSuggestionsRef"
+      ],
       "area": "search"
     },
     {
@@ -340,135 +629,242 @@
       "name": "Applications Page",
       "file": "src/app/(main)/applications/page.tsx",
       "exports": [],
-      "patterns": ["ApplicationRow", "DetailPanel"],
+      "patterns": [
+        "ApplicationRow",
+        "DetailPanel"
+      ],
       "area": "applications"
     },
     {
       "ticket": "CAR-62",
       "name": "Applications Hook",
       "file": "src/hooks/use-applications.ts",
-      "exports": ["useApplications"],
-      "patterns": ["addApplication", "updateApplication", "deleteApplication"],
+      "exports": [
+        "useApplications"
+      ],
+      "patterns": [
+        "addApplication",
+        "updateApplication",
+        "deleteApplication"
+      ],
       "area": "applications"
     },
     {
       "ticket": "CAR-41",
       "name": "Application Detail Panel",
       "file": "src/components/applications/application-row.tsx",
-      "exports": ["ApplicationRow"],
-      "patterns": ["Details", "Intelligence", "TabsList", "TabsTrigger"],
+      "exports": [
+        "ApplicationRow"
+      ],
+      "patterns": [
+        "Details",
+        "Intelligence",
+        "TabsList",
+        "TabsTrigger"
+      ],
       "area": "applications"
     },
     {
       "ticket": "CAR-43",
       "name": "Status Badge",
       "file": "src/components/shared/status-badge.tsx",
-      "exports": ["StatusBadge"],
-      "patterns": ["STATUS_CONFIG", "found"],
+      "exports": [
+        "StatusBadge"
+      ],
+      "patterns": [
+        "STATUS_CONFIG",
+        "found"
+      ],
       "area": "applications"
     },
     {
       "ticket": "CAR-44",
       "name": "URL Auto-Fill API Route",
       "file": "src/app/api/extract-job/route.ts",
-      "exports": ["POST"],
-      "patterns": ["extract", "company", "title"],
+      "exports": [
+        "POST"
+      ],
+      "patterns": [
+        "extract",
+        "company",
+        "title"
+      ],
       "area": "applications"
     },
     {
       "ticket": "CAR-45",
       "name": "Communications Section",
       "file": "src/components/applications/communications-section.tsx",
-      "exports": ["CommunicationsSection"],
-      "patterns": ["gmail", "thread"],
+      "exports": [
+        "CommunicationsSection"
+      ],
+      "patterns": [
+        "gmail",
+        "thread"
+      ],
       "area": "applications"
     },
     {
       "ticket": "CAR-57",
       "name": "Intelligence Tab",
       "file": "src/components/intelligence/intelligence-tab.tsx",
-      "exports": ["IntelligenceTab"],
-      "patterns": ["CompanyBriefDisplay", "InterviewPrepDisplay", "debrief", "skill"],
+      "exports": [
+        "IntelligenceTab"
+      ],
+      "patterns": [
+        "CompanyBriefDisplay",
+        "InterviewPrepDisplay",
+        "debrief",
+        "skill"
+      ],
       "area": "intelligence"
     },
     {
       "ticket": "CAR-57",
       "name": "Intelligence Hook",
       "file": "src/hooks/use-intelligence.ts",
-      "exports": ["useIntelligence"],
-      "patterns": ["brief", "preps", "debriefs", "skillMentions"],
+      "exports": [
+        "useIntelligence"
+      ],
+      "patterns": [
+        "brief",
+        "preps",
+        "debriefs",
+        "skillMentions"
+      ],
       "area": "intelligence"
     },
     {
       "ticket": "CAR-57",
-      "name": "Intelligence API — Generate",
+      "name": "Intelligence API \u00e2\u20ac\u201d Generate",
       "file": "src/app/api/intelligence/generate/route.ts",
-      "exports": ["POST"],
-      "patterns": ["company_brief", "interview_prep"],
+      "exports": [
+        "POST"
+      ],
+      "patterns": [
+        "company_brief",
+        "interview_prep"
+      ],
       "area": "intelligence"
     },
     {
       "ticket": "CAR-57",
-      "name": "Intelligence API — Fetch",
+      "name": "Intelligence API \u00e2\u20ac\u201d Fetch",
       "file": "src/app/api/intelligence/[applicationId]/route.ts",
-      "exports": ["GET"],
-      "patterns": ["brief", "preps", "debriefs", "skill_mentions"],
+      "exports": [
+        "GET"
+      ],
+      "patterns": [
+        "brief",
+        "preps",
+        "debriefs",
+        "skill_mentions"
+      ],
       "area": "intelligence"
     },
     {
       "ticket": "CAR-57",
       "name": "Model Routing Config",
       "file": "src/lib/intelligence/model-config.ts",
-      "exports": ["INTELLIGENCE_MODELS", "getModelConfig"],
-      "patterns": ["haiku", "sonnet"],
+      "exports": [
+        "INTELLIGENCE_MODELS",
+        "getModelConfig"
+      ],
+      "patterns": [
+        "haiku",
+        "sonnet"
+      ],
       "area": "intelligence"
     },
     {
       "ticket": "CAR-57",
       "name": "Intelligence Supabase Helpers",
       "file": "src/lib/intelligence/supabase-helpers.ts",
-      "exports": ["upsertCompanyBrief", "getIntelligenceSummary"],
-      "patterns": ["company_briefs", "interview_prep", "debriefs", "skill_mentions"],
+      "exports": [
+        "upsertCompanyBrief",
+        "getIntelligenceSummary"
+      ],
+      "patterns": [
+        "company_briefs",
+        "interview_prep",
+        "debriefs",
+        "skill_mentions"
+      ],
       "area": "intelligence"
     },
     {
       "ticket": "CAR-56",
       "name": "Company Brief Generator",
       "file": "src/lib/intelligence/generators/company-brief.ts",
-      "exports": ["generateCompanyBrief"],
-      "patterns": ["web_search", "why_good_fit", "red_flags", "tech_stack"],
+      "exports": [
+        "generateCompanyBrief"
+      ],
+      "patterns": [
+        "web_search",
+        "why_good_fit",
+        "red_flags",
+        "tech_stack"
+      ],
       "area": "intelligence"
     },
     {
       "ticket": "CAR-56",
       "name": "Company Brief Display",
       "file": "src/components/intelligence/company-brief.tsx",
-      "exports": ["CompanyBriefDisplay"],
-      "patterns": ["fit", "tech_stack", "red_flags"],
+      "exports": [
+        "CompanyBriefDisplay"
+      ],
+      "patterns": [
+        "fit",
+        "tech_stack",
+        "red_flags"
+      ],
       "area": "intelligence"
     },
     {
       "ticket": "CAR-52",
       "name": "Interview Prep Generator",
       "file": "src/lib/intelligence/generators/interview-prep.ts",
-      "exports": ["generateInterviewPrep"],
-      "patterns": ["phone_screen", "technical", "hiring_manager", "final_round", "offer"],
+      "exports": [
+        "generateInterviewPrep"
+      ],
+      "patterns": [
+        "phone_screen",
+        "technical",
+        "hiring_manager",
+        "final_round",
+        "offer"
+      ],
       "area": "intelligence"
     },
     {
       "ticket": "CAR-52",
       "name": "Interview Prep Display",
       "file": "src/components/intelligence/interview-prep-display.tsx",
-      "exports": ["InterviewPrepDisplay"],
-      "patterns": ["Practice Mode", "Reveal approach", "Career Narrative"],
+      "exports": [
+        "InterviewPrepDisplay"
+      ],
+      "patterns": [
+        "Practice Mode",
+        "Reveal approach",
+        "Career Narrative"
+      ],
       "area": "intelligence"
     },
     {
       "ticket": "CAR-56",
       "name": "Resume Context",
       "file": "src/lib/intelligence/resume-context.ts",
-      "exports": ["RESUME_SUMMARY", "RESUME_SKILLS"],
-      "patterns": ["PowerShell", "VMware", "Active Directory", "Splunk"],
+      "exports": [
+        "RESUME_SUMMARY",
+        "RESUME_SKILLS"
+      ],
+      "patterns": [
+        "PowerShell",
+        "VMware",
+        "Active Directory",
+        "Splunk"
+      ],
       "area": "intelligence"
     },
     {
@@ -476,15 +872,23 @@
       "name": "Analytics Page",
       "file": "src/app/(main)/analytics/page.tsx",
       "exports": [],
-      "patterns": ["AnalyticsContent", "createServerSupabaseClient"],
+      "patterns": [
+        "AnalyticsContent",
+        "createServerSupabaseClient"
+      ],
       "area": "analytics"
     },
     {
       "ticket": "CAR-113",
       "name": "Analytics Client Content",
       "file": "src/app/(main)/analytics/analytics-content.tsx",
-      "exports": ["default"],
-      "patterns": ["SourceChart", "PipelineFunnel"],
+      "exports": [
+        "default"
+      ],
+      "patterns": [
+        "SourceChart",
+        "PipelineFunnel"
+      ],
       "area": "analytics"
     },
     {
@@ -492,15 +896,27 @@
       "name": "Auth Middleware",
       "file": "src/lib/supabase/middleware.ts",
       "exports": [],
-      "patterns": ["supabase", "auth", "login"],
+      "patterns": [
+        "supabase",
+        "auth",
+        "login"
+      ],
       "area": "auth"
     },
     {
       "ticket": "CAR-110",
       "name": "Middleware Session Refresh",
       "file": "middleware.ts",
-      "exports": ["middleware", "config"],
-      "patterns": ["getUser", "PUBLIC_ROUTES", "/login", "_next/static"],
+      "exports": [
+        "middleware",
+        "config"
+      ],
+      "patterns": [
+        "getUser",
+        "PUBLIC_ROUTES",
+        "/login",
+        "_next/static"
+      ],
       "area": "auth"
     },
     {
@@ -508,39 +924,62 @@
       "name": "Login Page",
       "file": "src/app/login/page.tsx",
       "exports": [],
-      "patterns": ["signIn", "email", "password"],
+      "patterns": [
+        "signIn",
+        "email",
+        "password"
+      ],
       "area": "auth"
     },
     {
       "ticket": "CAR-38",
       "name": "Resume Tailoring API Route",
       "file": "src/app/api/tailor-resume/route.ts",
-      "exports": ["POST"],
-      "patterns": ["resume", "tailor"],
+      "exports": [
+        "POST"
+      ],
+      "patterns": [
+        "resume",
+        "tailor"
+      ],
       "area": "resume"
     },
     {
       "ticket": "CAR-22",
       "name": "Cover Letter API Route",
       "file": "src/app/api/cover-letter/route.ts",
-      "exports": ["POST"],
-      "patterns": ["cover letter"],
+      "exports": [
+        "POST"
+      ],
+      "patterns": [
+        "cover letter"
+      ],
       "area": "resume"
     },
     {
       "ticket": "CAR-28",
       "name": "Interview Coaching Section",
       "file": "src/components/coaching/coaching-section.tsx",
-      "exports": ["CoachingSection"],
-      "patterns": ["coach", "score"],
+      "exports": [
+        "CoachingSection"
+      ],
+      "patterns": [
+        "coach",
+        "score"
+      ],
       "area": "coaching"
     },
     {
       "ticket": "CAR-28",
       "name": "Practice Mode",
       "file": "src/components/coaching/practice-mode.tsx",
-      "exports": ["PracticeMode"],
-      "patterns": ["practice", "question"],
+      "exports": [
+        "PracticeMode"
+      ],
+      "patterns": [
+        "practice",
+        "question"
+      ],
       "area": "coaching"
     },
     {
@@ -548,151 +987,254 @@
       "name": "Conversations Page",
       "file": "src/app/(main)/conversations/page.tsx",
       "exports": [],
-      "patterns": ["ConversationList", "PatternInsights"],
+      "patterns": [
+        "ConversationList",
+        "PatternInsights"
+      ],
       "area": "conversations"
     },
     {
       "ticket": "CAR-31",
       "name": "Calendar Sync API Route",
       "file": "src/app/api/calendar-sync/route.ts",
-      "exports": ["POST"],
-      "patterns": ["calendar", "event"],
+      "exports": [
+        "POST"
+      ],
+      "patterns": [
+        "calendar",
+        "event"
+      ],
       "area": "calendar"
     },
     {
       "ticket": "CAR-18",
       "name": "Fit Scoring Engine",
       "file": "src/lib/fit-scoring.ts",
-      "exports": ["scoreJob"],
-      "patterns": ["scoreTitle", "scoreSkills", "scoreLocation", "scoreSalary", "DEFAULT_TARGET_TITLES"],
+      "exports": [
+        "scoreJob"
+      ],
+      "patterns": [
+        "scoreTitle",
+        "scoreSkills",
+        "scoreLocation",
+        "scoreSalary",
+        "DEFAULT_TARGET_TITLES"
+      ],
       "area": "search"
     },
     {
       "ticket": "CAR-18",
       "name": "Skills Inventory Hook",
       "file": "src/hooks/use-skills-inventory.ts",
-      "exports": ["useSkillsInventory"],
-      "patterns": ["skills_inventory"],
+      "exports": [
+        "useSkillsInventory"
+      ],
+      "patterns": [
+        "skills_inventory"
+      ],
       "area": "search"
     },
     {
       "ticket": "CAR-18",
       "name": "Auto-Apply Queue Hook",
       "file": "src/hooks/use-auto-apply-queue.ts",
-      "exports": ["useAutoApplyQueue"],
-      "patterns": ["auto_apply_queue", "addToQueue", "approveJob", "rejectJob"],
+      "exports": [
+        "useAutoApplyQueue"
+      ],
+      "patterns": [
+        "auto_apply_queue",
+        "addToQueue",
+        "approveJob",
+        "rejectJob"
+      ],
       "area": "search"
     },
     {
       "ticket": "CAR-18",
       "name": "Fit Score Badge",
       "file": "src/components/search/fit-score-badge.tsx",
-      "exports": ["FitScoreBadge"],
-      "patterns": ["FitScoreBadge", "ScoreRow"],
+      "exports": [
+        "FitScoreBadge"
+      ],
+      "patterns": [
+        "FitScoreBadge",
+        "ScoreRow"
+      ],
       "area": "search"
     },
     {
       "ticket": "CAR-18",
       "name": "Auto-Apply Queue Tab",
       "file": "src/components/search/auto-apply-queue.tsx",
-      "exports": ["AutoApplyQueue"],
-      "patterns": ["QueueCard", "STATUS_STYLES"],
+      "exports": [
+        "AutoApplyQueue"
+      ],
+      "patterns": [
+        "QueueCard",
+        "STATUS_STYLES"
+      ],
       "area": "search"
     },
     {
       "ticket": "CAR-18",
       "name": "PDF Generator",
       "file": "src/lib/pdf-generator.ts",
-      "exports": ["generateResumePdf", "generateCoverLetterPdf"],
-      "patterns": ["PDFDocument", "parseResumeText"],
+      "exports": [
+        "generateResumePdf",
+        "generateCoverLetterPdf"
+      ],
+      "patterns": [
+        "PDFDocument",
+        "parseResumeText"
+      ],
       "area": "search"
     },
     {
       "ticket": "CAR-18",
       "name": "Generate PDF API",
       "file": "src/app/api/generate-pdf/route.ts",
-      "exports": ["POST"],
-      "patterns": ["sanitizeFilename", "generateResumePdf"],
+      "exports": [
+        "POST"
+      ],
+      "patterns": [
+        "sanitizeFilename",
+        "generateResumePdf"
+      ],
       "area": "search"
     },
     {
       "ticket": "CAR-18",
       "name": "Batch Generate API",
       "file": "src/app/api/auto-apply/generate-batch/route.ts",
-      "exports": ["POST"],
-      "patterns": ["BatchResult", "queueIds"],
+      "exports": [
+        "POST"
+      ],
+      "patterns": [
+        "BatchResult",
+        "queueIds"
+      ],
       "area": "search"
     },
     {
       "ticket": "CAR-18",
       "name": "Apply Session API",
       "file": "src/app/api/auto-apply/session/route.ts",
-      "exports": ["GET", "POST", "PATCH"],
-      "patterns": ["sessionId", "applying"],
+      "exports": [
+        "GET",
+        "POST",
+        "PATCH"
+      ],
+      "patterns": [
+        "sessionId",
+        "applying"
+      ],
       "area": "search"
     },
     {
       "ticket": "CAR-18",
       "name": "Screening Answers API",
       "file": "src/app/api/auto-apply/screening/route.ts",
-      "exports": ["POST"],
-      "patterns": ["question_pattern", "confidence"],
+      "exports": [
+        "POST"
+      ],
+      "patterns": [
+        "question_pattern",
+        "confidence"
+      ],
       "area": "search"
     },
     {
       "ticket": "CAR-18",
       "name": "Apply Log API",
       "file": "src/app/api/auto-apply/log/route.ts",
-      "exports": ["GET", "POST"],
-      "patterns": ["auto_apply_log", "queueId"],
+      "exports": [
+        "GET",
+        "POST"
+      ],
+      "patterns": [
+        "auto_apply_log",
+        "queueId"
+      ],
       "area": "search"
     },
     {
       "ticket": "CAR-18",
       "name": "Apply Workflow Definitions",
       "file": "src/lib/indeed-apply-workflow.ts",
-      "exports": ["INDEED_APPLY_STEPS", "DICE_APPLY_STEPS", "getStepsForSource"],
-      "patterns": ["INDEED_APPLY_STEPS", "DICE_APPLY_STEPS"],
+      "exports": [
+        "INDEED_APPLY_STEPS",
+        "DICE_APPLY_STEPS",
+        "getStepsForSource"
+      ],
+      "patterns": [
+        "INDEED_APPLY_STEPS",
+        "DICE_APPLY_STEPS"
+      ],
       "area": "search"
     },
     {
       "ticket": "CAR-18",
       "name": "Auto-Apply Settings API",
       "file": "src/app/api/auto-apply/settings/route.ts",
-      "exports": ["GET", "PUT"],
-      "patterns": ["auto_apply_settings"],
+      "exports": [
+        "GET",
+        "PUT"
+      ],
+      "patterns": [
+        "auto_apply_settings"
+      ],
       "area": "settings"
     },
     {
       "ticket": "CAR-18",
       "name": "Auto-Apply Stats API",
       "file": "src/app/api/auto-apply/stats/route.ts",
-      "exports": ["GET"],
-      "patterns": ["COST_PER_APPLICATION", "dailyLimit"],
+      "exports": [
+        "GET"
+      ],
+      "patterns": [
+        "COST_PER_APPLICATION",
+        "dailyLimit"
+      ],
       "area": "search"
     },
     {
       "ticket": "CAR-18",
       "name": "Auto-Apply Settings Hook",
       "file": "src/hooks/use-auto-apply-settings.ts",
-      "exports": ["useAutoApplySettings"],
-      "patterns": ["auto_apply_settings", "AutoApplySettings"],
+      "exports": [
+        "useAutoApplySettings"
+      ],
+      "patterns": [
+        "auto_apply_settings",
+        "AutoApplySettings"
+      ],
       "area": "settings"
     },
     {
       "ticket": "CAR-18",
       "name": "Auto-Apply Pipeline Helper",
       "file": "src/lib/auto-apply-pipeline.ts",
-      "exports": ["runPipeline"],
-      "patterns": ["runPipeline", "dailyLimitHit"],
+      "exports": [
+        "runPipeline"
+      ],
+      "patterns": [
+        "runPipeline",
+        "dailyLimitHit"
+      ],
       "area": "search"
     },
     {
       "ticket": "CAR-18",
       "name": "Auto-Apply Dashboard Widget",
       "file": "src/components/overview/auto-apply-widget.tsx",
-      "exports": ["AutoApplyWidget"],
-      "patterns": ["AutoApplyWidget", "Auto-Apply Pipeline"],
+      "exports": [
+        "AutoApplyWidget"
+      ],
+      "patterns": [
+        "AutoApplyWidget",
+        "Auto-Apply Pipeline"
+      ],
       "area": "overview"
     },
     {
@@ -700,23 +1242,38 @@
       "name": "Settings Page",
       "file": "src/app/(main)/settings/page.tsx",
       "exports": [],
-      "patterns": ["Auto-Apply Configuration", "Screening Answers", "Skills Inventory"],
+      "patterns": [
+        "Auto-Apply Configuration",
+        "Screening Answers",
+        "Skills Inventory"
+      ],
       "area": "settings"
     },
     {
       "ticket": "CAR-83",
       "name": "Scan Results API",
       "file": "src/app/api/scan-results/route.ts",
-      "exports": ["GET"],
-      "patterns": ["scan_results", "scan_date", "scan_metadata"],
+      "exports": [
+        "GET"
+      ],
+      "patterns": [
+        "scan_results",
+        "scan_date",
+        "scan_metadata"
+      ],
       "area": "search"
     },
     {
       "ticket": "CAR-83",
       "name": "Mark Viewed API",
       "file": "src/app/api/scan-results/mark-viewed/route.ts",
-      "exports": ["POST"],
-      "patterns": ["viewed", "scan_results"],
+      "exports": [
+        "POST"
+      ],
+      "patterns": [
+        "viewed",
+        "scan_results"
+      ],
       "area": "search"
     },
     {
@@ -724,47 +1281,87 @@
       "name": "Auto-Apply Page",
       "file": "src/app/(main)/auto-apply/page.tsx",
       "exports": [],
-      "patterns": ["Auto-Apply Queue", "Ready to Apply", "Pending Review", "Cowork", "Mark Applied"],
+      "patterns": [
+        "Auto-Apply Queue",
+        "Ready to Apply",
+        "Pending Review",
+        "Cowork",
+        "Mark Applied"
+      ],
       "area": "auto-apply"
     },
     {
       "ticket": "CAR-85",
       "name": "Auto-Apply Sidebar Badge",
       "file": "src/components/layout/sidebar.tsx",
-      "exports": ["Sidebar"],
-      "patterns": ["auto-apply", "useApprovedQueueCount", "Rocket"],
+      "exports": [
+        "Sidebar"
+      ],
+      "patterns": [
+        "auto-apply",
+        "useApprovedQueueCount",
+        "Rocket"
+      ],
       "area": "auto-apply"
     },
     {
       "ticket": "CAR-87",
       "name": "Conversation Form Modal",
       "file": "src/components/conversations/conversation-form-modal.tsx",
-      "exports": ["ConversationFormModal"],
-      "patterns": ["Log Conversation", "Edit Conversation", "Link to Application", "Save Conversation"],
+      "exports": [
+        "ConversationFormModal"
+      ],
+      "patterns": [
+        "Log Conversation",
+        "Edit Conversation",
+        "Link to Application",
+        "Save Conversation"
+      ],
       "area": "conversations"
     },
     {
       "ticket": "CAR-87",
       "name": "Conversation AI Analysis API",
       "file": "src/app/api/conversations/analyze/route.ts",
-      "exports": ["POST"],
-      "patterns": ["anthropic", "ai_analysis", "coach", "improvements"],
+      "exports": [
+        "POST"
+      ],
+      "patterns": [
+        "anthropic",
+        "ai_analysis",
+        "coach",
+        "improvements"
+      ],
       "area": "conversations"
     },
     {
       "ticket": "CAR-87",
       "name": "Conversation AI Insights Display",
       "file": "src/components/conversations/conversation-list.tsx",
-      "exports": ["ConversationList"],
-      "patterns": ["Coaching Insights", "AIInsights", "onEdit"],
+      "exports": [
+        "ConversationList"
+      ],
+      "patterns": [
+        "Coaching Insights",
+        "AIInsights",
+        "onEdit"
+      ],
       "area": "conversations"
     },
     {
       "ticket": "CAR-92",
       "name": "Thread-Level Email Linking",
       "file": "src/components/applications/link-email-modal.tsx",
-      "exports": ["LinkEmailModal"],
-      "patterns": ["ThreadGroup", "buildThreadGroups", "thread_id", "All linked", "Link Emails"],
+      "exports": [
+        "LinkEmailModal"
+      ],
+      "patterns": [
+        "ThreadGroup",
+        "buildThreadGroups",
+        "thread_id",
+        "All linked",
+        "Link Emails"
+      ],
       "area": "applications"
     },
     {
@@ -772,688 +1369,1243 @@
       "name": "Training Page",
       "file": "src/app/(main)/training/page.tsx",
       "exports": [],
-      "patterns": ["useTraining", "useCourseDetail", "GraduationCap", "TrainingPage"],
+      "patterns": [
+        "useTraining",
+        "useCourseDetail",
+        "GraduationCap",
+        "TrainingPage"
+      ],
       "area": "training"
     },
     {
       "ticket": "CAR-101",
       "name": "Training Data Hook",
       "file": "src/hooks/use-training.ts",
-      "exports": ["useTraining", "useCourseDetail"],
-      "patterns": ["training_courses", "training_progress", "training_sessions"],
+      "exports": [
+        "useTraining",
+        "useCourseDetail"
+      ],
+      "patterns": [
+        "training_courses",
+        "training_progress",
+        "training_sessions"
+      ],
       "area": "training"
     },
     {
       "ticket": "CAR-112",
       "name": "Supabase Generated Types",
       "file": "src/types/database.types.ts",
-      "exports": ["Database", "Json"],
-      "patterns": ["Tables", "Row", "Insert", "Update"],
+      "exports": [
+        "Database",
+        "Json"
+      ],
+      "patterns": [
+        "Tables",
+        "Row",
+        "Insert",
+        "Update"
+      ],
       "area": "types"
     },
     {
       "ticket": "CAR-112",
       "name": "Supabase Convenience Types",
       "file": "src/types/supabase.ts",
-      "exports": ["ApplicationRow", "EmailRow", "ConversationRow"],
-      "patterns": ["Database", "database.types"],
+      "exports": [
+        "ApplicationRow",
+        "EmailRow",
+        "ConversationRow"
+      ],
+      "patterns": [
+        "Database",
+        "database.types"
+      ],
       "area": "types"
     },
     {
       "ticket": "CAR-112",
       "name": "Typed Browser Client",
       "file": "src/lib/supabase/client.ts",
-      "exports": ["createClient"],
-      "patterns": ["Database", "createBrowserClient"],
+      "exports": [
+        "createClient"
+      ],
+      "patterns": [
+        "Database",
+        "createBrowserClient"
+      ],
       "area": "types"
     },
     {
       "ticket": "CAR-112",
       "name": "Typed Server Client",
       "file": "src/lib/supabase/server.ts",
-      "exports": ["createServerSupabaseClient"],
-      "patterns": ["Database", "createServerClient"],
+      "exports": [
+        "createServerSupabaseClient"
+      ],
+      "patterns": [
+        "Database",
+        "createServerClient"
+      ],
       "area": "types"
     },
     {
       "ticket": "CAR-113",
       "name": "Root Loading Boundary",
       "file": "src/app/loading.tsx",
-      "exports": ["default"],
-      "patterns": ["Loading"],
+      "exports": [
+        "default"
+      ],
+      "patterns": [
+        "Loading"
+      ],
       "area": "layout"
     },
     {
       "ticket": "CAR-113",
       "name": "Main Loading Boundary",
       "file": "src/app/(main)/loading.tsx",
-      "exports": ["default"],
-      "patterns": ["Loading"],
+      "exports": [
+        "default"
+      ],
+      "patterns": [
+        "Loading"
+      ],
       "area": "layout"
     },
     {
       "ticket": "CAR-113",
       "name": "Root Error Boundary",
       "file": "src/app/error.tsx",
-      "exports": ["default"],
-      "patterns": ["use client", "reset", "AlertTriangle"],
+      "exports": [
+        "default"
+      ],
+      "patterns": [
+        "use client",
+        "reset",
+        "AlertTriangle"
+      ],
       "area": "layout"
     },
     {
       "ticket": "CAR-113",
       "name": "Not Found Page",
       "file": "src/app/not-found.tsx",
-      "exports": ["default"],
-      "patterns": ["not found", "Back to Overview"],
+      "exports": [
+        "default"
+      ],
+      "patterns": [
+        "not found",
+        "Back to Overview"
+      ],
       "area": "layout"
     },
     {
       "ticket": "CAR-114",
       "name": "API Error Response Utilities",
       "file": "src/lib/api-errors.ts",
-      "exports": ["badRequest", "unauthorized", "notFound", "serverError", "badGateway"],
-      "patterns": ["ApiError", "BAD_REQUEST", "UNAUTHORIZED", "NOT_FOUND", "INTERNAL_ERROR", "BAD_GATEWAY"],
+      "exports": [
+        "badRequest",
+        "unauthorized",
+        "notFound",
+        "serverError",
+        "badGateway"
+      ],
+      "patterns": [
+        "ApiError",
+        "BAD_REQUEST",
+        "UNAUTHORIZED",
+        "NOT_FOUND",
+        "INTERNAL_ERROR",
+        "BAD_GATEWAY"
+      ],
       "area": "api"
     },
     {
       "ticket": "CAR-115",
       "name": "Shared Async Operation Hook",
       "file": "src/hooks/use-async-operation.ts",
-      "exports": ["useAsyncOperation"],
-      "patterns": ["operationInFlight", "mountedRef", "AbortController", "AsyncState"],
+      "exports": [
+        "useAsyncOperation"
+      ],
+      "patterns": [
+        "operationInFlight",
+        "mountedRef",
+        "AbortController",
+        "AsyncState"
+      ],
       "area": "hooks"
     },
     {
       "ticket": "CAR-84",
       "name": "Auth Context Provider",
       "file": "src/contexts/auth-context.tsx",
-      "exports": ["AuthProvider", "useAuth"],
-      "patterns": ["onAuthStateChange", "user", "loading"],
+      "exports": [
+        "AuthProvider",
+        "useAuth"
+      ],
+      "patterns": [
+        "onAuthStateChange",
+        "user",
+        "loading"
+      ],
       "area": "auth"
     },
     {
       "ticket": "",
       "name": "Root Layout",
       "file": "src/app/layout.tsx",
-      "exports": ["default"],
-      "patterns": ["AuthProvider", "Toaster", "TooltipProvider", "Career Pilot"],
+      "exports": [
+        "default"
+      ],
+      "patterns": [
+        "AuthProvider",
+        "Toaster",
+        "TooltipProvider",
+        "Career Pilot"
+      ],
       "area": "layout"
     },
     {
       "ticket": "CAR-84",
       "name": "App Shell with Header Stats",
       "file": "src/components/layout/app-shell.tsx",
-      "exports": ["AppShell"],
-      "patterns": ["useHeaderStats", "POLL_INTERVAL_MS", "activeCount", "totalCount"],
+      "exports": [
+        "AppShell"
+      ],
+      "patterns": [
+        "useHeaderStats",
+        "POLL_INTERVAL_MS",
+        "activeCount",
+        "totalCount"
+      ],
       "area": "layout"
     },
     {
       "ticket": "CAR-84",
       "name": "Header Component",
       "file": "src/components/layout/header.tsx",
-      "exports": ["Header"],
-      "patterns": ["activeCount", "totalCount", "VIEW_TITLES"],
+      "exports": [
+        "Header"
+      ],
+      "patterns": [
+        "activeCount",
+        "totalCount",
+        "VIEW_TITLES"
+      ],
       "area": "layout"
     },
     {
       "ticket": "",
       "name": "Error Boundary Component",
       "file": "src/components/error-boundary.tsx",
-      "exports": ["ErrorBoundary"],
-      "patterns": ["getDerivedStateFromError", "componentDidCatch"],
+      "exports": [
+        "ErrorBoundary"
+      ],
+      "patterns": [
+        "getDerivedStateFromError",
+        "componentDidCatch"
+      ],
       "area": "layout"
     },
     {
       "ticket": "",
       "name": "Stats Computation Hook",
       "file": "src/hooks/use-stats.ts",
-      "exports": ["computeStats", "useStats"],
-      "patterns": ["by_status", "response_rate", "source_distribution"],
+      "exports": [
+        "computeStats",
+        "useStats"
+      ],
+      "patterns": [
+        "by_status",
+        "response_rate",
+        "source_distribution"
+      ],
       "area": "analytics"
     },
     {
       "ticket": "",
       "name": "Coaching Hook",
       "file": "src/hooks/use-coaching.ts",
-      "exports": ["useCoaching"],
-      "patterns": ["CoachingSession", "practicing", "evaluating"],
+      "exports": [
+        "useCoaching"
+      ],
+      "patterns": [
+        "CoachingSession",
+        "practicing",
+        "evaluating"
+      ],
       "area": "coaching"
     },
     {
       "ticket": "CAR-96",
       "name": "Interview Prep Hook",
       "file": "src/hooks/use-interview-prep.ts",
-      "exports": ["isPrepStage", "useInterviewPrep", "useSkillGaps"],
-      "patterns": ["phone_screen", "interview", "offer", "DebriefInput"],
+      "exports": [
+        "isPrepStage",
+        "useInterviewPrep",
+        "useSkillGaps"
+      ],
+      "patterns": [
+        "phone_screen",
+        "interview",
+        "offer",
+        "DebriefInput"
+      ],
       "area": "intelligence"
     },
     {
       "ticket": "",
       "name": "Job Details Hook",
       "file": "src/hooks/use-job-details.ts",
-      "exports": ["useJobDetails"],
-      "patterns": ["JobDetails", "requirements", "niceToHaves", "fetchDetails"],
+      "exports": [
+        "useJobDetails"
+      ],
+      "patterns": [
+        "JobDetails",
+        "requirements",
+        "niceToHaves",
+        "fetchDetails"
+      ],
       "area": "search"
     },
     {
       "ticket": "",
       "name": "Communications Hook",
       "file": "src/hooks/use-communications.ts",
-      "exports": ["useCommunications"],
-      "patterns": ["GroupedThread", "thread_id", "totalEmails"],
+      "exports": [
+        "useCommunications"
+      ],
+      "patterns": [
+        "GroupedThread",
+        "thread_id",
+        "totalEmails"
+      ],
       "area": "applications"
     },
     {
       "ticket": "CAR-87",
       "name": "Conversations Hook",
       "file": "src/hooks/use-conversations.ts",
-      "exports": ["useConversations", "useConversationPatterns"],
-      "patterns": ["ConversationPattern", "DEBOUNCE_MS", "fetchConversations"],
+      "exports": [
+        "useConversations",
+        "useConversationPatterns"
+      ],
+      "patterns": [
+        "ConversationPattern",
+        "DEBOUNCE_MS",
+        "fetchConversations"
+      ],
       "area": "conversations"
     },
     {
       "ticket": "",
       "name": "Activity Log Hook",
       "file": "src/hooks/use-activity-log.ts",
-      "exports": ["logActivity", "fetchRecentActivity"],
-      "patterns": ["activity_log", "ActivityEntry"],
+      "exports": [
+        "logActivity",
+        "fetchRecentActivity"
+      ],
+      "patterns": [
+        "activity_log",
+        "ActivityEntry"
+      ],
       "area": "analytics"
     },
     {
       "ticket": "",
       "name": "Application Events Hook",
       "file": "src/hooks/use-application-events.ts",
-      "exports": ["useApplicationEvents"],
-      "patterns": ["ApplicationEvent", "application_events"],
+      "exports": [
+        "useApplicationEvents"
+      ],
+      "patterns": [
+        "ApplicationEvent",
+        "application_events"
+      ],
       "area": "applications"
     },
     {
       "ticket": "CAR-97",
       "name": "Gmail Scan API",
       "file": "src/app/api/gmail/scan/route.ts",
-      "exports": ["POST"],
-      "patterns": ["getGmailClient", "extractDomain", "Unauthorized"],
+      "exports": [
+        "POST"
+      ],
+      "patterns": [
+        "getGmailClient",
+        "extractDomain",
+        "Unauthorized"
+      ],
       "area": "inbox"
     },
     {
       "ticket": "",
       "name": "Gmail Message API",
       "file": "src/app/api/gmail/message/route.ts",
-      "exports": ["POST"],
-      "patterns": ["gmail", "message"],
+      "exports": [
+        "POST"
+      ],
+      "patterns": [
+        "gmail",
+        "message"
+      ],
       "area": "inbox"
     },
     {
       "ticket": "CAR-92",
       "name": "Gmail Thread API",
       "file": "src/app/api/gmail/thread/route.ts",
-      "exports": ["POST"],
-      "patterns": ["ThreadMessage", "extractBody", "thread_id"],
+      "exports": [
+        "POST"
+      ],
+      "patterns": [
+        "ThreadMessage",
+        "extractBody",
+        "thread_id"
+      ],
       "area": "inbox"
     },
     {
       "ticket": "",
       "name": "Gmail Classify API",
       "file": "src/app/api/gmail/classify/route.ts",
-      "exports": ["POST"],
-      "patterns": ["ClassificationResult", "recruiter_outreach", "job_alert", "rejection"],
+      "exports": [
+        "POST"
+      ],
+      "patterns": [
+        "ClassificationResult",
+        "recruiter_outreach",
+        "job_alert",
+        "rejection"
+      ],
       "area": "inbox"
     },
     {
       "ticket": "",
       "name": "Gmail Draft Reply API",
       "file": "src/app/api/gmail/draft-reply/route.ts",
-      "exports": ["POST"],
-      "patterns": ["draft", "reply"],
+      "exports": [
+        "POST"
+      ],
+      "patterns": [
+        "draft",
+        "reply"
+      ],
       "area": "inbox"
     },
     {
       "ticket": "",
       "name": "Gmail Send API",
       "file": "src/app/api/gmail/send/route.ts",
-      "exports": ["POST"],
-      "patterns": ["send", "gmail"],
+      "exports": [
+        "POST"
+      ],
+      "patterns": [
+        "send",
+        "gmail"
+      ],
       "area": "inbox"
     },
     {
       "ticket": "CAR-87",
       "name": "Conversations CRUD API",
       "file": "src/app/api/conversations/route.ts",
-      "exports": ["GET", "POST"],
-      "patterns": ["conversations", "user_id"],
+      "exports": [
+        "GET",
+        "POST"
+      ],
+      "patterns": [
+        "conversations",
+        "user_id"
+      ],
       "area": "conversations"
     },
     {
       "ticket": "",
       "name": "Conversation Detail API",
       "file": "src/app/api/conversations/[id]/route.ts",
-      "exports": ["GET", "PATCH", "DELETE"],
-      "patterns": ["conversations"],
+      "exports": [
+        "GET",
+        "PATCH",
+        "DELETE"
+      ],
+      "patterns": [
+        "conversations"
+      ],
       "area": "conversations"
     },
     {
       "ticket": "CAR-87",
       "name": "Conversation Patterns API",
       "file": "src/app/api/conversations/patterns/route.ts",
-      "exports": ["GET"],
-      "patterns": ["ANTHROPIC_API_KEY", "conversations"],
+      "exports": [
+        "GET"
+      ],
+      "patterns": [
+        "ANTHROPIC_API_KEY",
+        "conversations"
+      ],
       "area": "conversations"
     },
     {
       "ticket": "CAR-28",
       "name": "Coaching Practice API",
       "file": "src/app/api/coaching/practice/route.ts",
-      "exports": ["POST"],
-      "patterns": ["applicationId", "jobDescription"],
+      "exports": [
+        "POST"
+      ],
+      "patterns": [
+        "applicationId",
+        "jobDescription"
+      ],
       "area": "coaching"
     },
     {
       "ticket": "CAR-28",
       "name": "Coaching Practice Evaluate API",
       "file": "src/app/api/coaching/practice-evaluate/route.ts",
-      "exports": ["POST"],
-      "patterns": ["evaluate", "score"],
+      "exports": [
+        "POST"
+      ],
+      "patterns": [
+        "evaluate",
+        "score"
+      ],
       "area": "coaching"
     },
     {
       "ticket": "CAR-28",
       "name": "Coaching Analyze API",
       "file": "src/app/api/coaching/analyze/route.ts",
-      "exports": ["POST"],
-      "patterns": ["analyzeFillersAndPatterns", "COACHING_SYSTEM_PROMPT", "overall_score"],
+      "exports": [
+        "POST"
+      ],
+      "patterns": [
+        "analyzeFillersAndPatterns",
+        "COACHING_SYSTEM_PROMPT",
+        "overall_score"
+      ],
       "area": "coaching"
     },
     {
       "ticket": "CAR-96",
       "name": "Interview Prep Generate API",
       "file": "src/app/api/interview-prep/route.ts",
-      "exports": ["POST"],
-      "patterns": ["buildPhoneScreenPrompt", "buildInterviewPrompt", "buildOfferPrompt", "PREP_STAGES"],
+      "exports": [
+        "POST"
+      ],
+      "patterns": [
+        "buildPhoneScreenPrompt",
+        "buildInterviewPrompt",
+        "buildOfferPrompt",
+        "PREP_STAGES"
+      ],
       "area": "intelligence"
     },
     {
       "ticket": "CAR-87",
       "name": "Interview Prep Debrief API",
       "file": "src/app/api/interview-prep/debrief/route.ts",
-      "exports": ["POST"],
-      "patterns": ["debrief", "round"],
+      "exports": [
+        "POST"
+      ],
+      "patterns": [
+        "debrief",
+        "round"
+      ],
       "area": "intelligence"
     },
     {
       "ticket": "",
       "name": "Job Details Extract API",
       "file": "src/app/api/job-details/route.ts",
-      "exports": ["POST"],
-      "patterns": ["JobDetailsRequest", "title", "company", "description"],
+      "exports": [
+        "POST"
+      ],
+      "patterns": [
+        "JobDetailsRequest",
+        "title",
+        "company",
+        "description"
+      ],
       "area": "search"
     },
     {
       "ticket": "CAR-62",
       "name": "Application Detail Side Panel",
       "file": "src/components/applications/detail-panel.tsx",
-      "exports": ["DetailPanel"],
-      "patterns": ["Sheet", "CommunicationsSection", "ConversationsSection"],
+      "exports": [
+        "DetailPanel"
+      ],
+      "patterns": [
+        "Sheet",
+        "CommunicationsSection",
+        "ConversationsSection"
+      ],
       "area": "applications"
     },
     {
       "ticket": "CAR-62",
       "name": "Application Add Form",
       "file": "src/components/applications/add-form.tsx",
-      "exports": ["AddForm"],
-      "patterns": ["onAdd", "company", "title"],
+      "exports": [
+        "AddForm"
+      ],
+      "patterns": [
+        "onAdd",
+        "company",
+        "title"
+      ],
       "area": "applications"
     },
     {
       "ticket": "CAR-62",
       "name": "Kanban Summary",
       "file": "src/components/applications/kanban-summary.tsx",
-      "exports": ["KanbanSummary"],
-      "patterns": ["KanbanSummary"],
+      "exports": [
+        "KanbanSummary"
+      ],
+      "patterns": [
+        "KanbanSummary"
+      ],
       "area": "applications"
     },
     {
       "ticket": "",
       "name": "URL Import Component",
       "file": "src/components/applications/url-import.tsx",
-      "exports": ["UrlImport"],
-      "patterns": ["onSave", "existingUrls"],
+      "exports": [
+        "UrlImport"
+      ],
+      "patterns": [
+        "onSave",
+        "existingUrls"
+      ],
       "area": "applications"
     },
     {
       "ticket": "",
       "name": "Tailor Resume Modal",
       "file": "src/components/applications/tailor-modal.tsx",
-      "exports": ["TailorModal"],
-      "patterns": ["TailorModal", "tailor-resume"],
+      "exports": [
+        "TailorModal"
+      ],
+      "patterns": [
+        "TailorModal",
+        "tailor-resume"
+      ],
       "area": "applications"
     },
     {
       "ticket": "",
       "name": "Cover Letter Modal",
       "file": "src/components/applications/cover-letter-modal.tsx",
-      "exports": ["CoverLetterModal"],
-      "patterns": ["CoverLetterModal", "cover-letter"],
+      "exports": [
+        "CoverLetterModal"
+      ],
+      "patterns": [
+        "CoverLetterModal",
+        "cover-letter"
+      ],
       "area": "applications"
     },
     {
       "ticket": "",
       "name": "Schedule Interview Modal",
       "file": "src/components/applications/schedule-modal.tsx",
-      "exports": ["ScheduleModal"],
-      "patterns": ["ScheduleModal", "CalendarAction", "handleSchedule"],
+      "exports": [
+        "ScheduleModal"
+      ],
+      "patterns": [
+        "ScheduleModal",
+        "CalendarAction",
+        "handleSchedule"
+      ],
       "area": "applications"
     },
     {
       "ticket": "CAR-92",
       "name": "Link Conversation Modal",
       "file": "src/components/applications/link-conversation-modal.tsx",
-      "exports": ["LinkConversationModal"],
-      "patterns": ["LinkConversationModal", "unlinked"],
+      "exports": [
+        "LinkConversationModal"
+      ],
+      "patterns": [
+        "LinkConversationModal",
+        "unlinked"
+      ],
       "area": "applications"
     },
     {
       "ticket": "CAR-96",
       "name": "Interview Prep Section",
       "file": "src/components/applications/interview-prep-section.tsx",
-      "exports": ["InterviewPrepSection"],
-      "patterns": ["InterviewPrepSection"],
+      "exports": [
+        "InterviewPrepSection"
+      ],
+      "patterns": [
+        "InterviewPrepSection"
+      ],
       "area": "intelligence"
     },
     {
       "ticket": "CAR-87",
       "name": "Debrief Form",
       "file": "src/components/applications/debrief-form.tsx",
-      "exports": ["DebriefForm"],
-      "patterns": ["rating", "questions", "nextRound"],
+      "exports": [
+        "DebriefForm"
+      ],
+      "patterns": [
+        "rating",
+        "questions",
+        "nextRound"
+      ],
       "area": "intelligence"
     },
     {
       "ticket": "CAR-87",
       "name": "Conversation Form",
       "file": "src/components/conversations/conversation-form.tsx",
-      "exports": ["ConversationForm"],
-      "patterns": ["ConversationForm", "action_items"],
+      "exports": [
+        "ConversationForm"
+      ],
+      "patterns": [
+        "ConversationForm",
+        "action_items"
+      ],
       "area": "conversations"
     },
     {
       "ticket": "",
       "name": "Conversation Section",
       "file": "src/components/conversations/conversation-section.tsx",
-      "exports": ["ConversationSection"],
-      "patterns": ["ConversationSection", "application"],
+      "exports": [
+        "ConversationSection"
+      ],
+      "patterns": [
+        "ConversationSection",
+        "application"
+      ],
       "area": "conversations"
     },
     {
       "ticket": "CAR-87",
       "name": "Pattern Insights",
       "file": "src/components/conversations/pattern-insights.tsx",
-      "exports": ["PatternInsights"],
-      "patterns": ["PatternInsights", "patterns"],
+      "exports": [
+        "PatternInsights"
+      ],
+      "patterns": [
+        "PatternInsights",
+        "patterns"
+      ],
       "area": "conversations"
     },
     {
       "ticket": "CAR-34",
       "name": "Email List Component",
       "file": "src/components/inbox/email-list.tsx",
-      "exports": ["EmailList"],
-      "patterns": ["EmailList"],
+      "exports": [
+        "EmailList"
+      ],
+      "patterns": [
+        "EmailList"
+      ],
       "area": "inbox"
     },
     {
       "ticket": "CAR-34",
       "name": "Email Card Component",
       "file": "src/components/inbox/email-card.tsx",
-      "exports": ["EmailCard"],
-      "patterns": ["EmailCard", "subject", "from"],
+      "exports": [
+        "EmailCard"
+      ],
+      "patterns": [
+        "EmailCard",
+        "subject",
+        "from"
+      ],
       "area": "inbox"
     },
     {
       "ticket": "",
       "name": "Inbox Bulk Actions",
       "file": "src/components/inbox/bulk-actions.tsx",
-      "exports": ["BulkActions"],
-      "patterns": ["BulkActions"],
+      "exports": [
+        "BulkActions"
+      ],
+      "patterns": [
+        "BulkActions"
+      ],
       "area": "inbox"
     },
     {
       "ticket": "CAR-34",
       "name": "Category Badge",
       "file": "src/components/inbox/category-badge.tsx",
-      "exports": ["CategoryBadge"],
-      "patterns": ["CategoryBadge", "EmailCategory"],
+      "exports": [
+        "CategoryBadge"
+      ],
+      "patterns": [
+        "CategoryBadge",
+        "EmailCategory"
+      ],
       "area": "inbox"
     },
     {
       "ticket": "CAR-77",
       "name": "Inbox Filter Chips",
       "file": "src/components/inbox/filter-chips.tsx",
-      "exports": ["FilterChips", "ALL_FILTER_IDS"],
-      "patterns": ["CATEGORY_FILTERS"],
+      "exports": [
+        "FilterChips",
+        "ALL_FILTER_IDS"
+      ],
+      "patterns": [
+        "CATEGORY_FILTERS"
+      ],
       "area": "inbox"
     },
     {
       "ticket": "CAR-18",
       "name": "Apply Flow Component",
       "file": "src/components/search/apply-flow.tsx",
-      "exports": ["ApplyFlow"],
-      "patterns": ["ApplyFlow"],
+      "exports": [
+        "ApplyFlow"
+      ],
+      "patterns": [
+        "ApplyFlow"
+      ],
       "area": "search"
     },
     {
       "ticket": "",
       "name": "Job Detail Pane",
       "file": "src/components/search/job-detail-pane.tsx",
-      "exports": ["JobDetailPane"],
-      "patterns": ["JobDetailPane", "description"],
+      "exports": [
+        "JobDetailPane"
+      ],
+      "patterns": [
+        "JobDetailPane",
+        "description"
+      ],
       "area": "search"
     },
     {
       "ticket": "CAR-63",
       "name": "Pipeline Chart",
       "file": "src/components/dashboard/pipeline-chart.tsx",
-      "exports": ["PipelineChart"],
-      "patterns": ["PipelineChart", "byStatus"],
+      "exports": [
+        "PipelineChart"
+      ],
+      "patterns": [
+        "PipelineChart",
+        "byStatus"
+      ],
       "area": "analytics"
     },
     {
       "ticket": "CAR-63",
       "name": "Weekly Activity Chart",
       "file": "src/components/dashboard/weekly-chart.tsx",
-      "exports": ["WeeklyChart"],
-      "patterns": ["WeeklyChart"],
+      "exports": [
+        "WeeklyChart"
+      ],
+      "patterns": [
+        "WeeklyChart"
+      ],
       "area": "analytics"
     },
     {
       "ticket": "",
       "name": "Activity Feed",
       "file": "src/components/dashboard/activity-feed.tsx",
-      "exports": ["ActivityFeed"],
-      "patterns": ["ActivityFeed"],
+      "exports": [
+        "ActivityFeed"
+      ],
+      "patterns": [
+        "ActivityFeed"
+      ],
       "area": "analytics"
     },
     {
       "ticket": "",
       "name": "Skill Gaps Widget",
       "file": "src/components/dashboard/skill-gaps-widget.tsx",
-      "exports": ["SkillGapsWidget"],
-      "patterns": ["SkillGapsWidget"],
+      "exports": [
+        "SkillGapsWidget"
+      ],
+      "patterns": [
+        "SkillGapsWidget"
+      ],
       "area": "analytics"
     },
     {
       "ticket": "CAR-113",
       "name": "Pipeline Funnel Chart",
       "file": "src/components/analytics/pipeline-funnel.tsx",
-      "exports": ["PipelineFunnel"],
-      "patterns": ["PipelineFunnel", "byStatus"],
+      "exports": [
+        "PipelineFunnel"
+      ],
+      "patterns": [
+        "PipelineFunnel",
+        "byStatus"
+      ],
       "area": "analytics"
     },
     {
       "ticket": "CAR-113",
       "name": "Source Distribution Chart",
       "file": "src/components/analytics/source-chart.tsx",
-      "exports": ["SourceChart"],
-      "patterns": ["SourceChart"],
+      "exports": [
+        "SourceChart"
+      ],
+      "patterns": [
+        "SourceChart"
+      ],
       "area": "analytics"
     },
     {
       "ticket": "CAR-113",
       "name": "Timeline Chart",
       "file": "src/components/analytics/timeline-chart.tsx",
-      "exports": ["TimelineChart"],
-      "patterns": ["TimelineChart"],
+      "exports": [
+        "TimelineChart"
+      ],
+      "patterns": [
+        "TimelineChart"
+      ],
       "area": "analytics"
     },
     {
       "ticket": "CAR-28",
       "name": "Coaching Report",
       "file": "src/components/coaching/coaching-report.tsx",
-      "exports": ["CoachingReport"],
-      "patterns": ["CoachingReport", "CoachingSession"],
+      "exports": [
+        "CoachingReport"
+      ],
+      "patterns": [
+        "CoachingReport",
+        "CoachingSession"
+      ],
       "area": "coaching"
     },
     {
       "ticket": "CAR-127",
       "name": "Debrief History Component",
       "file": "src/components/coaching/debrief-history.tsx",
-      "exports": ["DebriefHistory"],
-      "patterns": ["DebriefHistory", "Debrief History", "Export"],
+      "exports": [
+        "DebriefHistory"
+      ],
+      "patterns": [
+        "DebriefHistory",
+        "Debrief History",
+        "Export"
+      ],
       "area": "coaching"
     },
     {
       "ticket": "CAR-127",
       "name": "Debriefs Hook",
       "file": "src/hooks/use-debriefs.ts",
-      "exports": ["useDebriefs"],
-      "patterns": ["debriefs", "fetchDebriefs", "addDebrief"],
+      "exports": [
+        "useDebriefs"
+      ],
+      "patterns": [
+        "debriefs",
+        "fetchDebriefs",
+        "addDebrief"
+      ],
       "area": "coaching"
     },
     {
       "ticket": "CAR-127",
       "name": "Debrief Export Utility",
       "file": "src/lib/export-debrief.ts",
-      "exports": ["exportDebriefMarkdown"],
-      "patterns": ["exportDebriefMarkdown", "debrief-", ".md"],
+      "exports": [
+        "exportDebriefMarkdown"
+      ],
+      "patterns": [
+        "exportDebriefMarkdown",
+        "debrief-",
+        ".md"
+      ],
       "area": "coaching"
     },
     {
       "ticket": "CAR-113",
       "name": "KPI Card",
       "file": "src/components/shared/kpi-card.tsx",
-      "exports": ["KpiCard"],
-      "patterns": ["KpiCard", "label", "value", "trend"],
+      "exports": [
+        "KpiCard"
+      ],
+      "patterns": [
+        "KpiCard",
+        "label",
+        "value",
+        "trend"
+      ],
       "area": "overview"
     },
     {
       "ticket": "CAR-113",
       "name": "Empty State",
       "file": "src/components/shared/empty-state.tsx",
-      "exports": ["EmptyState"],
-      "patterns": ["EmptyState", "title", "description"],
+      "exports": [
+        "EmptyState"
+      ],
+      "patterns": [
+        "EmptyState",
+        "title",
+        "description"
+      ],
       "area": "layout"
     },
     {
       "ticket": "",
       "name": "Relative Time Display",
       "file": "src/components/ui/relative-time.tsx",
-      "exports": ["RelativeTime"],
-      "patterns": ["RelativeTime"],
+      "exports": [
+        "RelativeTime"
+      ],
+      "patterns": [
+        "RelativeTime"
+      ],
       "area": "layout"
     },
     {
       "ticket": "",
       "name": "Utility Functions",
       "file": "src/lib/utils.ts",
-      "exports": ["cn"],
-      "patterns": ["ClassValue"],
+      "exports": [
+        "cn"
+      ],
+      "patterns": [
+        "ClassValue"
+      ],
       "area": "lib"
     },
     {
       "ticket": "",
       "name": "Base Resume Template",
       "file": "src/lib/base-resume.ts",
-      "exports": ["BASE_RESUME"],
-      "patterns": ["JOSEPH FOWLER"],
+      "exports": [
+        "BASE_RESUME"
+      ],
+      "patterns": [
+        "JOSEPH FOWLER"
+      ],
       "area": "intelligence"
     },
     {
       "ticket": "",
       "name": "Gmail Auth Client",
       "file": "src/lib/gmail/auth.ts",
-      "exports": ["getGmailClient"],
-      "patterns": ["getGmailClient"],
+      "exports": [
+        "getGmailClient"
+      ],
+      "patterns": [
+        "getGmailClient"
+      ],
       "area": "inbox"
     },
     {
       "ticket": "",
       "name": "Gmail Message Parser",
       "file": "src/lib/gmail/parse.ts",
-      "exports": ["extractBody", "extractDomain", "extractPreview"],
-      "patterns": ["extractBody", "extractDomain"],
+      "exports": [
+        "extractBody",
+        "extractDomain",
+        "extractPreview"
+      ],
+      "patterns": [
+        "extractBody",
+        "extractDomain"
+      ],
       "area": "inbox"
     },
     {
       "ticket": "",
       "name": "Gmail Suggestions Helper",
       "file": "src/lib/gmail/suggestions.ts",
-      "exports": ["extractSecondLevelDomain", "findDomainMatch"],
-      "patterns": ["extractSecondLevelDomain", "findDomainMatch"],
+      "exports": [
+        "extractSecondLevelDomain",
+        "findDomainMatch"
+      ],
+      "patterns": [
+        "extractSecondLevelDomain",
+        "findDomainMatch"
+      ],
       "area": "inbox"
     },
     {
       "ticket": "",
       "name": "Indeed Results Parser",
       "file": "src/lib/parsers/indeed.ts",
-      "exports": ["parseIndeedResults"],
-      "patterns": ["parseIndeedResults", "ParsedJob"],
+      "exports": [
+        "parseIndeedResults"
+      ],
+      "patterns": [
+        "parseIndeedResults",
+        "ParsedJob"
+      ],
       "area": "search"
     },
     {
       "ticket": "",
       "name": "Dice Results Parser",
       "file": "src/lib/parsers/dice.ts",
-      "exports": ["parseDiceResults"],
-      "patterns": ["parseDiceResults"],
+      "exports": [
+        "parseDiceResults"
+      ],
+      "patterns": [
+        "parseDiceResults"
+      ],
       "area": "search"
     },
     {
       "ticket": "CAR-96",
       "name": "Interview Prep Prompts",
       "file": "src/lib/interview-prep-prompts.ts",
-      "exports": ["PREP_STAGES", "buildPhoneScreenPrompt", "buildInterviewPrompt", "buildOfferPrompt"],
-      "patterns": ["RESUME_CONTEXT", "phone_screen", "interview", "offer"],
+      "exports": [
+        "PREP_STAGES",
+        "buildPhoneScreenPrompt",
+        "buildInterviewPrompt",
+        "buildOfferPrompt"
+      ],
+      "patterns": [
+        "RESUME_CONTEXT",
+        "phone_screen",
+        "interview",
+        "offer"
+      ],
       "area": "intelligence"
     },
     {
       "ticket": "",
       "name": "Coaching Patterns Analysis",
       "file": "src/lib/coaching/patterns.ts",
-      "exports": ["analyzeFillersAndPatterns"],
-      "patterns": ["PatternAnalysis", "analyzeFillersAndPatterns"],
+      "exports": [
+        "analyzeFillersAndPatterns"
+      ],
+      "patterns": [
+        "PatternAnalysis",
+        "analyzeFillersAndPatterns"
+      ],
       "area": "coaching"
     },
     {
       "ticket": "",
       "name": "Core App Types",
       "file": "src/types/index.ts",
-      "exports": ["Job", "Application", "Conversation"],
-      "patterns": ["ApplicationStatus", "PrepStageKey", "AutoApplyStatus"],
+      "exports": [
+        "Job",
+        "Application",
+        "Conversation"
+      ],
+      "patterns": [
+        "ApplicationStatus",
+        "PrepStageKey",
+        "AutoApplyStatus"
+      ],
       "area": "types"
     },
     {
       "ticket": "",
       "name": "Coaching Types",
       "file": "src/types/coaching.ts",
-      "exports": ["CoachingSession", "PracticeQuestion"],
-      "patterns": ["CoachingAnalysis", "QuestionAnalysis", "PatternAnalysis"],
+      "exports": [
+        "CoachingSession",
+        "PracticeQuestion"
+      ],
+      "patterns": [
+        "CoachingAnalysis",
+        "QuestionAnalysis",
+        "PatternAnalysis"
+      ],
       "area": "types"
     },
     {
       "ticket": "",
       "name": "Email Types",
       "file": "src/types/email.ts",
-      "exports": ["EmailCategory", "Email"],
-      "patterns": ["ClassificationResult", "EmailApplicationLink", "UserSettings"],
+      "exports": [
+        "EmailCategory",
+        "Email"
+      ],
+      "patterns": [
+        "ClassificationResult",
+        "EmailApplicationLink",
+        "UserSettings"
+      ],
       "area": "types"
+    },
+    {
+      "ticket": "CAR-54",
+      "name": "Tag Input Component",
+      "file": "src/components/ui/tag-input.tsx",
+      "exports": [
+        "TagInput"
+      ],
+      "patterns": [
+        "handleKeyDown",
+        "removeTag"
+      ],
+      "area": "ui"
+    },
+    {
+      "ticket": "CAR-54",
+      "name": "Star Rating Component",
+      "file": "src/components/ui/star-rating.tsx",
+      "exports": [
+        "StarRating"
+      ],
+      "patterns": [
+        "fill-amber-400"
+      ],
+      "area": "ui"
+    },
+    {
+      "ticket": "CAR-54",
+      "name": "Structured Debrief Form Modal",
+      "file": "src/components/coaching/debrief-form-modal.tsx",
+      "exports": [
+        "DebriefFormModal"
+      ],
+      "patterns": [
+        "STAGE_OPTIONS",
+        "went_well",
+        "was_hard",
+        "do_differently"
+      ],
+      "area": "coaching"
+    },
+    {
+      "ticket": "CAR-54",
+      "name": "Structured Debrief AI Analysis API",
+      "file": "src/app/api/debriefs/analyze/route.ts",
+      "exports": [
+        "POST"
+      ],
+      "patterns": [
+        "DEBRIEF_ANALYSIS_PROMPT",
+        "debriefId"
+      ],
+      "area": "coaching"
+    },
+    {
+      "ticket": "CAR-54",
+      "name": "Cross-Application Patterns",
+      "file": "src/components/coaching/cross-app-patterns.tsx",
+      "exports": [
+        "CrossAppPatterns"
+      ],
+      "patterns": [
+        "topicCounts",
+        "recurringStrengths",
+        "recurringGaps"
+      ],
+      "area": "coaching"
     }
   ]
 }
