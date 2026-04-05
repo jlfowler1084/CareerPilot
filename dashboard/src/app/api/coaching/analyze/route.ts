@@ -136,6 +136,12 @@ export async function POST(req: NextRequest) {
     const improvements = Array.isArray(analysis.improvements) ? analysis.improvements : []
 
     // Step 6: Insert into interview_coaching table
+    const aiAnalysisJson = {
+      summary: analysis.summary || "",
+      question_analyses: analysis.question_analyses || [],
+      top_3_focus_areas: analysis.top_3_focus_areas || [],
+    } as unknown as Json
+
     const { data: session, error: insertError } = await supabase
       .from("interview_coaching")
       .insert({
@@ -143,11 +149,7 @@ export async function POST(req: NextRequest) {
         user_id: user.id,
         session_type: sessionType,
         raw_input: rawInput,
-        ai_analysis: {
-          summary: analysis.summary || "",
-          question_analyses: analysis.question_analyses || [],
-          top_3_focus_areas: analysis.top_3_focus_areas || [],
-        } as unknown as Json,
+        ai_analysis: aiAnalysisJson,
         overall_score: overallScore,
         strong_points: strongPoints as unknown as Json,
         improvements: improvements as unknown as Json,
@@ -159,6 +161,46 @@ export async function POST(req: NextRequest) {
     if (insertError) {
       console.error("Failed to store coaching session:", insertError.message)
       return NextResponse.json({ error: "Failed to store coaching session" }, { status: 500 })
+    }
+
+    // Step 7: Also persist to debriefs table for history/export (CAR-127)
+    // Only for debrief session types with a linked application
+    if (sessionType === "debrief" && applicationId) {
+      const modelUsed = process.env.MODEL_HAIKU || "claude-haiku-4-5-20241022"
+
+      // Look up application stage for context
+      const { data: app } = await supabase
+        .from("applications")
+        .select("status")
+        .eq("id", applicationId)
+        .maybeSingle()
+
+      const { data: debrief, error: debriefError } = await supabase
+        .from("debriefs")
+        .insert({
+          application_id: applicationId,
+          user_id: user.id,
+          stage: app?.status || "interview",
+          ai_analysis: {
+            ...analysis,
+            overall_score: overallScore,
+            strong_points: strongPoints,
+            improvements,
+            patterns_detected: patterns,
+          } as unknown as Json,
+          model_used: modelUsed,
+          generation_cost_cents: 0,
+        })
+        .select()
+        .single()
+
+      if (debriefError) {
+        // Log but don't fail — the coaching session was already saved
+        console.error("Failed to store debrief record:", debriefError.message)
+      }
+
+      // Return both the coaching session and the debrief record
+      return NextResponse.json({ ...session, debrief: debrief || null }, { status: 201 })
     }
 
     return NextResponse.json(session, { status: 201 })

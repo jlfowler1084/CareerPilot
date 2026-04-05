@@ -10,9 +10,11 @@ import {
 } from "lucide-react"
 import { toast } from "sonner"
 import { useCoaching } from "@/hooks/use-coaching"
+import { useDebriefs } from "@/hooks/use-debriefs"
 import { CoachingReport } from "@/components/coaching/coaching-report"
 import { PracticeMode } from "@/components/coaching/practice-mode"
-import type { Application } from "@/types"
+import { DebriefHistory } from "@/components/coaching/debrief-history"
+import type { Application, DebriefRecord } from "@/types"
 
 interface CoachingSectionProps {
   application: Application
@@ -36,6 +38,8 @@ export function CoachingSection({ application }: CoachingSectionProps) {
     evaluateAnswer,
   } = useCoaching(application.id)
 
+  const { debriefs, loading: debriefsLoading, addDebrief } = useDebriefs(application.id)
+
   const [open, setOpen] = useState(false)
   const [debriefOpen, setDebriefOpen] = useState(false)
   const [debriefText, setDebriefText] = useState("")
@@ -46,6 +50,11 @@ export function CoachingSection({ application }: CoachingSectionProps) {
     if (!debriefText.trim()) return
     const session = await analyzeDebrief(debriefText)
     if (session) {
+      // If the API returned a debrief record, add it to local state
+      const resp = session as unknown as Record<string, unknown>
+      if (resp.debrief) {
+        addDebrief(resp.debrief as DebriefRecord)
+      }
       toast.success(`Coaching complete — score: ${session.overall_score}/10`)
       setDebriefOpen(false)
       setDebriefText("")
@@ -141,6 +150,14 @@ export function CoachingSection({ application }: CoachingSectionProps) {
               Practice for This Role
             </button>
           </div>
+
+          {/* Debrief history timeline (CAR-127) */}
+          <DebriefHistory
+            debriefs={debriefs}
+            loading={debriefsLoading}
+            company={application.company}
+            title={application.title}
+          />
 
           {/* Debrief textarea */}
           {debriefOpen && (

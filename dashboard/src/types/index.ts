@@ -377,4 +377,5 @@ export type {
   CoachingImprovement,
   PatternAnalysis,
   PracticeQuestion,
+  DebriefRecord,
 } from "./coaching"

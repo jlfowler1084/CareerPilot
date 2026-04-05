@@ -49,3 +49,20 @@ export interface PracticeQuestion {
   difficulty: "easy" | "medium" | "hard"
   targets: string
 }
+
+export interface DebriefRecord {
+  id: string
+  application_id: string
+  user_id: string
+  stage: string
+  went_well: string | null
+  was_hard: string | null
+  do_differently: string | null
+  key_takeaways: string[] | null
+  interviewer_names: string[] | null
+  topics_covered: string[] | null
+  ai_analysis: CoachingAnalysis | null
+  model_used: string | null
+  generation_cost_cents: number
+  created_at: string
+}

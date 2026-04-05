@@ -1312,6 +1312,30 @@
       "area": "coaching"
     },
     {
+      "ticket": "CAR-127",
+      "name": "Debrief History Component",
+      "file": "src/components/coaching/debrief-history.tsx",
+      "exports": ["DebriefHistory"],
+      "patterns": ["DebriefHistory", "Debrief History", "Export"],
+      "area": "coaching"
+    },
+    {
+      "ticket": "CAR-127",
+      "name": "Debriefs Hook",
+      "file": "src/hooks/use-debriefs.ts",
+      "exports": ["useDebriefs"],
+      "patterns": ["debriefs", "fetchDebriefs", "addDebrief"],
+      "area": "coaching"
+    },
+    {
+      "ticket": "CAR-127",
+      "name": "Debrief Export Utility",
+      "file": "src/lib/export-debrief.ts",
+      "exports": ["exportDebriefMarkdown"],
+      "patterns": ["exportDebriefMarkdown", "debrief-", ".md"],
+      "area": "coaching"
+    },
+    {
       "ticket": "CAR-113",
       "name": "KPI Card",
       "file": "src/components/shared/kpi-card.tsx",
