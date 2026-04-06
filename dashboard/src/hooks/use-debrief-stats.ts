@@ -12,14 +12,10 @@ export function useDebriefStats() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const hasFetched = useRef(false)
-  const isFetching = useRef(false)
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const abortController = useRef<AbortController | null>(null)
 
   const fetchStats = useCallback(async () => {
-    if (isFetching.current) return
-    isFetching.current = true
-
     // Abort any previous in-flight request
     if (abortController.current) abortController.current.abort()
     abortController.current = new AbortController()
@@ -29,8 +25,8 @@ export function useDebriefStats() {
         signal: abortController.current.signal,
       })
       if (!resp.ok) {
-        const data = await resp.json()
-        setError(data.error || "Failed to load debrief stats")
+        const data = await resp.json().catch(() => ({}))
+        setError(data.error || `Failed to load debrief stats (${resp.status})`)
         return
       }
       const data = await resp.json()
@@ -41,7 +37,6 @@ export function useDebriefStats() {
       if (err instanceof DOMException && err.name === "AbortError") return
       setError("Network error")
     } finally {
-      isFetching.current = false
       setLoading(false)
     }
   }, [])
