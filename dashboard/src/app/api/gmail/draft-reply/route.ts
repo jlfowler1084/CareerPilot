@@ -134,6 +134,9 @@ export async function POST(req: NextRequest) {
 
     // Determine reply-to address (the sender of the latest message, not the user)
     const myEmail = getUserEmail(user)
+    if (!myEmail) {
+      console.warn('[draft-reply] getUserEmail returned empty — reply-to may be incorrect')
+    }
     const replyTo = myEmail && latestMsg.from_email.toLowerCase() === myEmail.toLowerCase()
       ? messages.find((m) => m.from_email.toLowerCase() !== myEmail.toLowerCase())?.from_email || latestMsg.from_email
       : latestMsg.from_email
