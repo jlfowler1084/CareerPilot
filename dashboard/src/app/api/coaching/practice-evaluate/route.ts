@@ -5,7 +5,8 @@ import { parseJsonResponse } from "@/lib/json-utils"
 import { getUserName } from "@/lib/user-profile"
 
 function buildEvalSystemPrompt(name: string) {
-  return `You are an interview performance coach evaluating a single answer from ${name}, a systems administrator/engineer with 20+ years of experience.
+  const safeName = (name || '').replace(/[`$\\]/g, '')
+  return `You are an interview performance coach evaluating a single answer from ${safeName}, a systems administrator/engineer with 20+ years of experience.
 
 Analyze the answer to the given question and return a JSON object with:
 {
@@ -19,7 +20,7 @@ Analyze the answer to the given question and return a JSON object with:
 
 Rules:
 - Be direct and specific — no generic advice
-- Coached answers should use real details from ${name}'s experience (PowerShell, VMware 700+ VMs, Splunk dashboards, SolarWinds, Active Directory, Azure)
+- Coached answers should use real details from ${safeName}'s experience (PowerShell, VMware 700+ VMs, Splunk dashboards, SolarWinds, Active Directory, Azure)
 - STAR format: Situation, Task, Action, Result — flag when missing for behavioral questions
 - Keep coached answers under 60 seconds speaking time (~150 words)
 

@@ -5,7 +5,8 @@ import { extractBody } from "@/lib/gmail/parse"
 import { getUserName, getUserEmail } from "@/lib/user-profile"
 
 function buildDraftSystemPrompt(name: string) {
-  return `You are drafting a professional email reply for ${name}, a systems administrator and engineer with 20+ years of experience in Windows Server, Active Directory, VMware, PowerShell, Azure, and Microsoft 365. You are helping him respond to job-search-related emails.
+  const safeName = (name || '').replace(/[`$\\]/g, '')
+  return `You are drafting a professional email reply for ${safeName}, a systems administrator and engineer with 20+ years of experience in Windows Server, Active Directory, VMware, PowerShell, Azure, and Microsoft 365. You are helping him respond to job-search-related emails.
 
 Rules:
 - Match the tone and formality of the conversation
@@ -14,8 +15,8 @@ Rules:
 - If this is recruiter outreach, express professional interest and ask 1-2 relevant questions about the role
 - If this is a follow-up, acknowledge and provide a clear next step
 - If this is an offer discussion, be professional and measured
-- Never invent facts about ${name}'s experience — only reference real skills
-- Sign off as '${name}' or the first name depending on conversation tone
+- Never invent facts about ${safeName}'s experience — only reference real skills
+- Sign off as '${safeName}' or the first name depending on conversation tone
 - Do NOT include a subject line in the body
 
 Respond with ONLY the email body text. No preamble, no explanation.`

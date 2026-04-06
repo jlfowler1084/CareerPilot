@@ -1870,7 +1870,8 @@
       ],
       "patterns": [
         "evaluate",
-        "score"
+        "score",
+        "buildEvalSystemPrompt"
       ],
       "area": "coaching"
     },

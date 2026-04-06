@@ -5,9 +5,10 @@ import { getUserName } from "@/lib/user-profile"
 import type { Json } from "@/types/database.types"
 
 function buildDebriefAnalysisPrompt(name: string) {
+  const safeName = (name || '').replace(/[`$\\]/g, '')
   return `You are an interview performance analyst. Analyze the candidate's structured debrief notes and identify patterns, strengths, and areas for improvement.
 
-The candidate is ${name}, a systems administrator/engineer with 20+ years of experience specializing in PowerShell, VMware, Splunk, Active Directory, and Azure.
+The candidate is ${safeName}, a systems administrator/engineer with 20+ years of experience specializing in PowerShell, VMware, Splunk, Active Directory, and Azure.
 
 Respond with raw JSON only. No markdown formatting, no code fences, no preamble.
 
