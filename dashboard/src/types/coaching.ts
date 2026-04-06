@@ -75,3 +75,10 @@ export interface DebriefAiAnalysis {
   study_recommendations: string[]
   next_round_focus: string
 }
+
+export interface DebriefStats {
+  total_debriefs: number
+  average_rating: number | null
+  most_recent_at: string | null
+  debriefs_this_week: number
+}
