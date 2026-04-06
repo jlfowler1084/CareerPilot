@@ -66,10 +66,10 @@ CareerPilot/
 | `skills` | Track skill gaps, generate study roadmaps |
 | `journal` | Progress entries, weekly insights |
 
-### MCP Servers (Project-Specific)
-- **Supabase** — cloud data sync (permission: `mcp__Supabase__*`)
-- **Playwright** — browser automation for job sites (permission: `mcp__plugin_playwright_playwright__*`)
-- **Indeed/Dice** — job search APIs
+## MCP Servers
+Allowed: Atlassian Rovo, Context7, Supabase, Indeed, Dice, Playwright
+All servers are enabled in this project — no disables needed.
+Source of truth: ClaudeInfra `configs/mcp-server-registry.json` (INFRA-70).
 
 ## Privacy & Safety
 - **Draft-only mode:** Gmail responder saves drafts only — nothing sends without explicit approval
