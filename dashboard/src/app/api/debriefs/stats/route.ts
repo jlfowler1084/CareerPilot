@@ -57,6 +57,29 @@ export function calculateDebriefStats(debriefs: DebriefStatsRow[]): DebriefStats
 }
 
 export async function GET() {
-  // Placeholder — implemented in Task 3
-  return NextResponse.json({})
+  try {
+    const supabase = await createServerSupabaseClient()
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    const { data, error } = await supabase
+      .from("debriefs")
+      .select("id, user_id, overall_rating, created_at")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+
+    if (error) {
+      console.error("Failed to fetch debrief stats:", error.message)
+      return NextResponse.json({ error: error.message }, { status: 500 })
+    }
+
+    // Cast needed because database.types.ts is stale (pre-CAR-127, missing overall_rating)
+    const stats = calculateDebriefStats((data || []) as unknown as DebriefStatsRow[])
+    return NextResponse.json(stats)
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Internal server error"
+    return NextResponse.json({ error: message }, { status: 500 })
+  }
 }
