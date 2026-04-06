@@ -86,10 +86,56 @@ describe("useDebriefStats", () => {
       json: async () => MOCK_STATS,
     })
 
-    const { unmount } = renderHook(() => useDebriefStats())
+    const { result, unmount } = renderHook(() => useDebriefStats())
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false)
+    })
+
     unmount()
 
     expect(mockRemoveChannel).toHaveBeenCalled()
+  })
+
+  it("sets 'Network error' when fetch throws", async () => {
+    ;(global.fetch as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new TypeError("Failed to fetch"))
+
+    const { result } = renderHook(() => useDebriefStats())
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false)
+    })
+
+    expect(result.current.error).toBe("Network error")
+    expect(result.current.stats).toBeNull()
+  })
+
+  it("re-fetches when realtime event fires", async () => {
+    vi.useFakeTimers()
+
+    ;(global.fetch as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce({ ok: true, json: async () => MOCK_STATS })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ ...MOCK_STATS, total_debriefs: 10 }) })
+
+    renderHook(() => useDebriefStats())
+
+    // Wait for initial fetch
+    await vi.waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledTimes(1)
+    })
+
+    // Extract the realtime callback registered via .on()
+    const onCallback = mockOn.mock.calls[0][2]
+    onCallback()
+
+    // Advance past debounce
+    vi.advanceTimersByTime(500)
+
+    await vi.waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledTimes(2)
+    })
+
+    vi.useRealTimers()
   })
 
   it("refresh triggers a new fetch", async () => {
