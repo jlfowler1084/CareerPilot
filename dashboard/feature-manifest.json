@@ -2622,6 +2622,35 @@
         "USER_EMAIL"
       ],
       "area": "lib"
+    },
+    {
+      "ticket": "CAR-102",
+      "name": "Debrief Stats API Route",
+      "file": "src/app/api/debriefs/stats/route.ts",
+      "exports": [
+        "GET",
+        "calculateDebriefStats"
+      ],
+      "patterns": [
+        "average_rating",
+        "debriefs_this_week",
+        "most_recent_at"
+      ],
+      "area": "coaching"
+    },
+    {
+      "ticket": "CAR-102",
+      "name": "Debrief Stats Hook",
+      "file": "src/hooks/use-debrief-stats.ts",
+      "exports": [
+        "useDebriefStats"
+      ],
+      "patterns": [
+        "DebriefStats",
+        "postgres_changes",
+        "debriefs"
+      ],
+      "area": "coaching"
     }
   ]
 }
