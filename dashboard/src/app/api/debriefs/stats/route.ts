@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import type { DebriefStats } from "@/types/coaching"
 
-interface DebriefRow {
+interface DebriefStatsRow {
   id: string
   user_id: string
   overall_rating: number | null
@@ -22,7 +22,7 @@ function getStartOfISOWeek(): Date {
   return monday
 }
 
-export function calculateDebriefStats(debriefs: DebriefRow[]): DebriefStats {
+export function calculateDebriefStats(debriefs: DebriefStatsRow[]): DebriefStats {
   if (debriefs.length === 0) {
     return {
       total_debriefs: 0,
@@ -41,8 +41,11 @@ export function calculateDebriefStats(debriefs: DebriefRow[]): DebriefStats {
       ? Math.round((rated.reduce((sum, d) => sum + d.overall_rating!, 0) / rated.length) * 10) / 10
       : null
 
-  // Most recent — debriefs are ordered by created_at desc from the query
-  const most_recent_at = debriefs[0].created_at
+  // Most recent — defensive reduce, no sort-order assumption
+  const most_recent_at = debriefs.reduce((latest, d) =>
+    d.created_at > latest ? d.created_at : latest,
+    debriefs[0].created_at
+  )
 
   // This week — created_at >= Monday 00:00 UTC
   const weekStart = getStartOfISOWeek()
