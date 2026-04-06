@@ -2,8 +2,10 @@ import { NextRequest, NextResponse } from "next/server"
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { getGmailClient } from "@/lib/gmail/auth"
 import { extractBody } from "@/lib/gmail/parse"
+import { getUserName, getUserEmail } from "@/lib/user-profile"
 
-const DRAFT_SYSTEM_PROMPT = `You are drafting a professional email reply for Joseph Fowler, a systems administrator and engineer with 20+ years of experience in Windows Server, Active Directory, VMware, PowerShell, Azure, and Microsoft 365. You are helping him respond to job-search-related emails.
+function buildDraftSystemPrompt(name: string) {
+  return `You are drafting a professional email reply for ${name}, a systems administrator and engineer with 20+ years of experience in Windows Server, Active Directory, VMware, PowerShell, Azure, and Microsoft 365. You are helping him respond to job-search-related emails.
 
 Rules:
 - Match the tone and formality of the conversation
@@ -12,11 +14,12 @@ Rules:
 - If this is recruiter outreach, express professional interest and ask 1-2 relevant questions about the role
 - If this is a follow-up, acknowledge and provide a clear next step
 - If this is an offer discussion, be professional and measured
-- Never invent facts about Joseph's experience — only reference real skills
-- Sign off as 'Joseph Fowler' or 'Joe' depending on conversation tone
+- Never invent facts about ${name}'s experience — only reference real skills
+- Sign off as '${name}' or the first name depending on conversation tone
 - Do NOT include a subject line in the body
 
 Respond with ONLY the email body text. No preamble, no explanation.`
+}
 
 interface ThreadMessageParsed {
   from_email: string
@@ -109,7 +112,7 @@ export async function POST(req: NextRequest) {
       body: JSON.stringify({
         model: process.env.MODEL_SONNET || "claude-sonnet-4-20250514",
         max_tokens: 500,
-        system: DRAFT_SYSTEM_PROMPT,
+        system: buildDraftSystemPrompt(getUserName(user)),
         messages: [{ role: "user", content: userContent }],
       }),
     })
@@ -130,9 +133,9 @@ export async function POST(req: NextRequest) {
       : `Re: ${originalSubject}`
 
     // Determine reply-to address (the sender of the latest message, not the user)
-    const userEmail = "jlfowler1084@gmail.com"
-    const replyTo = latestMsg.from_email.toLowerCase() === userEmail.toLowerCase()
-      ? messages.find((m) => m.from_email.toLowerCase() !== userEmail.toLowerCase())?.from_email || latestMsg.from_email
+    const myEmail = getUserEmail(user)
+    const replyTo = myEmail && latestMsg.from_email.toLowerCase() === myEmail.toLowerCase()
+      ? messages.find((m) => m.from_email.toLowerCase() !== myEmail.toLowerCase())?.from_email || latestMsg.from_email
       : latestMsg.from_email
 
     // Thread continuity headers

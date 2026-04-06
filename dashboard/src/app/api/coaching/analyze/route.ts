@@ -2,9 +2,11 @@ import { NextRequest, NextResponse } from "next/server"
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { analyzeFillersAndPatterns } from "@/lib/coaching/patterns"
 import { parseJsonResponse } from "@/lib/json-utils"
+import { getUserName } from "@/lib/user-profile"
 import type { Json } from "@/types/database.types"
 
-const COACHING_SYSTEM_PROMPT = `You are an interview performance coach analyzing a candidate's interview performance. The candidate is Joseph Fowler, a systems administrator/engineer with 20+ years of experience.
+function buildCoachingSystemPrompt(name: string) {
+  return `You are an interview performance coach analyzing a candidate's interview performance. The candidate is ${name}, a systems administrator/engineer with 20+ years of experience.
 
 Analyze the provided interview content. Respond with raw JSON only. No markdown formatting, no code fences, no preamble, no explanation.
 
@@ -36,13 +38,14 @@ Return a JSON object with:
 
 Rules:
 - Be direct and specific — no generic advice like 'be more confident'
-- Every coached answer must use real details from Joseph's actual experience (PowerShell, VMware 700+ VMs, Splunk dashboards, SolarWinds, Active Directory, Azure)
+- Every coached answer must use real details from ${name}'s actual experience (PowerShell, VMware 700+ VMs, Splunk dashboards, SolarWinds, Active Directory, Azure)
 - Flag answers that sound good but lack substance
 - If a question is about a skill gap, coach how to acknowledge it honestly while showing initiative
 - STAR format: Situation, Task, Action, Result — flag when missing
 - Keep coached answers under 60 seconds speaking time (~150 words)
 
 Return ONLY valid JSON. No markdown, no backticks, no preamble.`
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -91,7 +94,7 @@ export async function POST(req: NextRequest) {
       body: JSON.stringify({
         model: process.env.MODEL_HAIKU || "claude-haiku-4-5-20251001",
         max_tokens: 8192,
-        system: COACHING_SYSTEM_PROMPT,
+        system: buildCoachingSystemPrompt(getUserName(user)),
         messages: [{ role: "user", content: contextParts.join("\n") }],
       }),
       signal: AbortSignal.timeout(120_000),

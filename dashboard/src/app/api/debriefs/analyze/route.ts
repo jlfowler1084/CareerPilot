@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { parseJsonResponse } from "@/lib/json-utils"
+import { getUserName } from "@/lib/user-profile"
 import type { Json } from "@/types/database.types"
 
-const DEBRIEF_ANALYSIS_PROMPT = `You are an interview performance analyst. Analyze the candidate's structured debrief notes and identify patterns, strengths, and areas for improvement.
+function buildDebriefAnalysisPrompt(name: string) {
+  return `You are an interview performance analyst. Analyze the candidate's structured debrief notes and identify patterns, strengths, and areas for improvement.
 
-The candidate is Joseph Fowler, a systems administrator/engineer with 20+ years of experience specializing in PowerShell, VMware, Splunk, Active Directory, and Azure.
+The candidate is ${name}, a systems administrator/engineer with 20+ years of experience specializing in PowerShell, VMware, Splunk, Active Directory, and Azure.
 
 Respond with raw JSON only. No markdown formatting, no code fences, no preamble.
 
@@ -25,6 +27,7 @@ Rules:
 - If there are prior debriefs, compare this round to previous rounds
 
 Return ONLY valid JSON. No markdown, no backticks, no preamble.`
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -150,7 +153,7 @@ export async function POST(req: NextRequest) {
       body: JSON.stringify({
         model: process.env.MODEL_HAIKU || "claude-haiku-4-5-20251001",
         max_tokens: 2048,
-        system: DEBRIEF_ANALYSIS_PROMPT,
+        system: buildDebriefAnalysisPrompt(getUserName(user)),
         messages: [{ role: "user", content: contextParts.join("\n") }],
       }),
       signal: AbortSignal.timeout(60_000),

@@ -2,8 +2,10 @@ import { NextRequest, NextResponse } from "next/server"
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { analyzeFillersAndPatterns } from "@/lib/coaching/patterns"
 import { parseJsonResponse } from "@/lib/json-utils"
+import { getUserName } from "@/lib/user-profile"
 
-const EVAL_SYSTEM_PROMPT = `You are an interview performance coach evaluating a single answer from Joseph Fowler, a systems administrator/engineer with 20+ years of experience.
+function buildEvalSystemPrompt(name: string) {
+  return `You are an interview performance coach evaluating a single answer from ${name}, a systems administrator/engineer with 20+ years of experience.
 
 Analyze the answer to the given question and return a JSON object with:
 {
@@ -17,11 +19,12 @@ Analyze the answer to the given question and return a JSON object with:
 
 Rules:
 - Be direct and specific — no generic advice
-- Coached answers should use real details from Joseph's experience (PowerShell, VMware 700+ VMs, Splunk dashboards, SolarWinds, Active Directory, Azure)
+- Coached answers should use real details from ${name}'s experience (PowerShell, VMware 700+ VMs, Splunk dashboards, SolarWinds, Active Directory, Azure)
 - STAR format: Situation, Task, Action, Result — flag when missing for behavioral questions
 - Keep coached answers under 60 seconds speaking time (~150 words)
 
 Return ONLY valid JSON. No markdown, no backticks, no preamble.`
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -68,7 +71,7 @@ export async function POST(req: NextRequest) {
       body: JSON.stringify({
         model: process.env.MODEL_SONNET || "claude-sonnet-4-20250514",
         max_tokens: 1000,
-        system: EVAL_SYSTEM_PROMPT,
+        system: buildEvalSystemPrompt(getUserName(user)),
         messages: [{ role: "user", content: contextParts.join("\n") }],
       }),
       signal: AbortSignal.timeout(30_000),

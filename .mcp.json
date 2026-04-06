@@ -16,6 +16,14 @@
     "supabase": {
       "type": "url",
       "url": "https://mcp.supabase.com/mcp"
+    },
+    "otter": {
+      "type": "stdio",
+      "command": "F:/Projects/otter-mcp/.venv/Scripts/python.exe",
+      "args": [
+        "F:/Projects/otter-mcp/launch.py"
+      ],
+      "env": {}
     }
   }
 }

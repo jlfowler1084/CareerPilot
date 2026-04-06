@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { generateResumePdf, generateCoverLetterPdf } from "@/lib/pdf-generator"
+import { getUserName } from "@/lib/user-profile"
 
 function sanitizeFilename(str: string): string {
   return str
@@ -30,7 +31,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Generate PDF buffer
-    const pdfMetadata = { name: "Joseph Fowler", title: metadata.title, company: metadata.company }
+    const pdfMetadata = { name: getUserName(user), title: metadata.title, company: metadata.company }
     const pdfBuffer = type === "resume"
       ? await generateResumePdf(text, pdfMetadata)
       : await generateCoverLetterPdf(text, pdfMetadata)

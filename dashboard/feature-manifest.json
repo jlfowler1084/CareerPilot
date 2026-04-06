@@ -1883,7 +1883,7 @@
       ],
       "patterns": [
         "analyzeFillersAndPatterns",
-        "COACHING_SYSTEM_PROMPT",
+        "buildCoachingSystemPrompt",
         "overall_score"
       ],
       "area": "coaching"
@@ -2588,7 +2588,7 @@
         "POST"
       ],
       "patterns": [
-        "DEBRIEF_ANALYSIS_PROMPT",
+        "buildDebriefAnalysisPrompt",
         "debriefId"
       ],
       "area": "coaching"
@@ -2606,6 +2606,21 @@
         "recurringGaps"
       ],
       "area": "coaching"
+    },
+    {
+      "ticket": "CAR-128",
+      "name": "User Profile Utility",
+      "file": "src/lib/user-profile.ts",
+      "exports": [
+        "getUserName",
+        "getUserEmail"
+      ],
+      "patterns": [
+        "user_metadata",
+        "USER_FULL_NAME",
+        "USER_EMAIL"
+      ],
+      "area": "lib"
     }
   ]
 }
