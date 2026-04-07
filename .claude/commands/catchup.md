@@ -60,8 +60,16 @@ dependencies where CareerPilot is either `from` or `to`.
 
 ### Step 4: Read today's daily note for dependency flags
 
-Read `F:\Obsidian\SecondBrain\Daily Notes\<YYYY-MM-DD>.md` and look for lines
-containing `NEW DEPENDENCY:` markers. Collect them for the Flagged Dependencies section.
+Check if `F:\Obsidian\SecondBrain\Daily Notes\<YYYY-MM-DD>.md` exists:
+- If the file does NOT exist: Step 1 should have auto-created it (existing behavior)
+- If the file DOES exist: grep it for lines containing `NEW DEPENDENCY:` markers
+
+Report one of three states under "Flagged Dependencies" in the output:
+1. If file was just auto-created by Step 1: "Daily note auto-created this session; no dependencies flagged yet"
+2. If file exists and has no `NEW DEPENDENCY:` markers: "None found"
+3. If file exists and has markers: list each one as a bullet with context
+
+**Never say "No daily note exists" if the file is actually on disk.**
 
 ### Step 5: Identify cross-project ticket references
 
@@ -81,7 +89,7 @@ Produce the following structured summary with these EXACT section headers IN THI
 (list all dependencies where CareerPilot is from or to)
 
 ## Flagged Dependencies
-<NEW DEPENDENCY: markers found in today's daily note; otherwise "None found">
+<One of: "Daily note auto-created this session; no dependencies flagged yet" | "None found" | bulleted list of NEW DEPENDENCY: markers>
 
 ## Recent Activity in Dependent Projects (last 48h)
 
@@ -130,3 +138,38 @@ END CATCHUP METADATA -->
 
 If no recent activity is found for a dependent project, state "No activity in last 48 hours"
 rather than omitting the project or generating filler content.
+
+## Required Output Format
+
+Your response MUST end with the metadata block below. This is NOT optional — the Phase 2 message bus parses this block programmatically. If you omit it, downstream automation breaks.
+
+To generate the block, run this PowerShell snippet and paste its output verbatim at the end of your response:
+
+```powershell
+$activity = Get-SBCrossProjectActivity -DaysBack 2
+$meta = [ordered]@{
+    catchup_version    = '1.0'
+    project            = 'CareerPilot'
+    generated_at       = (Get-Date -Format 'o')
+    days_back          = 2
+    dependent_projects = @($activity.Project)
+    cross_project_refs = @($activity.CrossProjectRefs | Sort-Object -Unique)
+    new_dependencies   = @()
+    flagged_risks      = @()
+}
+
+# Prefer YAML if powershell-yaml is installed, fall back to JSON otherwise
+if (Get-Module -ListAvailable powershell-yaml) {
+    Import-Module powershell-yaml
+    $body = $meta | ConvertTo-Yaml
+} else {
+    $body = $meta | ConvertTo-Json -Depth 4
+}
+
+$fence = '``' + '`'
+"---`n<!-- BEGIN CATCHUP METADATA -->`n${fence}yaml`n$body`n${fence}`n<!-- END CATCHUP METADATA -->"
+```
+
+Fill `new_dependencies` with any `NEW DEPENDENCY:` markers found in today's daily note. Fill `flagged_risks` with short strings summarizing anything from the "Action Items for This Session" section that's a risk to cross-project stability.
+
+The output block must start with `<!-- BEGIN CATCHUP METADATA -->` and end with `<!-- END CATCHUP METADATA -->` on their own lines, with a fenced yaml code block between them.
