@@ -85,21 +85,37 @@ export async function POST(req: NextRequest) {
 
     // Haiku: structured extraction from interview transcript (classification-level task)
     // 8192 max_tokens: full transcripts (~15K input tokens) produce ~7K output tokens for detailed per-question analysis
-    const resp = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: process.env.MODEL_HAIKU || "claude-haiku-4-5-20251001",
-        max_tokens: 8192,
-        system: buildCoachingSystemPrompt(getUserName(user)),
-        messages: [{ role: "user", content: contextParts.join("\n") }],
-      }),
-      signal: AbortSignal.timeout(120_000),
-    })
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 90_000)
+
+    let resp: Response
+    try {
+      resp = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
+        },
+        body: JSON.stringify({
+          model: process.env.MODEL_HAIKU || "claude-haiku-4-5-20251001",
+          max_tokens: 8192,
+          system: buildCoachingSystemPrompt(getUserName(user)),
+          messages: [{ role: "user", content: contextParts.join("\n") }],
+        }),
+        signal: controller.signal,
+      })
+    } catch (err: unknown) {
+      clearTimeout(timeout)
+      if (err instanceof Error && err.name === "AbortError") {
+        return NextResponse.json(
+          { error: "Analysis timed out after 90s. Try a shorter transcript or click Retry." },
+          { status: 504 }
+        )
+      }
+      throw err
+    }
+    clearTimeout(timeout)
 
     if (!resp.ok) {
       const errBody = await resp.text()
