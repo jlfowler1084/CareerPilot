@@ -51,6 +51,9 @@ CareerPilot/
 │   └── journal.py         # Progress journaling
 ├── tests/
 ├── .env                   # API keys (never committed)
+├── prompts/               # Session handoff prompts
+├── docs/plans/            # CE implementation plans (archive)
+├── docs/solutions/        # Knowledge compounding (solved problems)
 ├── .mcp.json              # MCP server configuration
 └── requirements.txt
 ```
