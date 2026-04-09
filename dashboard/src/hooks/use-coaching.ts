@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback, useMemo } from "react"
+import { useState, useCallback, useMemo, useEffect, useRef } from "react"
 import type {
   CoachingSession,
   PracticeQuestion,
@@ -10,29 +10,37 @@ import type {
 
 export function useCoaching(applicationId: string) {
   const [sessions, setSessions] = useState<CoachingSession[]>([])
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [analyzing, setAnalyzing] = useState(false)
   const [practicing, setPracticing] = useState(false)
   const [evaluating, setEvaluating] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const hasFetched = useRef(false)
 
   const fetchSessions = useCallback(async () => {
     setLoading(true)
-    setError(null)
     try {
       const resp = await fetch(`/api/coaching/analyze?applicationId=${applicationId}`)
-      if (!resp.ok) {
-        // No GET handler yet — we'll load from sessions state
-        return
-      }
+      if (!resp.ok) return
       const data = await resp.json()
       setSessions(Array.isArray(data) ? data : [])
     } catch {
-      // Sessions will be populated as they're created
+      // Silent — sessions will be populated as they're created
     } finally {
       setLoading(false)
     }
   }, [applicationId])
+
+  useEffect(() => {
+    hasFetched.current = false
+  }, [applicationId])
+
+  useEffect(() => {
+    if (!hasFetched.current) {
+      hasFetched.current = true
+      fetchSessions()
+    }
+  }, [fetchSessions])
 
   const analyzeDebrief = useCallback(
     async (notes: string, jobDescription?: string) => {
