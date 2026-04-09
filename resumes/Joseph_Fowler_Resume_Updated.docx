@@ -1,0 +1,105 @@
+**JOSEPH FOWLER**
+
+Sheridan, IN
+
+jlfowler1084@gmail.com  ·  443-787-6528  ·  linkedin.com/in/system-administration
+
+**PROFESSIONAL SUMMARY**
+
+Systems administrator and engineer with over two decades of experience managing enterprise server environments, supporting Windows and Microsoft 365 infrastructure, and improving operational reliability. Skilled in server commissioning, Windows OS administration and migration, VMware vSphere virtualization, Active Directory and Group Policy management, and PowerShell automation. Experienced with SolarWinds monitoring, SCCM patch management, Azure administration, and maintaining thorough documentation across the full server lifecycle. Known for clear communication, steady follow-through, and a practical approach to solving infrastructure problems. Increasingly focused on cloud technologies and infrastructure automation.
+
+**CORE SKILLS**
+
+PowerShell Scripting & Automation  ·  Windows Server & Active Directory  ·  VMware vSphere & PowerCLI  ·  Microsoft 365 & Azure AD/Entra ID  ·  Splunk & SolarWinds Monitoring  ·  Networking (DNS, DHCP, VLAN, VPN)  ·  Nimble SAN & Storage Management  ·  SCCM & Group Policy Management  ·  Azure Portal & VM Provisioning  ·  Technical Support & Escalation Handling  ·  Documentation, Runbooks & Knowledge Management  ·  GitHub & Version Control
+
+**PROFESSIONAL EXPERIENCE**
+
+**Venable LLP** — Baltimore, MD
+
+*Systems Engineer* · 2021 – October 2025
+
+- Led server commissioning activities including deployment, configuration, and validation of physical and virtual servers in compliance with organizational standards and security policies.
+
+- Planned and executed Windows OS refresh and migration projects, validating system functionality post-upgrade and resolving any post-migration issues.
+
+- Administered Microsoft 365 licensing and tenant configuration alongside on-premises Exchange, supporting a hybrid messaging environment across the firm.
+
+- Provisioned and managed resources in the Azure portal, including virtual machine deployment and Azure AD/Entra ID administration for identity and access management.
+
+- Redesigned SolarWinds alerting configuration, meaningfully reducing noise and false positives and improving team response times to genuine incidents.
+
+- Developed and deployed 30+ Splunk dashboards providing real-time analytics and operational visibility into critical infrastructure components.
+
+- Automated a broad range of manual administrative tasks using PowerShell scripting, freeing up team time and improving workflow consistency.
+
+- Designed and implemented custom Windows scheduled tasks with Splunk integration for comprehensive logging and performance tracking.
+
+- Built a modular PowerShell scripting framework hosted in GitHub with detailed documentation to support maintainability and future scalability.
+
+- Expanded and optimized Nimble SAN storage, provisioning LUNs and managing high-demand storage to support data availability requirements.
+
+- Automated VMware PowerCLI tasks to accelerate virtual machine provisioning and routine maintenance across a 700+ VM environment.
+
+*Operations Analyst* · 2018 – 2021
+
+- Managed a 700+ server VMware vSphere environment, supporting uptime and compliance with security policies.
+
+- Supported backup operations and disaster recovery planning for server infrastructure, ensuring data protection and continuity across the environment.
+
+- Developed PowerShell scripts to automate user provisioning, log analysis, and patch management, substantially reducing manual workload.
+
+- Strengthened Active Directory and Group Policy enforcement, ensuring consistent policy application across the enterprise.
+
+- Revamped SolarWinds monitoring with dynamic alerting thresholds to proactively detect and surface infrastructure issues.
+
+- Improved SCCM deployment strategies to enforce enterprise-wide patch compliance and support security hardening efforts.
+
+*Analyst, Technology Networks **&** Systems* · 2014 – 2017
+
+- Contributed to meaningful reductions in critical system downtime through proactive monitoring and automated alerting using SolarWinds and Splunk.
+
+- Streamlined certificate lifecycle management, improving compliance and uptime for enterprise security systems.
+
+- Upgraded and maintained network infrastructure, deploying Cisco routers, switches, and wireless access points to improve connectivity.
+
+- Managed DNS, DHCP, VLAN auditing, and virtualization lifecycle activities to maintain network integrity.
+
+*Specialist, Technology Hardware Services* · 2005 – 2013
+
+- Provided tier-3 support for desktops, laptops, and mobile devices with a strong record of thorough resolution and follow-through.
+
+- Assisted in the firm-wide Windows 7 rollout, ensuring smooth data migration and user transition across the organization.
+
+- Performed new-hire setups, workstation installations, and equipment replacement activities.
+
+- Created clear written instructions for hardware deployment, setup, and user guidance.
+
+**EDUCATION ****&**** CERTIFICATIONS**
+
+- Microsoft Azure Fundamentals (AZ-900) — In Progress
+
+- ITIL V4 Foundations Certificate
+
+- Security+, CompTIA
+
+- Network Information Systems Certificate, Tesst College of Technology
+
+**TECHNICAL KNOWLEDGE**
+
+**Operating Systems: **Windows 10/11, Windows Server, Active Directory, VMware vSphere
+
+**Cloud ****&**** Identity: **Microsoft 365 Administration, Azure Portal, Azure AD/Entra ID, Azure VM Deployment, Exchange Online (Hybrid)
+
+**Scripting ****&**** Automation: **PowerShell, VMware PowerCLI, Python (Foundational)
+
+**Monitoring ****&**** Logging: **Splunk, SolarWinds, ITSI
+
+**Networking: **DNS, DHCP, VLAN, VPN, Cisco Routers & Switches
+
+**Storage: **Nimble SAN, LUN Provisioning
+
+**Security ****&**** Compliance: **ITIL, Security+, SCCM, Group Policy, SIEM
+
+**DevOps ****&**** Version Control: **GitHub, PowerShell Modules, Git
+
+**Hardware: **Workstations, laptops, printers, peripherals, mobile devices

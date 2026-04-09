@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "protected_branches": [
+    "master"
+  ],
+  "worktree_root": ".worktrees/",
+  "allow_bypass_push_env": "ALLOW_MAIN_PUSH",
+  "allow_bypass_env": "ALLOW_MAIN_COMMIT",
+  "worktree_pattern": "worktree/<TICKET>-<slug>"
+}

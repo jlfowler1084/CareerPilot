@@ -1,0 +1,427 @@
+════════════════════════════════════════════════════════════════
+  CareerPilot Morning Scan — Thursday, March 26, 2026
+════════════════════════════════════════════════════════════════
+
+  Total: 100 unique jobs
+  Sources: 23 Direct | 32 Indeed | 33 Dice | 12 USAJobs
+
+────────────────────────────────────────────────────────────────
+  🏢 DIRECT EMPLOYER POSTINGS (early catch)
+────────────────────────────────────────────────────────────────
+  ▸ Windows Server Platform Operations Engineer
+    Eli Lilly · Indianapolis, IN (Onsite, relocation required)
+    💰 $64K - $145K (employer provided, per Glassdoor)
+    🔗 https://careers.lilly.com/us/en/job/R-83730/Windows-Server-Platform-Operations-Engineer
+
+  ▸ Windows Server Platform Operations Engineer – Technical Pathways Program
+    Eli Lilly · Indianapolis, IN (Onsite)
+    🔗 https://careers.lilly.com/us/en/job/R-88914/Windows-Server-Platform-Operations-Engineer-Technical-Pathways-Program
+
+  ▸ Server Virtualization Platform Operations Engineer
+    Eli Lilly · Indianapolis, IN (Onsite, relocation required)
+    💰 $64K - $145K (employer provided, per Glassdoor)
+    🔗 https://careers.lilly.com/us/en/job/R-83729/Server-Virtualization-Platform-Operations-Engineer
+
+  ▸ Associate Director – Platform Operations Windows Server and Server Virtualization
+    Eli Lilly · Indianapolis, IN
+    🔗 https://careers.lilly.com/us/en/job/R-84871/Associate-Director-Platform-Operations-Windows-Server-and-Server-Virtualization
+
+  ▸ Sr. Engineer – Automation Infrastructure
+    Eli Lilly · Indianapolis, IN
+    🔗 https://careers.lilly.com/us/en/job/R-90953/Sr-Engineer-Automation-Infrastructure
+
+  ▸ Sr. Principal Infrastructure Architect – Manufacturing & Quality Systems
+    Eli Lilly · Indianapolis, IN
+    🔗 https://careers.lilly.com/us/en/job/R-96374/Sr-Principal-Infrastructure-Architect-Manufacturing-Quality-Systems
+
+  ▸ Principal – AWS Cloud Platform Engineer
+    Eli Lilly · Indianapolis, IN
+    🔗 https://careers.lilly.com/us/en/job/R-98358/Principal-AWS-Cloud-Platform-Engineer
+
+  ▸ Sr. Manufacturing System Administrator / Automation Platform
+    Eli Lilly · Lebanon, IN (near Indianapolis)
+    🔗 https://careers.lilly.com/us/en/job/R-67617/Sr-Manufacturing-System-Administrator-Automation-Platform
+
+  ▸ Cloud Solutions Engineer/Administrator Senior
+    Elevance Health · Multiple locations including Indianapolis, IN – Hybrid/Virtual
+    💰 $127,764 – $191,646
+    🔗 https://careers.elevancehealth.com/cloud-solutions-engineer-administrator-senior/job/9C42AC7BD83986A3A9D6DBB2C2A75167
+
+  ▸ Senior Cloud Platform Engineer
+    Elevance Health · Preferred: Chicago, IL; Atlanta, GA; Dallas, TX – Hybrid (alternate Elevance office locations considered)
+    💰 $127,600 – $191,400
+    🔗 https://careers.elevancehealth.com/senior-cloud-platform-engineer/job/B6287C34A39C00E7459A990DACB68F80
+
+  ▸ Director I Technology – Active Directory
+    Elevance Health · Multiple Elevance Health PulsePoint offices – Hybrid (3 days/week in-office)
+    🔗 https://careers.elevancehealth.com/director-i-technology-active-directory/job/D89C8287E86AFD318A0D12E5303D3FCE
+
+  ▸ Intermediate IS Engineer - Cybersecurity
+    IU Health · Indianapolis, IN
+    🔗 https://careers.iuhealth.org/search/system-services/jobs
+
+  ▸ Network Automation Engineer
+    Salesforce · Indiana - Indianapolis / California - San Francisco / Washington - Seattle / New York - New York
+    🔗 https://careers.salesforce.com/en/jobs/jr331234/network-automation-engineer/
+
+  ▸ Senior Systems Administrator for Software Distribution
+    State of Indiana · Indianapolis, IN (Onsite – Indiana Government Center)
+    💰 $70,122/year starting (may be commensurate with education/experience)
+    🔗 https://workforindiana.in.gov/job/Indianapolis-Senior-Systems-Administrator-for-Software-Distribution-IN-46250/1372402900/
+
+  ▸ Systems Administrator Associate (Messaging & Collaboration / M365)
+    State of Indiana · Indianapolis, IN (Onsite – Indiana Government Center)
+    💰 $55,224/year starting (may be commensurate with education/experience)
+    🔗 https://workforindiana.in.gov/job/Indianapolis-Systems-Administrator-Associate-IN-46204/1360038400/
+
+  ▸ Enterprise Storage System Administrator Intermediate
+    State of Indiana · Indianapolis, IN (Onsite – Indiana Government Center)
+    💰 $61,022/year starting (may be commensurate with education/experience)
+    🔗 https://workforindiana.in.gov/job/Indianapolis-Enterprise-Storage-System-Administrator-Intermediate-IN-46204/1339871400/
+
+  ▸ Systems Administrator Associate (Windows)
+    State of Indiana · Indianapolis, IN (Hybrid remote potential)
+    💰 $55,224/year starting (may be commensurate with education/experience)
+    🔗 https://workforindiana.in.gov/job/Indianapolis-Systems-Administrator-Associate-IN-46204/1214413400/
+
+  ▸ Roads and Highways System Administrator
+    State of Indiana · Indianapolis, IN (INDOT Central Office; hybrid potential)
+    💰 $79,118/year starting (may be commensurate with education/experience)
+    🔗 https://workforindiana.in.gov/job/Indianapolis-Roads-and-Highways-System-Administrator-IN-46204/1299107700/
+
+  ▸ Linux Systems Administrator
+    Purdue University · West Lafayette, IN
+    💰 $61,120 – $64,940/year
+    🔗 https://careers.purdue.edu/default/job/Linux-Systems-Administrator/38352-en_US
+
+  ▸ Systems Administrator
+    Purdue University · West Lafayette, IN
+    🔗 https://careers.purdue.edu/job/West-Lafayette-Systems-Administrator-IN-47906/907192500/
+
+  ▸ Windows Systems Administrator
+    Purdue University · West Lafayette, IN
+    🔗 https://careers.purdue.edu/job/West-Lafayette-Windows-Systems-Administrator-IN-47906/964672300/
+
+  ▸ Configuration Management Systems Administrator
+    Purdue University · West Lafayette, IN
+    🔗 https://careers.purdue.edu/job/West-Lafayette-Configuration-Management-Systems-Administrator-IN-47906/904400300/
+
+  ▸ Associate Security Analyst (Identity & Access Management)
+    Purdue University · Remote
+    💰 $52,992 – $56,525/year
+    🔗 https://careers.purdue.edu/job/Associate-Security-Analyst/40041-en_US/
+
+────────────────────────────────────────────────────────────────
+  🔵 INDEED (32 results)
+────────────────────────────────────────────────────────────────
+  ▸ Here are the relevant IT/infrastructure **Systems Administrator** job listings found on Indeed for **Indianapolis, IN**:
+    Unknown · 
+
+  ▸ Based on the search results from Indeed, here are the relevant IT/infrastructure **Systems Engineer (Windows)** jobs in **Indianapolis, IN**, returned as a JSON array:
+    Unknown · 
+
+  ▸ Cloud Engineer
+    AIS · Indianapolis, IN
+    🔗 https://www.indeed.com/q-devops-l-indianapolis,-in-jobs.html
+
+  ▸ DevOps Engineer
+    Verra Mobility / T2 Systems · Indianapolis, IN
+    🔗 https://www.indeed.com/q-devops-engineer-l-indianapolis,-in-jobs.html
+
+  ▸ Principal Developer (Azure / DevOps)
+    aFit Staffing Inc. · Indianapolis, IN
+    🔗 https://www.indeed.com/q-devops-engineer-l-indianapolis,-in-jobs.html
+
+  ▸ Senior DevOps Engineer
+    Moser Consulting · Indianapolis, IN
+    🔗 https://www.indeed.com/q-devops-engineer-l-indianapolis,-in-jobs.html
+
+  ▸ Cloud Engineer (SRE/DevOps)
+    Your Money Line · Indianapolis, IN (Hybrid)
+    🔗 https://www.indeed.com/q-Azure-Cloud-Engineer-l-Indianapolis,-IN-jobs.html
+
+  ▸ Cloud Infrastructure Engineer
+    Bright Vision Technologies · Indianapolis, IN
+    🔗 https://www.indeed.com/q-cloud-engineer-l-indianapolis,-in-jobs.html
+
+  ▸ Azure Cloud Engineer
+    KPIT Technologies GmbH · Indianapolis, IN
+    🔗 https://www.indeed.com/q-Aws-Devops-l-Indianapolis,-IN-jobs.html
+
+  ▸ Microsoft Azure Engineer
+    Healthcare Chaos Management · Indianapolis, IN
+    🔗 https://www.indeed.com/q-cloud-engineer-l-indianapolis,-in-jobs.html
+
+  ▸ Cloud Architect (Azure/AWS)
+    Career Mentors, LLC · Indianapolis, IN
+    🔗 https://www.indeed.com/q-Cloud-Azure-Architect-l-Indianapolis,-IN-jobs.html
+
+  ▸ Azure Cloud Consultant
+    Virtusa · Indianapolis, IN
+    🔗 https://www.indeed.com/viewjob?jk=844e59bb2caf7b16
+
+  ▸ DevOps Engineer
+    Federal Home Loan Bank of Indianapolis · Indianapolis, IN
+    🔗 https://www.indeed.com/q-cloud-engineer-l-indiana-jobs.html
+
+  ▸ Senior DevOps Engineer (Lead Azure)
+    Dutech Systems · Indianapolis, IN | $60/hr (Contract W2)
+    🔗 https://www.indeed.com/q-Aws-Devops-l-Indianapolis,-IN-jobs.html
+
+  ▸ Multi-Cloud Systems Engineer
+    Ameriinfovets · Indianapolis, IN
+    🔗 https://www.indeed.com/q-Cloud-Azure-Architect-l-Indianapolis,-IN-jobs.html
+
+  ▸ Cloud Data Engineer
+    CSpring · Indianapolis, IN
+    🔗 https://www.indeed.com/q-cloud-engineer-l-indianapolis,-in-jobs.html
+
+  ▸ Infrastructure Engineer Lead
+    OneAmerica Financial Partners, Inc. · Indianapolis, IN (Hybrid)
+    🔗 https://www.indeed.com/q-devops-engineer-l-indianapolis,-in-jobs.html
+
+  ▸ PowerShell Automation Engineer
+    United Data Technologies (UDT) · Remote (FL, GA, NC, SC, OK, TX, TN, VA, MO) | Not listed (search: Powershell Automation Engineer salaries in Raleigh, NC)
+    🔗 https://www.indeed.com/q-powershell-l-remote-jobs.html
+
+  ▸ Bash/PowerShell Engineer (AI Training/Automation Content)
+    YO IT CONSULTING · Remote (United States) | Hourly (rate not specified)
+    🔗 https://www.indeed.com/q-powershell-l-united-states-(-remote-jobs.html
+
+  ▸ Sr. Microsoft Teams Collaboration Engineer (PowerShell/MS Graph API)
+    Lams Technology LLC · Remote | Not listed (search: Sr Microsoft Teams Collaboration Engineer salaries in Remote)
+    🔗 https://www.indeed.com/q-remote-powershell-automation-engineer-jobs.html
+
+  ▸ PowerShell Automation Engineer – W2 Role
+    Aaditus Technologies LLC · Remote / Plano, TX | Not listed (search: PowerShell Automation Engineer- W2 Role salaries in Plano, TX)
+    🔗 https://www.indeed.com/q-remote-powershell-automation-engineer-jobs.html
+
+  ▸ Sr. Citrix Engineer (PowerShell Desktop Automation)
+    Global HIT · Remote | Not listed (search: Sr. Citrix Engineer UAH salaries in Remote)
+    🔗 https://www.indeed.com/q-remote-powershell-automation-engineer-jobs.html
+
+  ▸ Sr. Citrix Engineer (PowerShell Scripting / Desktop Automation)
+    Global Healthcare IT · Remote
+    🔗 https://www.indeed.com/q-remote-powershell-automation-engineer-jobs.html
+
+  ▸ DevOps Automation Engineer
+    Illumial · Remote | Not listed (search: DevOps Automation Engineer salaries in Remote)
+    🔗 https://www.indeed.com/q-powershell-l-remote-jobs.html
+
+  ▸ Windows Server Engineer (PowerShell / SCCM / MDT)
+    IT First Source · Remote | Not listed (search: Windows Server Engineer with PowerShell, SCCM, MDT salaries in Remote)
+    🔗 https://www.indeed.com/q-powershell-automation-l-remote-jobs.html
+
+  ▸ PowerShell Developer
+    Fisec Global Inc. · Remote | Not listed (search: powershell developer salaries in Remote)
+    🔗 https://www.indeed.com/q-powershell-automation-l-remote-jobs.html
+
+  ▸ Microsoft Intune Administrator (PowerShell Automation & Reporting)
+    Core NX-OS / Infinite Computing Systems · Remote | Not listed (search: Remote Microsoft Intune Administrator salaries in Remote)
+    🔗 https://www.indeed.com/q-powershell-automation-l-remote-jobs.html
+
+  ▸ Windows Engineer (PowerShell / Hybrid Cloud)
+    Codehut IT Solutions · Remote | Not listed (search: Windows Engineer salaries in Remote)
+    🔗 https://www.indeed.com/q-powershell-l-remote-jobs.html
+
+  ▸ QA Engineer – Azure & PowerShell
+    Blueprint Technologies · Remote / Redmond, WA | Not listed (search: QA Engineer – Azure & PowerShell salaries in Redmond, WA)
+    🔗 https://www.indeed.com/q-powershell-l-remote-jobs.html
+
+  ▸ IT Automation & Integration Engineer
+    Cortica · Remote | Not listed (search: IT Automation & Integration Engineer (Remote) salaries in Remote)
+    🔗 https://www.indeed.com/q-powershell-automation-developer-jobs.html
+
+  ▸ Active Directory / IAM Engineer (PowerShell Automation)
+    Brakebush Brothers, Inc. · Remote
+    🔗 https://www.indeed.com/q-Remote-Powershell-Automation-Engineer-jobs.html
+
+  ▸ Azure Engineer (PowerShell / Azure CLI Automation)
+    Not specified · Remote | Not listed (search: Azure Engineer salaries in Remote)
+    🔗 https://www.indeed.com/q-Remote-Powershell-Automation-Engineer-jobs.html
+
+────────────────────────────────────────────────────────────────
+  🟦 DICE (33 results)
+────────────────────────────────────────────────────────────────
+  ▸ Systems Administrator II
+    Robert Half · Indianapolis, IN
+    🔗 https://www.dice.com/job-detail/22fda815-2b51-4d36-8113-2c9f4d66680b
+
+  ▸ SaaS Systems Administrator
+    Y & L Consulting Inc. · Indianapolis, IN
+    🔗 https://www.dice.com/job-detail/c6e09119-de58-4350-89b9-897b53e271e2
+
+  ▸ System Administrator
+    MSys Technologies · Indianapolis, IN | Depends on Experience
+    🔗 https://www.dice.com/job-detail/8b701b7c-5238-431d-a723-ab2a3d9ddfff
+
+  ▸ Multi-Cloud Systems Administrator
+    Apex Systems · Indianapolis, IN
+    🔗 https://www.dice.com/job-detail/80218453-8389-4b6b-9b11-a98eb0cabfa3
+
+  ▸ Systems Administrator II
+    Kelly Services · Indianapolis, IN (100% Onsite - Downtown)
+    🔗 https://www.dice.com/jobs/q-Infrastructure+Administrator-l-Indiana-jobs
+
+  ▸ Tanium Admin
+    TCS (Tata Consultancy Services) · Indianapolis, IN (Initial Remote)
+    🔗 https://www.dice.com/jobs/q-Infrastructure+Administrator-l-Indiana-jobs
+
+  ▸ Based on all the search results gathered from Dice.com, here is the JSON array of the most relevant IT/infrastructure "Systems Engineer Windows" jobs near Indianapolis, IN:
+    Unknown · 
+
+  ▸ DevOps Engineer
+    INNOVIT USA INC · Indianapolis, IN
+    🔗 https://www.dice.com/job-detail/3b27875e-df07-4877-94fc-4e43fe90130d
+
+  ▸ Senior Azure DevOps Engineer
+    INNOVIT USA INC · Remote (Indianapolis, IN area)
+    🔗 https://www.dice.com/job-detail/ef8233ce-32cd-4c5d-b1f5-3b04fed110c2
+
+  ▸ Azure DevOps/Cloud Infrastructure Engineer
+    Not listed · Remote
+    🔗 https://www.dice.com/job-detail/695d5bf1-809b-456f-baa8-18f5d85709e6
+
+  ▸ Azure Cloud DevOps Engineer
+    Aroha Technologies · Remote
+    🔗 https://www.dice.com/job-detail/b33875c2-757e-4ce6-b4f0-6f4f99276d38
+
+  ▸ DevOps Engineer / Cloud Engineer (Azure) - Retail / E-commerce
+    Activesoft, Inc. · Remote
+    🔗 https://www.dice.com/job-detail/9ec89ec0-4eb3-4cb1-b29b-cb33648d59fb
+
+  ▸ Azure DevOps Engineer with Salesforce Commerce Cloud
+    Neurasol Inc · Remote
+    🔗 https://www.dice.com/job-detail/a65310a0-50c3-46ef-982a-85d64a90d34e
+
+  ▸ Cloud Infrastructure DevOps Engineer
+    ResolveTech Solutions Inc. · Remote
+    🔗 https://www.dice.com/job-detail/40c7d7f1-2ff8-468c-a42b-5b7937c714c1
+
+  ▸ Senior Data Engineer - Snowflake & Azure
+    Apex Systems · Indianapolis, IN (or Remote)
+    🔗 https://www.dice.com/job-detail/ce96e8e3-ddce-4615-9e3c-0d07bbb6e306
+
+  ▸ Here is the JSON array of all relevant IT/infrastructure PowerShell Automation Engineer remote job results found on Dice.com:
+    Unknown · 
+
+  ▸ Here is the JSON array of all relevant IT/Infrastructure job listings found on Dice.com matching **"Windows Server VMware Infrastructure"** near **Remote**:
+    Unknown · 
+
+  ▸ Here are the most relevant IT/infrastructure contract job results found on Dice.com matching your search for **Windows Server / VMware Infrastructure / Contract** roles near **Indianapolis, IN** (including remote-eligible and nearby roles):
+    Unknown · 
+
+  ▸ Sr Active Directory / Azure Engineer
+    ETS LLC · Remote (US) | $60 - $80/hour
+    🔗 https://www.dice.com/job-detail/ed0a095a-47f0-4587-9607-2e79b802cdcb
+
+  ▸ Entra ID / Active Directory Engineer
+    ERPA · Remote
+    🔗 https://www.dice.com/job-detail/58646144-9b8e-4161-b8bb-ad3c36fe32b9
+
+  ▸ Remote Active Directory Migration Engineer
+    Not listed · Remote | $40/hour
+    🔗 https://www.dice.com/jobs/q-Active+Directory-jobs
+
+  ▸ Senior Active Directory Administrator / Senior Active Directory Engineer
+    Not listed · Remote (US) - W2 only
+    🔗 https://www.dice.com/jobs/q-Sr.+Active+Directory+Administrator-jobs
+
+  ▸ Senior Active Directory Systems Engineer / Senior Active Directory Administrator
+    Not listed · Remote / Tampa Bay, FL (preferred)
+    🔗 https://www.dice.com/jobs/q-Sr.+Active+Directory+Administrator-jobs
+
+  ▸ Azure Active Directory Consultant
+    Not listed · Remote
+    🔗 https://www.dice.com/jobs/q-active+directory-l-chicago,+il-jobs
+
+  ▸ Azure AD / Entra ID Administrator
+    Not listed · Remote
+    🔗 https://www.dice.com/jobs/q-active+directory-l-chicago,+il-jobs
+
+  ▸ Active Directory Systems Engineer
+    Not listed · Remote (100%)
+    🔗 https://www.dice.com/jobs/q-Entry+Level+Active+Directory+Engineer-l-Miami,+FL-jobs
+
+  ▸ Active Directory and Entra ID Engineer
+    Not listed · Remote
+    🔗 https://www.dice.com/jobs/q-Entry+Level+Active+Directory+Engineer-l-Miami,+FL-jobs
+
+  ▸ Engineer - Active Directory with Virtual Directory Experience
+    Mindlance · Remote (US) | $60 - $65/hour
+    🔗 https://www.dice.com/jobs/q-Entry+Level+Active+Directory+Engineer-l-Miami,+FL-jobs
+
+  ▸ Identity & Access Management (IAM) Engineer
+    Not listed · Remote
+    🔗 https://www.dice.com/jobs/q-identity+access+management+iam+consultant-jobs
+
+  ▸ Lead IAM Engineer
+    Not listed · Remote
+    🔗 https://www.dice.com/jobs/q-lead+identity+access+management-jobs
+
+  ▸ IAM Saviynt Lead
+    HCL Tech (via staffing) · Remote (USA) | $65/hour (C2C) / $55/hour (W2)
+    🔗 https://www.dice.com/jobs/q-lead+identity+access+management-jobs
+
+  ▸ Senior Security Engineer - IAM / Active Directory
+    Raymond James · St. Petersburg, Florida
+    🔗 https://www.dice.com/jobs/q-Active+Directory+Security+Engineer-jobs
+
+  ▸ Jr. Identity & Access Management Engineer
+    Tier4 Group · Remote (preference for candidates near Lake Wales, FL)
+    🔗 https://www.dice.com/jobs/q-identity+access+management+iam+consultant-jobs
+
+────────────────────────────────────────────────────────────────
+  🏛️ USAJOBS (12 results)
+────────────────────────────────────────────────────────────────
+  ▸ IT Cybersecurity Specialist (SYSANALYSIS/INFOSEC)
+    Defense Finance and Accounting Service (DFAS), Department of Defense · Indianapolis, IN | $90,341 – $117,446 per year
+    🔗 https://www.usajobs.gov/job/859086500
+
+  ▸ IT Cybersecurity Specialist (INFOSEC)
+    Defense Finance and Accounting Service (DFAS), Department of Defense · Indianapolis, IN / Cleveland, OH | $90,341 – $117,446 per year
+    🔗 https://www.usajobs.gov/job/857281900
+
+  ▸ IT Cybersecurity Specialist (NETWORK/INFOSEC)
+    Defense Finance and Accounting Service (DFAS), Department of Defense · Indianapolis, IN / Cleveland, OH / Columbus, OH | $106,365 – $143,051 per year
+    🔗 https://www.usajobs.gov/job/858157600
+
+  ▸ IT Cybersecurity Specialist (CUSTSPT/INFOSEC) — Job #858344700
+    Defense Finance and Accounting Service (DFAS), Department of Defense · Indianapolis, IN / Cleveland, OH / Columbus, OH | $107,428 – $139,658 per year
+    🔗 https://www.usajobs.gov/job/858344700
+
+  ▸ IT Cybersecurity Specialist (CUSTSPT/INFOSEC) — Job #852206300
+    Defense Finance and Accounting Service (DFAS), Department of Defense · Indianapolis, IN / Cleveland, OH / Columbus, OH | Per 2025 GS Pay Tables (GS-12)
+    🔗 https://www.usajobs.gov/job/852206300
+
+  ▸ IT Cybersecurity Specialist (CUSTSPT/INFOSEC) — Job #859877500
+    Defense Finance and Accounting Service (DFAS), Department of Defense · Indianapolis, IN / Cleveland, OH / Columbus, OH | Per 2026 GS Pay Tables (GS-12)
+    🔗 https://www.usajobs.gov/job/859877500
+
+  ▸ IT Cybersecurity Specialist (SYSANALYSIS)
+    Defense Finance and Accounting Service (DFAS), Department of Defense · Indianapolis, IN / Cleveland, OH / Whitehall, OH | Per GS Pay Tables (GS-12)
+    🔗 https://www.usajobs.gov/job/845650400
+
+  ▸ IT Cybersecurity Specialist (INET/INFOSEC)
+    Defense Finance and Accounting Service (DFAS), Department of Defense · Indianapolis, IN / Cleveland, OH / Whitehall, OH | Per GS Pay Tables (GS-12)
+    🔗 https://www.usajobs.gov/job/841988600
+
+  ▸ Information Technology Specialist (Security)
+    U.S. Customs and Border Protection (CBP), Department of Homeland Security · Indianapolis, IN / Minneapolis, MN | $105,383 – $137,000 per year
+    🔗 https://www.usajobs.gov/job/850635500
+
+  ▸ IT Specialist (Information Security) — Fraud Investigator
+    General Services Administration (GSA), Technology Transformation Services (TTS) · Indianapolis, IN (and multiple other cities) | Per GS Pay Tables (GS-13, promotion potential to 13)
+    🔗 https://www.usajobs.gov/job/846597600
+
+  ▸ IT Specialist — Senior Software Engineer
+    General Services Administration (GSA), Technology Transformation Services (TTS) · Indianapolis, IN (and multiple other cities) | Per GS Pay Tables (GS-14)
+    🔗 https://www.usajobs.gov/job/848619800
+
+  ▸ Information Technology Specialist (CUSTSPT/NETWORK)
+    Defense Contract Management Agency (DCMA), Department of Defense · Indianapolis, IN | GS-11: $69,741–$90,661 / GS-12: $83,591–$108,669
+    🔗 https://www.usajobs.gov/job/701387500
+
+────────────────────────────────────────────────────────────────
+  Scan completed at 11:00 AM UTC
+════════════════════════════════════════════════════════════════

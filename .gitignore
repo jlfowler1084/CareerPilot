@@ -45,4 +45,25 @@ env/
 # Local Claude settings (user-specific permissions)
 .claude/settings.local.json
 .claude/hooks/billing-events.log
+.claude/projects/
+
+# Superpowers brainstorm artifacts
+.superpowers/
+
+# Playwright MCP browser binaries
+.playwright-mcp/
+
+# Node dependencies
+node_modules/
+
+# Personal documents (resumes, cover letters generated per-application)
+data/cover_letters/
+data/resumes/
+
+# Scanner secrets and databases
+config/scan.env
+scanner/data/.api_key.enc
+scanner/data/career_pages.db
+
+# Vercel
 .vercel
