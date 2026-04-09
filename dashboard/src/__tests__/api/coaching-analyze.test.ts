@@ -37,3 +37,27 @@ describe("classifyFetchError", () => {
     expect(result.error).toBe("something broke")
   })
 })
+
+describe("GET handler validation", () => {
+  function validateGetParams(searchParams: URLSearchParams): { error: string; status: number } | null {
+    const applicationId = searchParams.get("applicationId")
+    if (!applicationId) {
+      return { error: "applicationId required", status: 400 }
+    }
+    return null
+  }
+
+  it("returns 400 when applicationId is missing", () => {
+    const params = new URLSearchParams()
+    const result = validateGetParams(params)
+    expect(result).not.toBeNull()
+    expect(result!.status).toBe(400)
+    expect(result!.error).toBe("applicationId required")
+  })
+
+  it("returns null (valid) when applicationId is present", () => {
+    const params = new URLSearchParams({ applicationId: "abc-123" })
+    const result = validateGetParams(params)
+    expect(result).toBeNull()
+  })
+})

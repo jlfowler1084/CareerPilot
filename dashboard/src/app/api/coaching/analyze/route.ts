@@ -230,3 +230,36 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: message }, { status: 500 })
   }
 }
+
+export async function GET(req: NextRequest) {
+  try {
+    const supabase = await createServerSupabaseClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    const applicationId = req.nextUrl.searchParams.get("applicationId")
+    if (!applicationId) {
+      return NextResponse.json({ error: "applicationId required" }, { status: 400 })
+    }
+
+    const { data, error } = await supabase
+      .from("interview_coaching")
+      .select("*")
+      .eq("application_id", applicationId)
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+
+    if (error) {
+      console.error("Failed to fetch coaching sessions:", error.message)
+      return NextResponse.json({ error: error.message }, { status: 500 })
+    }
+
+    return NextResponse.json(data)
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error)
+    console.error("Coaching sessions fetch error:", message)
+    return NextResponse.json({ error: message }, { status: 500 })
+  }
+}
