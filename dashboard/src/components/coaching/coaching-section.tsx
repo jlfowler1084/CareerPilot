@@ -132,11 +132,19 @@ export function CoachingSection({ application }: CoachingSectionProps) {
 
       {open && (
         <div className="mt-2 space-y-3">
-          {/* Error */}
-          {error && (
+          {/* Error with retry */}
+          {error && !analyzing && (
             <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-lg p-2.5">
               <AlertCircle size={14} className="text-red-500 flex-shrink-0" />
               <span className="text-xs text-red-700 flex-1">{error}</span>
+              {debriefText.trim() && (
+                <button
+                  onClick={() => handleAnalyzeDebrief()}
+                  className="text-[10px] font-bold text-red-700 hover:text-red-900 px-2 py-1 bg-red-100 rounded"
+                >
+                  Retry
+                </button>
+              )}
             </div>
           )}
 
