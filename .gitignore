@@ -65,5 +65,8 @@ config/scan.env
 scanner/data/.api_key.enc
 scanner/data/career_pages.db
 
+# Git worktrees (ADR-0029)
+.worktrees/
+
 # Vercel
 .vercel
