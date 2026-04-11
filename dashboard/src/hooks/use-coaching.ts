@@ -47,16 +47,31 @@ export function useCoaching(applicationId: string) {
       setAnalyzing(true)
       setError(null)
       try {
-        const resp = await fetch("/api/coaching/analyze", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            applicationId,
-            sessionType: "debrief",
-            rawInput: notes,
-            jobDescription,
-          }),
-        })
+        const controller = new AbortController()
+        const clientTimeout = setTimeout(() => controller.abort(), 95_000)
+
+        let resp: Response
+        try {
+          resp = await fetch("/api/coaching/analyze", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              applicationId,
+              sessionType: "debrief",
+              rawInput: notes,
+              jobDescription,
+            }),
+            signal: controller.signal,
+          })
+        } catch (err) {
+          clearTimeout(clientTimeout)
+          if (err instanceof Error && err.name === "AbortError") {
+            throw new Error("Analysis timed out — the server may be overloaded. Please try again.")
+          }
+          throw err
+        }
+        clearTimeout(clientTimeout)
+
         if (!resp.ok) {
           const data = await resp.json()
           throw new Error(data.error || "Analysis failed")

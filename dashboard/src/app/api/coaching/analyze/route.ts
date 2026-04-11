@@ -5,6 +5,8 @@ import { parseJsonResponse } from "@/lib/json-utils"
 import { getUserName } from "@/lib/user-profile"
 import type { Json } from "@/types/database.types"
 
+export const maxDuration = 90
+
 function buildCoachingSystemPrompt(name: string) {
   const safeName = (name || '').replace(/[`$\\]/g, '')
   return `You are an interview performance coach analyzing a candidate's interview performance. The candidate is ${safeName}, a systems administrator/engineer with 20+ years of experience.

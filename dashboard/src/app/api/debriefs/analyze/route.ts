@@ -4,6 +4,8 @@ import { parseJsonResponse } from "@/lib/json-utils"
 import { getUserName } from "@/lib/user-profile"
 import type { Json } from "@/types/database.types"
 
+export const maxDuration = 90
+
 function buildDebriefAnalysisPrompt(name: string) {
   const safeName = (name || '').replace(/[`$\\]/g, '')
   return `You are an interview performance analyst. Analyze the candidate's structured debrief notes and identify patterns, strengths, and areas for improvement.
@@ -144,21 +146,37 @@ export async function POST(req: NextRequest) {
     }
 
     // Haiku: structured pattern extraction from debrief notes
-    const resp = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: process.env.MODEL_HAIKU || "claude-haiku-4-5-20251001",
-        max_tokens: 2048,
-        system: buildDebriefAnalysisPrompt(getUserName(user)),
-        messages: [{ role: "user", content: contextParts.join("\n") }],
-      }),
-      signal: AbortSignal.timeout(60_000),
-    })
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 90_000)
+
+    let resp: Response
+    try {
+      resp = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
+        },
+        body: JSON.stringify({
+          model: process.env.MODEL_HAIKU || "claude-haiku-4-5-20251001",
+          max_tokens: 2048,
+          system: buildDebriefAnalysisPrompt(getUserName(user)),
+          messages: [{ role: "user", content: contextParts.join("\n") }],
+        }),
+        signal: controller.signal,
+      })
+    } catch (err: unknown) {
+      clearTimeout(timeout)
+      if (err instanceof Error && err.name === "AbortError") {
+        return NextResponse.json(
+          { error: "Analysis timed out after 90s. Try again or simplify your notes." },
+          { status: 504 }
+        )
+      }
+      throw err
+    }
+    clearTimeout(timeout)
 
     if (!resp.ok) {
       const errBody = await resp.text()
