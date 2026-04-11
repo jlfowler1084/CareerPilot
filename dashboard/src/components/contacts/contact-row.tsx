@@ -1,5 +1,6 @@
 "use client"
 
+import type React from "react"
 import { useRouter } from "next/navigation"
 import { RelativeTime } from "@/components/ui/relative-time"
 import type { ContactWithLinks } from "@/types"
@@ -14,9 +15,11 @@ const ROLE_LABELS: Record<string, { label: string; className: string }> = {
 
 interface ContactRowProps {
   contact: ContactWithLinks
+  selected?: boolean
+  onToggleSelect?: () => void
 }
 
-export function ContactRow({ contact }: ContactRowProps) {
+export function ContactRow({ contact, selected = false, onToggleSelect }: ContactRowProps) {
   const router = useRouter()
 
   // Derive the primary role from the first linked application, if any
@@ -31,6 +34,15 @@ export function ContactRow({ contact }: ContactRowProps) {
     router.push(`/contacts/${contact.id}`)
   }
 
+  function handleCheckboxChange(e: React.ChangeEvent<HTMLInputElement>) {
+    e.stopPropagation()
+    onToggleSelect?.()
+  }
+
+  function handleCheckboxClick(e: React.MouseEvent) {
+    e.stopPropagation()
+  }
+
   return (
     <div
       role="button"
@@ -39,8 +51,22 @@ export function ContactRow({ contact }: ContactRowProps) {
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") handleClick()
       }}
-      className="flex items-center gap-4 px-4 py-3 bg-white border border-zinc-200 rounded-xl hover:border-zinc-300 hover:shadow-sm cursor-pointer transition-all focus:outline-none focus:ring-2 focus:ring-amber-300"
+      className={`flex items-center gap-4 px-4 py-3 bg-white border rounded-xl hover:border-zinc-300 hover:shadow-sm cursor-pointer transition-all focus:outline-none focus:ring-2 focus:ring-amber-300 ${
+        selected ? "border-amber-400 bg-amber-50" : "border-zinc-200"
+      }`}
     >
+      {/* Checkbox — only shown when onToggleSelect is provided */}
+      {onToggleSelect && (
+        <input
+          type="checkbox"
+          checked={selected}
+          onChange={handleCheckboxChange}
+          onClick={handleCheckboxClick}
+          className="flex-shrink-0 w-4 h-4 rounded border-zinc-300 accent-amber-500 cursor-pointer"
+          aria-label={`Select ${contact.name}`}
+        />
+      )}
+
       {/* Avatar initials */}
       <div className="w-9 h-9 rounded-full bg-zinc-100 flex items-center justify-center text-xs font-bold text-zinc-500 flex-shrink-0">
         {contact.name

@@ -9,6 +9,8 @@ interface ContactListProps {
   isFiltered: boolean
   onAddContact: () => void
   onClearFilters: () => void
+  selectedIds?: Set<string>
+  onToggleSelect?: (id: string) => void
 }
 
 export function ContactList({
@@ -17,6 +19,8 @@ export function ContactList({
   isFiltered,
   onAddContact,
   onClearFilters,
+  selectedIds,
+  onToggleSelect,
 }: ContactListProps) {
   if (loading) {
     return (
@@ -64,7 +68,12 @@ export function ContactList({
   return (
     <div className="space-y-2">
       {contacts.map((contact) => (
-        <ContactRow key={contact.id} contact={contact} />
+        <ContactRow
+          key={contact.id}
+          contact={contact}
+          selected={selectedIds?.has(contact.id) ?? false}
+          onToggleSelect={onToggleSelect ? () => onToggleSelect(contact.id) : undefined}
+        />
       ))}
     </div>
   )

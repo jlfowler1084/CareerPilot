@@ -1,10 +1,11 @@
 "use client"
 
 import { useState } from "react"
-import { Plus, Loader2 } from "lucide-react"
+import { Plus, Loader2, GitMerge } from "lucide-react"
 import { useContacts } from "@/hooks/use-contacts"
 import { ContactFilters } from "@/components/contacts/contact-filters"
 import { ContactList } from "@/components/contacts/contact-list"
+import { ContactMergeModal } from "@/components/contacts/contact-merge-modal"
 import {
   Dialog,
   DialogContent,
@@ -14,6 +15,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
+import type { Contact } from "@/types"
 
 const inputClass =
   "w-full text-sm border border-zinc-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-amber-300"
@@ -63,7 +65,35 @@ export default function ContactsPage() {
   const [form, setForm] = useState<CreateFormState>(EMPTY_FORM)
   const [emailError, setEmailError] = useState("")
 
+  // Multi-select + merge state
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [mergeModalOpen, setMergeModalOpen] = useState(false)
+
   const isFiltered = !!(search || effectiveRole || effectiveRecency)
+
+  // Derive the two selected contacts when exactly 2 are selected
+  const selectedContacts = contacts.filter((c) => selectedIds.has(c.id))
+  const canMerge = selectedContacts.length === 2
+
+  function toggleContactSelection(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) {
+        next.delete(id)
+      } else {
+        next.add(id)
+      }
+      return next
+    })
+  }
+
+  function handleMergeComplete(merged: Contact) {
+    setSelectedIds(new Set())
+    setMergeModalOpen(false)
+    // The real-time subscription in useContacts will refresh the list automatically,
+    // but we also reset selection state here for immediate UX feedback.
+    void merged // merged contact available if needed for navigation
+  }
 
   function handleClearFilters() {
     setSearch("")
@@ -126,17 +156,34 @@ export default function ContactsPage() {
           {!loading && (
             <p className="text-xs text-zinc-400 mt-0.5">
               {contacts.length} contact{contacts.length !== 1 ? "s" : ""}
+              {selectedIds.size > 0 && (
+                <span className="ml-2 text-amber-600 font-semibold">
+                  {selectedIds.size} selected
+                </span>
+              )}
             </p>
           )}
         </div>
-        <button
-          type="button"
-          onClick={openCreateDialog}
-          className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border bg-amber-500 border-amber-500 text-white hover:bg-amber-600 transition-colors"
-        >
-          <Plus size={12} />
-          Add Contact
-        </button>
+        <div className="flex items-center gap-2">
+          {canMerge && (
+            <button
+              type="button"
+              onClick={() => setMergeModalOpen(true)}
+              className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-50 transition-colors"
+            >
+              <GitMerge size={12} />
+              Merge
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={openCreateDialog}
+            className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg border bg-amber-500 border-amber-500 text-white hover:bg-amber-600 transition-colors"
+          >
+            <Plus size={12} />
+            Add Contact
+          </button>
+        </div>
       </div>
 
       {/* Filters */}
@@ -158,7 +205,20 @@ export default function ContactsPage() {
         isFiltered={isFiltered}
         onAddContact={openCreateDialog}
         onClearFilters={handleClearFilters}
+        selectedIds={selectedIds}
+        onToggleSelect={toggleContactSelection}
       />
+
+      {/* Merge contacts modal */}
+      {canMerge && mergeModalOpen && (
+        <ContactMergeModal
+          primaryContact={selectedContacts[0]}
+          secondaryContact={selectedContacts[1]}
+          open={mergeModalOpen}
+          onClose={() => setMergeModalOpen(false)}
+          onMerged={handleMergeComplete}
+        />
+      )}
 
       {/* Create contact dialog */}
       <Dialog open={dialogOpen} onOpenChange={handleDialogOpenChange}>
