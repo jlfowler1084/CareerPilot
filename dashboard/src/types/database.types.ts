@@ -431,6 +431,75 @@ export type Database = {
           },
         ]
       }
+      contact_application_links: {
+        Row: {
+          contact_id: string
+          application_id: string
+          user_id: string
+          role: string
+          created_at: string | null
+        }
+        Insert: {
+          contact_id: string
+          application_id: string
+          user_id: string
+          role?: string
+          created_at?: string | null
+        }
+        Update: {
+          contact_id?: string
+          application_id?: string
+          user_id?: string
+          role?: string
+          created_at?: string | null
+        }
+        Relationships: []
+      }
+      contacts: {
+        Row: {
+          id: string
+          user_id: string
+          name: string
+          email: string | null
+          phone: string | null
+          company: string | null
+          title: string | null
+          source: string
+          notes: string | null
+          last_contact_date: string | null
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          name: string
+          email?: string | null
+          phone?: string | null
+          company?: string | null
+          title?: string | null
+          source?: string
+          notes?: string | null
+          last_contact_date?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          name?: string
+          email?: string | null
+          phone?: string | null
+          company?: string | null
+          title?: string | null
+          source?: string
+          notes?: string | null
+          last_contact_date?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       conversations: {
         Row: {
           action_items: Json | null
