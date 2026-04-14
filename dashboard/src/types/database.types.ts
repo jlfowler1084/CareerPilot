@@ -433,70 +433,85 @@ export type Database = {
       }
       contact_application_links: {
         Row: {
-          contact_id: string
           application_id: string
-          user_id: string
-          role: string
+          contact_id: string
           created_at: string | null
+          role: string
+          user_id: string
         }
         Insert: {
-          contact_id: string
           application_id: string
-          user_id: string
-          role?: string
+          contact_id: string
           created_at?: string | null
+          role?: string
+          user_id: string
         }
         Update: {
-          contact_id?: string
           application_id?: string
-          user_id?: string
-          role?: string
+          contact_id?: string
           created_at?: string | null
+          role?: string
+          user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "contact_application_links_application_id_fkey"
+            columns: ["application_id"]
+            isOneToOne: false
+            referencedRelation: "applications"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contact_application_links_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       contacts: {
         Row: {
-          id: string
-          user_id: string
-          name: string
-          email: string | null
-          phone: string | null
           company: string | null
-          title: string | null
-          source: string
-          notes: string | null
-          last_contact_date: string | null
           created_at: string | null
+          email: string | null
+          id: string
+          last_contact_date: string | null
+          name: string
+          notes: string | null
+          phone: string | null
+          source: string
+          title: string | null
           updated_at: string | null
+          user_id: string
         }
         Insert: {
-          id?: string
-          user_id: string
-          name: string
-          email?: string | null
-          phone?: string | null
           company?: string | null
-          title?: string | null
-          source?: string
-          notes?: string | null
-          last_contact_date?: string | null
           created_at?: string | null
+          email?: string | null
+          id?: string
+          last_contact_date?: string | null
+          name: string
+          notes?: string | null
+          phone?: string | null
+          source?: string
+          title?: string | null
           updated_at?: string | null
+          user_id: string
         }
         Update: {
-          id?: string
-          user_id?: string
-          name?: string
-          email?: string | null
-          phone?: string | null
           company?: string | null
-          title?: string | null
-          source?: string
-          notes?: string | null
-          last_contact_date?: string | null
           created_at?: string | null
+          email?: string | null
+          id?: string
+          last_contact_date?: string | null
+          name?: string
+          notes?: string | null
+          phone?: string | null
+          source?: string
+          title?: string | null
           updated_at?: string | null
+          user_id?: string
         }
         Relationships: []
       }
