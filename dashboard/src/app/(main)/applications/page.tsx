@@ -8,11 +8,10 @@ import { KanbanSummary } from "@/components/applications/kanban-summary"
 import { AddForm } from "@/components/applications/add-form"
 import { UrlImport } from "@/components/applications/url-import"
 import { ApplicationRow } from "@/components/applications/application-row"
-import { DetailPanel } from "@/components/applications/detail-panel"
 import { EmptyState } from "@/components/shared/empty-state"
 import { Search, Briefcase } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
-import type { Application, ApplicationStatus } from "@/types"
+import type { ApplicationStatus } from "@/types"
 
 type SortKey = "date_found" | "company" | "title" | "status"
 
@@ -69,17 +68,11 @@ function ApplicationsContent() {
   const [statusFilter, setStatusFilter] = useState<ApplicationStatus | null>(urlStatus)
   const [searchQuery, setSearchQuery] = useState("")
   const [sortKey, setSortKey] = useState<SortKey>("date_found")
-  const [selectedApplication, setSelectedApplication] = useState<Application | null>(null)
 
   // Sync URL status param to filter state
   useEffect(() => {
     setStatusFilter(urlStatus)
   }, [urlStatus])
-
-  // Keep selectedApplication in sync with real-time updates
-  const currentSelected = selectedApplication
-    ? applications.find((a) => a.id === selectedApplication.id) || null
-    : null
 
   const filtered = useMemo(() => {
     let list = [...applications]
@@ -206,8 +199,10 @@ function ApplicationsContent() {
               key={app.id}
               application={app}
               onUpdate={updateApplication}
+              onUpdateContact={updateContact}
+              onUpdateNotes={updateNotes}
+              onUpdateJobDescription={updateJobDescription}
               onDelete={deleteApplication}
-              onClick={() => setSelectedApplication(app)}
               autoUpdatedViaEmail={autoStatusAppIds.has(app.id)}
             />
           ))}
@@ -229,18 +224,6 @@ function ApplicationsContent() {
         </div>
       )}
 
-      {/* Detail Panel */}
-      {currentSelected && (
-        <DetailPanel
-          application={currentSelected}
-          open={!!currentSelected}
-          onClose={() => setSelectedApplication(null)}
-          onUpdate={updateApplication}
-          onUpdateContact={updateContact}
-          onUpdateNotes={updateNotes}
-          onUpdateJobDescription={updateJobDescription}
-        />
-      )}
     </div>
   )
 }

@@ -5,8 +5,9 @@
 // still called unconditionally per React rules.
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { toast } from "sonner"
+import { formatDistanceToNow } from "date-fns"
 import { StatusBadge } from "@/components/shared/status-badge"
 import { ConversationSection } from "@/components/conversations/conversation-section"
 import { CommunicationsSection } from "@/components/applications/communications-section"
@@ -17,33 +18,56 @@ import { TailorModal } from "@/components/applications/tailor-modal"
 import { CoverLetterModal } from "@/components/applications/cover-letter-modal"
 import { ScheduleModal } from "@/components/applications/schedule-modal"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
+import { Input } from "@/components/ui/input"
 import { useIntelligence } from "@/hooks/use-intelligence"
+import { useApplicationEvents } from "@/hooks/use-application-events"
 import { STATUSES } from "@/lib/constants"
 import { RelativeTime } from "@/components/ui/relative-time"
-import { ExternalLink, Trash2, Save, Mail, Sparkles, FileCheck, CalendarDays, CalendarCheck, FileText, BrainCircuit, ChevronDown, ChevronRight, Download, Loader2 } from "lucide-react"
-import type { Application, ApplicationStatus } from "@/types"
+import { ExternalLink, Trash2, Save, Mail, Phone, Sparkles, FileCheck, CalendarDays, CalendarCheck, FileText, BrainCircuit, ChevronDown, ChevronRight, Download, Loader2 } from "lucide-react"
+import type { Application, ApplicationStatus, ApplicationEvent } from "@/types"
+
+const EVENT_ICONS: Record<string, string> = {
+  status_change: "\uD83D\uDD04",
+  note_added: "\uD83D\uDCDD",
+  resume_tailored: "\u2728",
+  calendar_scheduled: "\uD83D\uDCC5",
+  contact_added: "\uD83D\uDC64",
+  cover_letter_generated: "\uD83D\uDCE8",
+  follow_up: "\uD83D\uDCDE",
+}
 
 const SCHEDULABLE_STATUSES: ApplicationStatus[] = ["applied", "phone_screen", "interview", "offer"]
 
 interface ApplicationRowProps {
   application: Application
   onUpdate: (id: string, updates: Partial<Application>) => Promise<unknown>
+  onUpdateContact: (
+    id: string,
+    contact: Pick<Application, "contact_name" | "contact_email" | "contact_phone" | "contact_role">
+  ) => Promise<unknown>
+  onUpdateNotes: (id: string, notes: string) => Promise<unknown>
+  onUpdateJobDescription: (id: string, jobDescription: string) => Promise<unknown>
   onDelete: (id: string) => Promise<void>
-  onClick?: () => void
   autoUpdatedViaEmail?: boolean
 }
 
 export function ApplicationRow({
   application,
   onUpdate,
+  onUpdateContact,
+  onUpdateNotes,
+  onUpdateJobDescription,
   onDelete,
-  onClick,
   autoUpdatedViaEmail,
 }: ApplicationRowProps) {
   const [editingNotes, setEditingNotes] = useState(false)
   const [notes, setNotes] = useState(application.notes || "")
   const [jobDesc, setJobDesc] = useState(application.job_description || "")
   const [fetchingJd, setFetchingJd] = useState(false)
+  const [contactName, setContactName] = useState(application.contact_name || "")
+  const [contactEmail, setContactEmail] = useState(application.contact_email || "")
+  const [contactPhone, setContactPhone] = useState(application.contact_phone || "")
+  const [contactRole, setContactRole] = useState(application.contact_role || "")
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [tailorOpen, setTailorOpen] = useState(false)
   const [tailorViewMode, setTailorViewMode] = useState(false)
@@ -52,6 +76,17 @@ export function ApplicationRow({
   const [statusUpdating, setStatusUpdating] = useState(false)
   const [isExpanded, setIsExpanded] = useState(false)
   const { hasData: hasIntelligence } = useIntelligence(application.id, isExpanded)
+  const { events, loading: eventsLoading } = useApplicationEvents(
+    isExpanded ? application.id : null
+  )
+
+  // Sync local contact state when application changes via realtime
+  useEffect(() => {
+    setContactName(application.contact_name || "")
+    setContactEmail(application.contact_email || "")
+    setContactPhone(application.contact_phone || "")
+    setContactRole(application.contact_role || "")
+  }, [application.contact_name, application.contact_email, application.contact_phone, application.contact_role])
 
   async function handleStatusChange(e: React.ChangeEvent<HTMLSelectElement>) {
     setStatusUpdating(true)
@@ -65,13 +100,29 @@ export function ApplicationRow({
   }
 
   async function handleSaveNotes() {
-    await onUpdate(application.id, { notes })
+    await onUpdateNotes(application.id, notes)
     setEditingNotes(false)
   }
 
   async function saveJobDesc() {
     if (jobDesc === (application.job_description || "")) return
-    await onUpdate(application.id, { job_description: jobDesc })
+    await onUpdateJobDescription(application.id, jobDesc)
+  }
+
+  async function saveContact() {
+    const current = {
+      contact_name: contactName || null,
+      contact_email: contactEmail || null,
+      contact_phone: contactPhone || null,
+      contact_role: contactRole || null,
+    }
+    const unchanged =
+      current.contact_name === (application.contact_name ?? null) &&
+      current.contact_email === (application.contact_email ?? null) &&
+      current.contact_phone === (application.contact_phone ?? null) &&
+      current.contact_role === (application.contact_role ?? null)
+    if (unchanged) return
+    await onUpdateContact(application.id, current)
   }
 
   async function fetchJobDescFromUrl() {
@@ -386,6 +437,126 @@ export function ApplicationRow({
                 className="w-full text-xs border border-zinc-200 rounded-lg p-2 resize-none focus:outline-none focus:ring-1 focus:ring-amber-300 min-h-[80px]"
                 rows={4}
               />
+            </div>
+
+            {/* Calendar Events */}
+            {(application.calendar_event_id || application.interview_date || application.follow_up_date) && (
+              <div className="mt-3 pt-3 border-t border-zinc-100">
+                <div className="text-xs font-medium text-zinc-600 mb-1.5">Calendar Events</div>
+                <div className="space-y-1.5">
+                  {application.interview_date && (
+                    <div className="flex items-center gap-2 text-xs text-zinc-700">
+                      <CalendarCheck size={12} className="text-blue-600" />
+                      <span>Interview: {new Date(application.interview_date).toLocaleString()}</span>
+                    </div>
+                  )}
+                  {application.follow_up_date && (
+                    <div className="flex items-center gap-2 text-xs text-zinc-700">
+                      <CalendarDays size={12} className="text-amber-600" />
+                      <span>Follow-up: {new Date(application.follow_up_date).toLocaleString()}</span>
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setScheduleOpen(true)}
+                    className="text-[10px] font-semibold px-2 py-1 rounded-md border border-zinc-200 text-zinc-600 hover:bg-zinc-50 transition-colors"
+                  >
+                    Add more events
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Contact Info */}
+            <div className="mt-3 pt-3 border-t border-zinc-100">
+              <div className="text-xs font-medium text-zinc-600 mb-1.5">Contact Info</div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <Input
+                  value={contactName}
+                  onChange={(e) => setContactName(e.target.value)}
+                  onBlur={saveContact}
+                  placeholder="Contact name"
+                  className="h-8 text-xs"
+                />
+                <select
+                  value={contactRole}
+                  onChange={(e) => setContactRole(e.target.value)}
+                  onBlur={saveContact}
+                  title="Contact role"
+                  aria-label="Contact role"
+                  className="h-8 rounded-lg border border-input bg-transparent px-2.5 text-xs focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 outline-none"
+                >
+                  <option value="">Select role...</option>
+                  <option value="Recruiter">Recruiter</option>
+                  <option value="Hiring Manager">Hiring Manager</option>
+                  <option value="HR">HR</option>
+                  <option value="Other">Other</option>
+                </select>
+                <div className="flex items-center gap-1">
+                  <Input
+                    type="email"
+                    value={contactEmail}
+                    onChange={(e) => setContactEmail(e.target.value)}
+                    onBlur={saveContact}
+                    placeholder="email@example.com"
+                    className="h-8 text-xs flex-1"
+                  />
+                  {contactEmail && (
+                    <a
+                      href={`mailto:${contactEmail}`}
+                      className="text-zinc-400 hover:text-blue-600"
+                      title="Email contact"
+                    >
+                      <Mail size={12} />
+                    </a>
+                  )}
+                </div>
+                <div className="flex items-center gap-1">
+                  <Input
+                    type="tel"
+                    value={contactPhone}
+                    onChange={(e) => setContactPhone(e.target.value)}
+                    onBlur={saveContact}
+                    placeholder="(555) 123-4567"
+                    className="h-8 text-xs flex-1"
+                  />
+                  {contactPhone && (
+                    <a
+                      href={`tel:${contactPhone}`}
+                      className="text-zinc-400 hover:text-blue-600"
+                      title="Call contact"
+                    >
+                      <Phone size={12} />
+                    </a>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Activity Timeline */}
+            <div className="mt-3 pt-3 border-t border-zinc-100">
+              <div className="text-xs font-medium text-zinc-600 mb-1.5">Activity Timeline</div>
+              {eventsLoading ? (
+                <div className="text-xs text-zinc-400 animate-pulse">Loading timeline...</div>
+              ) : events.length > 0 ? (
+                <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                  {events.map((event: ApplicationEvent) => (
+                    <div key={event.id} className="flex items-start gap-2 text-xs">
+                      <span className="mt-0.5 text-sm leading-none">
+                        {EVENT_ICONS[event.event_type] || "\u2022"}
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-zinc-700">{event.description}</p>
+                        <p className="text-zinc-400 mt-0.5">
+                          {formatDistanceToNow(new Date(event.created_at), { addSuffix: true })}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-zinc-400">No activity yet.</p>
+              )}
             </div>
 
             {/* Expandable sections */}
