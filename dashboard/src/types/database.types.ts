@@ -431,6 +431,90 @@ export type Database = {
           },
         ]
       }
+      contact_application_links: {
+        Row: {
+          application_id: string
+          contact_id: string
+          created_at: string | null
+          role: string
+          user_id: string
+        }
+        Insert: {
+          application_id: string
+          contact_id: string
+          created_at?: string | null
+          role?: string
+          user_id: string
+        }
+        Update: {
+          application_id?: string
+          contact_id?: string
+          created_at?: string | null
+          role?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contact_application_links_application_id_fkey"
+            columns: ["application_id"]
+            isOneToOne: false
+            referencedRelation: "applications"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contact_application_links_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      contacts: {
+        Row: {
+          company: string | null
+          created_at: string | null
+          email: string | null
+          id: string
+          last_contact_date: string | null
+          name: string
+          notes: string | null
+          phone: string | null
+          source: string
+          title: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          company?: string | null
+          created_at?: string | null
+          email?: string | null
+          id?: string
+          last_contact_date?: string | null
+          name: string
+          notes?: string | null
+          phone?: string | null
+          source?: string
+          title?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          company?: string | null
+          created_at?: string | null
+          email?: string | null
+          id?: string
+          last_contact_date?: string | null
+          name?: string
+          notes?: string | null
+          phone?: string | null
+          source?: string
+          title?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       conversations: {
         Row: {
           action_items: Json | null

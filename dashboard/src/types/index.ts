@@ -380,3 +380,34 @@ export type {
   PracticeQuestion,
   DebriefRecord,
 } from "./coaching"
+
+// Contact types (CAR-116)
+export type ContactRole = "recruiter" | "hiring_manager" | "interviewer" | "hr" | "referral"
+
+export interface Contact {
+  id: string
+  user_id: string
+  name: string
+  email: string | null
+  phone: string | null
+  company: string | null
+  title: string | null
+  source: string
+  notes: string | null
+  last_contact_date: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface ContactApplicationLink {
+  contact_id: string
+  application_id: string
+  user_id: string
+  role: ContactRole
+  created_at: string
+}
+
+export interface ContactWithLinks extends Contact {
+  applications?: Pick<Application, "id" | "title" | "company" | "status">[]
+  link_count?: number
+}

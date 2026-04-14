@@ -525,6 +525,35 @@ export function useEmails() {
       console.error("[auto-track-backfill] Non-blocking error:", err)
     }
 
+    // CAR-118: Auto-create contacts from recruiter_outreach emails (fire-and-forget)
+    {
+      const recruiterEmails = classifiedResults.filter(
+        (e) => e.category === "recruiter_outreach"
+      )
+      if (recruiterEmails.length > 0) {
+        void Promise.allSettled(
+          recruiterEmails.map((email) =>
+            fetch("/api/contacts/auto-create", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                from_email: email.from_email,
+                from_name: email.from_name,
+                from_domain: email.from_domain,
+                company: (email.classification_json as { company?: string | null } | null)?.company || null,
+                role: "recruiter",
+                application_id: email.suggested_application_id || null,
+              }),
+            }).catch((err) => {
+              console.error("[auto-create-contact] fetch error:", err)
+            })
+          )
+        ).catch((err) => {
+          console.error("[auto-create-contact] batch error:", err)
+        })
+      }
+    }
+
     // CAR-78: Extract job suggestions from newly classified alert emails
     try {
       const alertEmails = classifiedResults.filter(

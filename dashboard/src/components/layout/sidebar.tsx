@@ -5,7 +5,7 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import { useAuth } from "@/contexts/auth-context"
-import { LayoutDashboard, Search, Briefcase, BarChart3, ChevronRight, Mail, MessageSquare, Settings, Rocket, GraduationCap } from "lucide-react"
+import { LayoutDashboard, Search, Briefcase, BarChart3, ChevronRight, Mail, MessageSquare, Settings, Rocket, GraduationCap, Users } from "lucide-react"
 
 const NAV_ITEMS = [
   { id: "overview", href: "/", label: "Overview", icon: LayoutDashboard },
@@ -14,6 +14,7 @@ const NAV_ITEMS = [
   { id: "applications", href: "/applications", label: "Applications", icon: Briefcase },
   { id: "auto-apply", href: "/auto-apply", label: "Auto-Apply", icon: Rocket },
   { id: "conversations", href: "/conversations", label: "Conversations", icon: MessageSquare },
+  { id: "contacts", href: "/contacts", label: "Contacts", icon: Users },
   { id: "analytics", href: "/analytics", label: "Analytics", icon: BarChart3 },
   { id: "training", href: "/training", label: "Training", icon: GraduationCap },
   { id: "settings", href: "/settings", label: "Settings", icon: Settings },

@@ -54,6 +54,7 @@ export function ConversationForm({
   const [notes, setNotes] = useState("")
   const [sentiment, setSentiment] = useState<number>(0)
   const [people, setPeople] = useState<ConversationPerson[]>([])
+  const [peopleEmailErrors, setPeopleEmailErrors] = useState<Record<number, string>>({})
   const [questionsAsked, setQuestionsAsked] = useState<QuestionAsked[]>([])
   const [questionsYouAsked, setQuestionsYouAsked] = useState<QuestionYouAsked[]>([])
   const [actionItems, setActionItems] = useState<ActionItem[]>([])
@@ -66,6 +67,7 @@ export function ConversationForm({
     setNotes("")
     setSentiment(0)
     setPeople([])
+    setPeopleEmailErrors({})
     setQuestionsAsked([])
     setQuestionsYouAsked([])
     setActionItems([])
@@ -107,9 +109,29 @@ export function ConversationForm({
     const copy = [...people]
     copy[i] = { ...copy[i], [field]: value }
     setPeople(copy)
+    if (field === "email") {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+      const errors = { ...peopleEmailErrors }
+      if (value && !emailRegex.test(value)) {
+        errors[i] = "Invalid email address"
+      } else {
+        delete errors[i]
+      }
+      setPeopleEmailErrors(errors)
+    }
   }
   function removePerson(i: number) {
     setPeople(people.filter((_, j) => j !== i))
+    const errors = { ...peopleEmailErrors }
+    delete errors[i]
+    // Re-key errors for shifted indices after removal
+    const reKeyed: Record<number, string> = {}
+    Object.entries(errors).forEach(([k, v]) => {
+      const idx = parseInt(k, 10)
+      if (idx > i) reKeyed[idx - 1] = v
+      else reKeyed[idx] = v
+    })
+    setPeopleEmailErrors(reKeyed)
   }
 
   function addQuestionAsked() {
@@ -263,26 +285,39 @@ export function ConversationForm({
               </button>
             </div>
             {people.map((p, i) => (
-              <div key={i} className="flex gap-2 mb-2">
-                <input
-                  value={p.name}
-                  onChange={(e) => updatePerson(i, "name", e.target.value)}
-                  placeholder="Name"
-                  className={`${inputClass} flex-1`}
-                />
-                <input
-                  value={p.role || ""}
-                  onChange={(e) => updatePerson(i, "role", e.target.value)}
-                  placeholder="Role"
-                  className={`${inputClass} flex-1`}
-                />
-                <button
-                  type="button"
-                  onClick={() => removePerson(i)}
-                  className="text-zinc-400 hover:text-red-500 px-1"
-                >
-                  <Trash2 size={12} />
-                </button>
+              <div key={i} className="mb-3">
+                <div className="flex gap-2">
+                  <input
+                    value={p.name}
+                    onChange={(e) => updatePerson(i, "name", e.target.value)}
+                    placeholder="Name"
+                    className={`${inputClass} flex-1`}
+                  />
+                  <input
+                    value={p.role || ""}
+                    onChange={(e) => updatePerson(i, "role", e.target.value)}
+                    placeholder="Role"
+                    className={`${inputClass} flex-1`}
+                  />
+                  <input
+                    type="text"
+                    value={p.email || ""}
+                    onChange={(e) => updatePerson(i, "email", e.target.value)}
+                    placeholder="Email (optional)"
+                    className={`${inputClass} flex-1${peopleEmailErrors[i] ? " border-red-400 focus:ring-red-300" : ""}`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removePerson(i)}
+                    title="Remove person"
+                    className="text-zinc-400 hover:text-red-500 px-1 shrink-0"
+                  >
+                    <Trash2 size={12} />
+                  </button>
+                </div>
+                {peopleEmailErrors[i] && (
+                  <p className="text-[10px] text-red-500 mt-1 ml-1">{peopleEmailErrors[i]}</p>
+                )}
               </div>
             ))}
           </div>
