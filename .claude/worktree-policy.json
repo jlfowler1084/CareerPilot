@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "protected_branches": [
+    "main"
+  ],
+  "worktree_pattern": "worktree/<TICKET>-<slug>",
+  "worktree_root": ".worktrees/",
+  "allow_bypass_env": "ALLOW_MAIN_COMMIT",
+  "allow_bypass_push_env": "ALLOW_MAIN_PUSH",
+  "exempt_paths": [
+    "QWEN.md",
+    "CLAUDE.md",
+    "README.md",
+    ".claude/**",
+    "docs/**",
+    "prompts/**",
+    ".gitignore"
+  ]
+}
