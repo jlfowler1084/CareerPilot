@@ -39,6 +39,9 @@ get-refresh-token.js
 # vercel
 .vercel
 
+# supabase CLI internal state (CAR-135)
+supabase/.temp/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
