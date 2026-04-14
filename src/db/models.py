@@ -185,6 +185,30 @@ CREATE TABLE IF NOT EXISTS skill_application_map (
     FOREIGN KEY (application_id) REFERENCES applications(id),
     PRIMARY KEY (skill_name, application_id)
 );
+
+CREATE TABLE IF NOT EXISTS llm_calls (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    task TEXT NOT NULL,
+    provider_used TEXT NOT NULL CHECK(provider_used IN ('local', 'claude')),
+    model TEXT NOT NULL,
+    prompt TEXT,
+    prompt_sha256 TEXT,
+    response TEXT,
+    response_sha256 TEXT,
+    schema_invalid INTEGER NOT NULL DEFAULT 0 CHECK(schema_invalid IN (0, 1)),
+    pii_bearing INTEGER NOT NULL DEFAULT 0 CHECK(pii_bearing IN (0, 1)),
+    fallback_reason TEXT,
+    reviewed_at TEXT,
+    review_verdict TEXT,
+    latency_ms INTEGER,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS llm_budget_resets (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    last_reset_at TEXT NOT NULL DEFAULT (datetime('now')),
+    fallback_count_since_reset INTEGER NOT NULL DEFAULT 0
+);
 """
 
 
@@ -229,6 +253,14 @@ def get_connection(db_path: Path = None) -> sqlite3.Connection:
 
     # Re-issue after executescript may have reset it
     conn.execute("PRAGMA foreign_keys = ON")
+
+    # Seed llm_budget_resets with one row on first init (CAR-142)
+    if conn.execute("SELECT COUNT(*) FROM llm_budget_resets").fetchone()[0] == 0:
+        conn.execute(
+            "INSERT INTO llm_budget_resets (last_reset_at, fallback_count_since_reset) "
+            "VALUES (datetime('now'), 0)"
+        )
+        conn.commit()
 
     return conn
 
