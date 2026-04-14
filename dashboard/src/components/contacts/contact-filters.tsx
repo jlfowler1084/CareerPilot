@@ -9,6 +9,11 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 
+// Sentinel used for "no filter" because Base UI Select can't round-trip an
+// empty-string value cleanly. Parent state still stores "" for no filter;
+// we map to/from ALL at the Select boundary.
+const ALL = "__all__"
+
 const ROLE_OPTIONS = [
   { value: "", label: "All Roles" },
   { value: "recruiter", label: "Recruiter" },
@@ -65,13 +70,16 @@ export function ContactFilters({
       </div>
 
       {/* Role filter */}
-      <Select value={role || undefined} onValueChange={(v) => onRoleChange(v ?? "")}>
+      <Select
+        value={role || ALL}
+        onValueChange={(v) => onRoleChange(!v || v === ALL ? "" : v)}
+      >
         <SelectTrigger className="min-w-[140px] text-sm">
           <SelectValue placeholder="All Roles" />
         </SelectTrigger>
         <SelectContent>
           {ROLE_OPTIONS.map((opt) => (
-            <SelectItem key={opt.value} value={opt.value || "__all__"}>
+            <SelectItem key={opt.value || ALL} value={opt.value || ALL}>
               {opt.label}
             </SelectItem>
           ))}
@@ -79,13 +87,16 @@ export function ContactFilters({
       </Select>
 
       {/* Recency filter */}
-      <Select value={recency || undefined} onValueChange={(v) => onRecencyChange(v ?? "")}>
+      <Select
+        value={recency || ALL}
+        onValueChange={(v) => onRecencyChange(!v || v === ALL ? "" : v)}
+      >
         <SelectTrigger className="min-w-[160px] text-sm">
           <SelectValue placeholder="All Time" />
         </SelectTrigger>
         <SelectContent>
           {RECENCY_OPTIONS.map((opt) => (
-            <SelectItem key={opt.value} value={opt.value || "__all__"}>
+            <SelectItem key={opt.value || ALL} value={opt.value || ALL}>
               {opt.label}
             </SelectItem>
           ))}
