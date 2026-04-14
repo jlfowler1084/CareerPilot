@@ -2651,6 +2651,110 @@
         "debriefs"
       ],
       "area": "coaching"
+    },
+    {
+      "ticket": "CAR-117",
+      "name": "Contact Validation Lib",
+      "file": "src/lib/contacts/validation.ts",
+      "exports": [
+        "validateContactEmail",
+        "sanitizeContactName",
+        "validateContactInput"
+      ],
+      "patterns": [
+        "Name is required",
+        "Invalid email format"
+      ],
+      "area": "contacts"
+    },
+    {
+      "ticket": "CAR-117",
+      "name": "Contacts API Route",
+      "file": "src/app/api/contacts/route.ts",
+      "exports": [
+        "GET",
+        "POST",
+        "getRecencyFilter",
+        "normalizeContactLinks"
+      ],
+      "patterns": [
+        "validateContactInput",
+        "sanitizeContactName",
+        "contact_application_links"
+      ],
+      "area": "contacts"
+    },
+    {
+      "ticket": "CAR-117",
+      "name": "Use Contacts Hook",
+      "file": "src/hooks/use-contacts.ts",
+      "exports": [
+        "useContacts"
+      ],
+      "patterns": [
+        "createContact",
+        "updateContact",
+        "deleteContact",
+        "mergeContacts",
+        "postgres_changes"
+      ],
+      "area": "contacts"
+    },
+    {
+      "ticket": "CAR-116",
+      "name": "Contacts Query Helper",
+      "file": "src/lib/contacts/query.ts",
+      "exports": [
+        "buildContactsQuery"
+      ],
+      "patterns": [
+        "URLSearchParams",
+        "search",
+        "role",
+        "recency"
+      ],
+      "area": "contacts"
+    },
+    {
+      "ticket": "CAR-118",
+      "name": "Contacts List Page",
+      "file": "src/app/(main)/contacts/page.tsx",
+      "exports": [],
+      "patterns": [
+        "ContactsPage",
+        "useContacts",
+        "ContactFilters",
+        "ContactList"
+      ],
+      "area": "contacts"
+    },
+    {
+      "ticket": "CAR-118",
+      "name": "Contact Detail Page",
+      "file": "src/app/(main)/contacts/[id]/page.tsx",
+      "exports": [],
+      "patterns": [
+        "ContactDetailPage",
+        "ContactSummaryCard",
+        "ContactTimeline",
+        "ContactEditModal"
+      ],
+      "area": "contacts"
+    },
+    {
+      "ticket": "CAR-116",
+      "name": "Contact Filters Component",
+      "file": "src/components/contacts/contact-filters.tsx",
+      "exports": [
+        "ContactFilters"
+      ],
+      "patterns": [
+        "ROLE_OPTIONS",
+        "RECENCY_OPTIONS",
+        "All Roles",
+        "All Time"
+      ],
+      "area": "contacts"
     }
   ]
 }

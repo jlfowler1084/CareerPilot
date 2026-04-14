@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { toast } from "sonner"
+import { buildContactsQuery } from "@/lib/contacts/query"
 import type { Contact, ContactWithLinks } from "@/types"
 
 const supabase = createClient()
@@ -25,13 +26,10 @@ export function useContacts(options: UseContactsOptions = {}) {
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const fetchContacts = useCallback(async () => {
-    const params = new URLSearchParams()
-    if (search) params.set("search", search)
-    if (role) params.set("role", role)
-    if (recency) params.set("recency", recency)
+    const qs = buildContactsQuery({ search, role, recency })
 
     try {
-      const resp = await fetch(`/api/contacts?${params}`)
+      const resp = await fetch(`/api/contacts?${qs}`)
       if (resp.ok) {
         const data = await resp.json()
         setContacts(data.contacts || [])

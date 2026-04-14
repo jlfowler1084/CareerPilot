@@ -2,6 +2,58 @@ import { NextRequest, NextResponse } from "next/server"
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { validateContactInput, sanitizeContactName } from "@/lib/contacts/validation"
 
+export type RecencyFilter = { from?: string; to?: string } | null
+
+/**
+ * Derive a last_contact_date window from a recency keyword.
+ * Returns null when the keyword is empty or unrecognized.
+ * Exported so unit tests can lock in the date-math without hitting Supabase.
+ */
+export function getRecencyFilter(recency: string | null | undefined, now: Date): RecencyFilter {
+  if (!recency) return null
+  const ms = 24 * 60 * 60 * 1000
+  if (recency === "active") {
+    return { from: new Date(now.getTime() - 14 * ms).toISOString() }
+  }
+  if (recency === "recent") {
+    return {
+      from: new Date(now.getTime() - 60 * ms).toISOString(),
+      to: new Date(now.getTime() - 15 * ms).toISOString(),
+    }
+  }
+  if (recency === "dormant") {
+    return {
+      from: new Date(now.getTime() - 180 * ms).toISOString(),
+      to: new Date(now.getTime() - 61 * ms).toISOString(),
+    }
+  }
+  if (recency === "inactive") {
+    return { to: new Date(now.getTime() - 180 * ms).toISOString() }
+  }
+  return null
+}
+
+type RawContactRow = Record<string, unknown> & {
+  contact_application_links?: Array<{ count: number }> | null
+}
+
+/**
+ * Flattens the `contact_application_links(count)` aggregate from Supabase
+ * into a simple `link_count: number` field. Exported for unit testing.
+ */
+export function normalizeContactLinks(
+  rows: RawContactRow[]
+): Array<Record<string, unknown>> {
+  return rows.map((c) => {
+    const linkArr = c.contact_application_links as Array<{ count: number }> | null
+    return {
+      ...c,
+      contact_application_links: undefined,
+      link_count: linkArr?.[0]?.count ?? 0,
+    }
+  })
+}
+
 export async function GET(req: NextRequest) {
   try {
     const supabase = await createServerSupabaseClient()
@@ -26,23 +78,10 @@ export async function GET(req: NextRequest) {
     }
 
     // Recency filter on last_contact_date
-    if (recency) {
-      const now = new Date()
-      if (recency === "active") {
-        const cutoff = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000).toISOString()
-        query = query.gte("last_contact_date", cutoff)
-      } else if (recency === "recent") {
-        const from = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000).toISOString()
-        const to = new Date(now.getTime() - 15 * 24 * 60 * 60 * 1000).toISOString()
-        query = query.gte("last_contact_date", from).lte("last_contact_date", to)
-      } else if (recency === "dormant") {
-        const from = new Date(now.getTime() - 180 * 24 * 60 * 60 * 1000).toISOString()
-        const to = new Date(now.getTime() - 61 * 24 * 60 * 60 * 1000).toISOString()
-        query = query.gte("last_contact_date", from).lte("last_contact_date", to)
-      } else if (recency === "inactive") {
-        const cutoff = new Date(now.getTime() - 180 * 24 * 60 * 60 * 1000).toISOString()
-        query = query.lte("last_contact_date", cutoff)
-      }
+    const recencyFilter = getRecencyFilter(recency, new Date())
+    if (recencyFilter) {
+      if (recencyFilter.from) query = query.gte("last_contact_date", recencyFilter.from)
+      if (recencyFilter.to) query = query.lte("last_contact_date", recencyFilter.to)
     }
 
     const { data, error } = await query
@@ -71,14 +110,7 @@ export async function GET(req: NextRequest) {
     }
 
     // Flatten link_count from nested aggregate
-    const normalized = contacts.map((c: Record<string, unknown>) => {
-      const linkArr = c.contact_application_links as Array<{ count: number }> | null
-      return {
-        ...c,
-        contact_application_links: undefined,
-        link_count: linkArr?.[0]?.count ?? 0,
-      }
-    })
+    const normalized = normalizeContactLinks(contacts as RawContactRow[])
 
     return NextResponse.json({ contacts: normalized })
   } catch (error: unknown) {
