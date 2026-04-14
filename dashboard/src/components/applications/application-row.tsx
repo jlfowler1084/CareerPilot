@@ -6,6 +6,7 @@
 "use client"
 
 import { useState } from "react"
+import { toast } from "sonner"
 import { StatusBadge } from "@/components/shared/status-badge"
 import { ConversationSection } from "@/components/conversations/conversation-section"
 import { CommunicationsSection } from "@/components/applications/communications-section"
@@ -19,7 +20,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { useIntelligence } from "@/hooks/use-intelligence"
 import { STATUSES } from "@/lib/constants"
 import { RelativeTime } from "@/components/ui/relative-time"
-import { ExternalLink, Trash2, Save, Mail, Sparkles, FileCheck, CalendarDays, CalendarCheck, FileText, BrainCircuit, ChevronDown, ChevronRight } from "lucide-react"
+import { ExternalLink, Trash2, Save, Mail, Sparkles, FileCheck, CalendarDays, CalendarCheck, FileText, BrainCircuit, ChevronDown, ChevronRight, Download, Loader2 } from "lucide-react"
 import type { Application, ApplicationStatus } from "@/types"
 
 const SCHEDULABLE_STATUSES: ApplicationStatus[] = ["applied", "phone_screen", "interview", "offer"]
@@ -41,6 +42,8 @@ export function ApplicationRow({
 }: ApplicationRowProps) {
   const [editingNotes, setEditingNotes] = useState(false)
   const [notes, setNotes] = useState(application.notes || "")
+  const [jobDesc, setJobDesc] = useState(application.job_description || "")
+  const [fetchingJd, setFetchingJd] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [tailorOpen, setTailorOpen] = useState(false)
   const [tailorViewMode, setTailorViewMode] = useState(false)
@@ -64,6 +67,47 @@ export function ApplicationRow({
   async function handleSaveNotes() {
     await onUpdate(application.id, { notes })
     setEditingNotes(false)
+  }
+
+  async function saveJobDesc() {
+    if (jobDesc === (application.job_description || "")) return
+    await onUpdate(application.id, { job_description: jobDesc })
+  }
+
+  async function fetchJobDescFromUrl() {
+    if (!application.url) return
+    setFetchingJd(true)
+    try {
+      const res = await fetch("/api/extract-job", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: application.url }),
+      })
+      const json = await res.json()
+      if (!res.ok || !json.success) {
+        toast.error(json.error || "Failed to fetch job details")
+        return
+      }
+      const data = json.data
+      const updates: Partial<Application> = {}
+      if (data.job_description) {
+        updates.job_description = data.job_description
+        setJobDesc(data.job_description)
+      }
+      if (data.location && !application.location) updates.location = data.location
+      if (data.salary_range && !application.salary_range) updates.salary_range = data.salary_range
+      if (data.job_type && !application.job_type) updates.job_type = data.job_type
+      if (Object.keys(updates).length > 0) {
+        await onUpdate(application.id, updates)
+        toast.success("Job details updated")
+      } else {
+        toast.info("No new details found")
+      }
+    } catch {
+      toast.error("Failed to connect to extraction service")
+    } finally {
+      setFetchingJd(false)
+    }
   }
 
   async function handleDelete() {
@@ -309,6 +353,39 @@ export function ApplicationRow({
                     : "Add notes..."}
                 </button>
               )}
+            </div>
+
+            {/* Job Description (feeds Intelligence) */}
+            <div className="mt-3">
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-xs font-medium text-zinc-600">
+                  Job Description
+                </label>
+                {!jobDesc && application.url && (
+                  <button
+                    type="button"
+                    onClick={fetchJobDescFromUrl}
+                    disabled={fetchingJd}
+                    className="text-[10px] font-semibold px-2 py-1 rounded-md border border-zinc-200 text-zinc-600 hover:bg-zinc-50 transition-colors flex items-center gap-1 disabled:opacity-50"
+                    title="Fetch job description from the application URL"
+                  >
+                    {fetchingJd ? (
+                      <Loader2 size={10} className="animate-spin" />
+                    ) : (
+                      <Download size={10} />
+                    )}
+                    {fetchingJd ? "Fetching..." : "Fetch from URL"}
+                  </button>
+                )}
+              </div>
+              <textarea
+                value={jobDesc}
+                onChange={(e) => setJobDesc(e.target.value)}
+                onBlur={saveJobDesc}
+                placeholder="Paste the job description here so Intelligence can use it..."
+                className="w-full text-xs border border-zinc-200 rounded-lg p-2 resize-none focus:outline-none focus:ring-1 focus:ring-amber-300 min-h-[80px]"
+                rows={4}
+              />
             </div>
 
             {/* Expandable sections */}
