@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-# Unit 2 implementation
+import jsonschema
 
 
 def validate_against_schema(data, schema: dict) -> None:
@@ -10,9 +10,9 @@ def validate_against_schema(data, schema: dict) -> None:
 
     Args:
         data: Parsed data (dict or list).
-        schema: JSON Schema dict.
+        schema: JSON Schema dict (draft-7 compatible).
 
     Raises:
         jsonschema.ValidationError: If validation fails.
     """
-    raise NotImplementedError("Unit 2 not yet implemented")
+    jsonschema.validate(instance=data, schema=schema)
