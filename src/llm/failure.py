@@ -13,6 +13,10 @@ class LocalEndpointSecurityError(Exception):
     """Raised when the local endpoint URL fails security validation."""
 
 
+class SchemaValidationError(Exception):
+    """Raised when the local provider returns JSON that fails schema validation."""
+
+
 class FallbackBudgetExhausted(Exception):
     """Raised when the daily Claude fallback budget is exhausted."""
 

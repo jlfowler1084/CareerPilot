@@ -76,31 +76,29 @@ LLM_FALLBACK_BUDGET_PER_DAY = int(
 # ---------------------------------------------------------------------------
 
 TASK_MODEL_MAP = {
-    # R9 structured-local tier (Unit 3 will flip these to "local")
-    "email_classify": MODEL_HAIKU,
-    "job_analyze": MODEL_SONNET,
-    "skill_extract": MODEL_SONNET,
-    "company_intel": MODEL_SONNET,
-    "profile_extract": MODEL_SONNET,
-    "gmail_thread_actions": MODEL_SONNET,
-    # R10 Claude-default tier — stays on Claude, never promoted to local
-    # skill_study_plan: structurally R9 but prompt uses web_search (Claude-only tool);
-    # must stay on Claude until Phase 1b provides a local web-search shim.
-    "skill_study_plan": MODEL_SONNET,
-    "roadmap_generate": MODEL_SONNET,
-    "journal_entry": MODEL_HAIKU,
+    # R9 structured-local tier — routes to Qwen by default (Unit 3+)
+    "email_classify":       "local",
+    "job_analyze":          "local",
+    "skill_extract":        "local",
+    "company_intel":        "local",
+    "profile_extract":      "local",
+    "gmail_thread_actions": "local",
+    # R10 Claude-default tier — stays on Claude; includes skill_study_plan (web_search constraint)
+    "skill_study_plan":     MODEL_SONNET,
+    "roadmap_generate":     MODEL_SONNET,
+    "journal_entry":        MODEL_HAIKU,
     "journal_weekly_summary": MODEL_SONNET,
-    "journal_momentum": MODEL_HAIKU,
+    "journal_momentum":     MODEL_HAIKU,
     "transcript_speaker_id": MODEL_SONNET,
-    "recruiter_respond": MODEL_SONNET,
+    "recruiter_respond":    MODEL_SONNET,
     "interview_transcript_analyze": MODEL_SONNET,
-    "interview_compare": MODEL_SONNET,
+    "interview_compare":    MODEL_SONNET,
     "interview_question_gen": MODEL_HAIKU,
-    "interview_answer_eval": MODEL_SONNET,
-    "interview_summary": MODEL_SONNET,
-    "resume_generate": MODEL_SONNET,
-    "cover_letter": MODEL_SONNET,
-    "daily_summary": MODEL_SONNET,
+    "interview_answer_eval":  MODEL_SONNET,
+    "interview_summary":    MODEL_SONNET,
+    "resume_generate":      MODEL_SONNET,
+    "cover_letter":         MODEL_SONNET,
+    "daily_summary":        MODEL_SONNET,
 }
 
 # ---------------------------------------------------------------------------

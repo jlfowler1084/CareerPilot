@@ -11,4 +11,4 @@ pyperclip
 python-docx
 pytest
 jsonschema>=4.0.0
-openai>=1.0.0,<2.0.0
+openai>=1.40.0,<2.0.0

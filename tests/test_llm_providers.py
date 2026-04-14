@@ -326,3 +326,198 @@ class TestClaudeProviderEmbed:
         """ClaudeProvider.embed() always raises NotImplementedError."""
         with pytest.raises(NotImplementedError):
             provider.embed(task="embed_default", text="hello", model="embed-model")
+
+
+# ---------------------------------------------------------------------------
+# LocalProvider — schema tasks (response_format=json_schema + disable thinking)
+# ---------------------------------------------------------------------------
+
+from src.llm.providers.local import LocalProvider
+from src.llm.failure import SchemaValidationError
+
+
+class TestLocalProviderSchemaTask:
+    def _make_provider(self):
+        return LocalProvider(
+            chat_base_url="http://localhost:8000/v1",
+            embed_base_url="http://localhost:8001/v1",
+            chat_model="qwen3.5-35b-a3b-fp8",
+            embed_model="qwen3-embed",
+            api_key="",
+        )
+
+    def test_response_format_json_schema_passed(self):
+        """Schema tasks use response_format={"type":"json_schema",...}."""
+        schema = {"type": "object", "properties": {"category": {"type": "string"}}}
+        provider = self._make_provider()
+        mock_client = MagicMock()
+        choice = MagicMock()
+        choice.message.content = '{"category": "recruiter_outreach"}'
+        choice.finish_reason = "stop"
+        mock_client.chat.completions.create.return_value = MagicMock(choices=[choice])
+        with patch.object(provider, "_get_chat_client", return_value=mock_client):
+            result = provider.complete(
+                task="email_classify",
+                system_prompt="Classify.",
+                prompt="Hi candidate",
+                model="qwen3.5-35b-a3b-fp8",
+                max_tokens=256,
+                temperature=None,
+                schema=schema,
+            )
+        kw = mock_client.chat.completions.create.call_args[1]
+        assert kw["response_format"]["type"] == "json_schema"
+        assert kw["response_format"]["json_schema"]["name"] == "email_classify"
+        assert kw["response_format"]["json_schema"]["schema"] == schema
+        assert result.parsed == {"category": "recruiter_outreach"}
+
+    def test_thinking_disabled_via_extra_body(self):
+        """All local complete() calls include enable_thinking=False."""
+        provider = self._make_provider()
+        mock_client = MagicMock()
+        choice = MagicMock()
+        choice.message.content = "plain text response"
+        choice.finish_reason = "stop"
+        mock_client.chat.completions.create.return_value = MagicMock(choices=[choice])
+        with patch.object(provider, "_get_chat_client", return_value=mock_client):
+            provider.complete(
+                task="roadmap_generate",
+                system_prompt="",
+                prompt="test",
+                model="qwen3.5-35b-a3b-fp8",
+                max_tokens=512,
+                temperature=None,
+                schema=None,
+            )
+        kw = mock_client.chat.completions.create.call_args[1]
+        assert kw.get("extra_body", {}).get("chat_template_kwargs", {}).get("enable_thinking") is False
+
+    def test_schema_invalid_json_raises_infra_error(self):
+        """Non-JSON response when schema expected raises ProviderInfraError(json_parse_error)."""
+        schema = {"type": "object", "properties": {"x": {"type": "string"}}}
+        provider = self._make_provider()
+        mock_client = MagicMock()
+        choice = MagicMock()
+        choice.message.content = "not json at all"
+        choice.finish_reason = "stop"
+        mock_client.chat.completions.create.return_value = MagicMock(choices=[choice])
+        with patch.object(provider, "_get_chat_client", return_value=mock_client):
+            with pytest.raises(ProviderInfraError, match="json_parse_error"):
+                provider.complete(
+                    task="email_classify",
+                    system_prompt="",
+                    prompt="test",
+                    model="q",
+                    max_tokens=256,
+                    temperature=None,
+                    schema=schema,
+                )
+
+    def test_schema_invalid_structure_raises_schema_validation_error(self):
+        """Valid JSON that fails schema raises SchemaValidationError."""
+        schema = {
+            "type": "object",
+            "required": ["category"],
+            "properties": {"category": {"type": "string"}},
+        }
+        provider = self._make_provider()
+        mock_client = MagicMock()
+        choice = MagicMock()
+        choice.message.content = '{"wrong_key": "value"}'  # missing required "category"
+        choice.finish_reason = "stop"
+        mock_client.chat.completions.create.return_value = MagicMock(choices=[choice])
+        with patch.object(provider, "_get_chat_client", return_value=mock_client):
+            with pytest.raises(SchemaValidationError):
+                provider.complete(
+                    task="email_classify",
+                    system_prompt="",
+                    prompt="test",
+                    model="q",
+                    max_tokens=256,
+                    temperature=None,
+                    schema=schema,
+                )
+
+    def test_empty_response_raises_infra_error(self):
+        """Empty content string raises ProviderInfraError(empty_response)."""
+        provider = self._make_provider()
+        mock_client = MagicMock()
+        choice = MagicMock()
+        choice.message.content = ""
+        choice.finish_reason = "stop"
+        mock_client.chat.completions.create.return_value = MagicMock(choices=[choice])
+        with patch.object(provider, "_get_chat_client", return_value=mock_client):
+            with pytest.raises(ProviderInfraError, match="empty_response"):
+                provider.complete(
+                    task="email_classify",
+                    system_prompt="",
+                    prompt="test",
+                    model="q",
+                    max_tokens=256,
+                    temperature=None,
+                    schema=None,
+                )
+
+    def test_truncated_finish_reason_raises_infra_error(self):
+        """finish_reason='length' raises ProviderInfraError(truncated_finish_reason)."""
+        provider = self._make_provider()
+        mock_client = MagicMock()
+        choice = MagicMock()
+        choice.message.content = "partial"
+        choice.finish_reason = "length"
+        mock_client.chat.completions.create.return_value = MagicMock(choices=[choice])
+        with patch.object(provider, "_get_chat_client", return_value=mock_client):
+            with pytest.raises(ProviderInfraError, match="truncated_finish_reason"):
+                provider.complete(
+                    task="email_classify",
+                    system_prompt="",
+                    prompt="test",
+                    model="q",
+                    max_tokens=256,
+                    temperature=None,
+                    schema=None,
+                )
+
+    def test_connection_error_raises_provider_infra_error(self):
+        """openai.APIConnectionError maps to ProviderInfraError(connection_error)."""
+        import openai as openai_mod
+        provider = self._make_provider()
+        mock_client = MagicMock()
+        mock_client.chat.completions.create.side_effect = openai_mod.APIConnectionError(
+            request=MagicMock()
+        )
+        with patch.object(provider, "_get_chat_client", return_value=mock_client):
+            with pytest.raises(ProviderInfraError, match="connection_error"):
+                provider.complete(
+                    task="email_classify",
+                    system_prompt="",
+                    prompt="test",
+                    model="q",
+                    max_tokens=256,
+                    temperature=None,
+                    schema=None,
+                )
+
+
+# ---------------------------------------------------------------------------
+# LocalProvider — URL validation
+# ---------------------------------------------------------------------------
+
+class TestLocalProviderURLValidation:
+    def test_non_loopback_url_raises_security_error(self):
+        """Non-loopback, non-allowlisted URL raises LocalEndpointSecurityError."""
+        from src.llm.providers.local import validate_endpoint_url
+        from src.llm.failure import LocalEndpointSecurityError
+        with pytest.raises(LocalEndpointSecurityError):
+            validate_endpoint_url("http://192.168.1.5:8000/v1", allowlist=[])
+
+    def test_loopback_url_passes(self):
+        """localhost URL passes without DNS lookup."""
+        from src.llm.providers.local import validate_endpoint_url
+        # Should not raise
+        validate_endpoint_url("http://localhost:8000/v1", allowlist=[])
+
+    def test_allowlisted_ip_passes(self):
+        """Non-loopback IP in allowlist passes."""
+        from src.llm.providers.local import validate_endpoint_url
+        validate_endpoint_url("http://192.168.1.5:8000/v1", allowlist=["192.168.1.5"])
