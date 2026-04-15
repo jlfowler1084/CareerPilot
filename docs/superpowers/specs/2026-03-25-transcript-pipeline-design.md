@@ -1,8 +1,10 @@
 # SCRUM-102: Interview Transcription Pipeline (CLI)
 
 **Date:** 2026-03-25
-**Status:** Approved
+**Status:** Approved — **superseded in part by CAR-145 (2026-04-15)**
 **Scope:** Python CLI only (dashboard upload deferred to follow-on spec)
+
+> **Historical reference.** CAR-145 added a `kind` column to `transcripts`, backfilled and dropped the `interview_analyses` table, and replaced `update_analysis()` with `save_analysis(transcript_id, analysis)`. The current canonical patterns are documented in [`docs/solutions/workflow-issues/transcripts-kind-consolidation-2026-04-15.md`](../solutions/workflow-issues/transcripts-kind-consolidation-2026-04-15.md).
 
 ## Overview
 
