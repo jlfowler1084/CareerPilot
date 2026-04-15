@@ -166,43 +166,17 @@ class ProfileManager:
     # --- Import / Export ---
 
     def import_from_resume(self, resume_text: str | None = None) -> dict:
-        """Send resume text to Claude API to extract structured profile data.
+        """Send resume text to the LLM router to extract structured profile data.
 
         If resume_text is None, uses the built-in Joseph Fowler resume.
         Returns the parsed profile dict.
         """
-        import anthropic
+        from src.llm.router import router
 
         if resume_text is None:
             resume_text = JOSEPH_RESUME_TEXT
 
-        client = anthropic.Anthropic()
-        response = client.messages.create(
-            model="claude-sonnet-4-6",
-            max_tokens=4096,
-            system=(
-                "You are a resume parser. Extract structured profile data from the "
-                "resume text and return ONLY valid JSON with no markdown formatting. "
-                "Use this exact schema:\n"
-                "{\n"
-                '  "personal": {"full_name": "", "email": "", "phone": "", '
-                '"street": "", "city": "", "state": "", "zip": "", '
-                '"linkedin_url": "", "github_url": "", "website": ""},\n'
-                '  "work_history": [{"company": "", "title": "", "location": "", '
-                '"start_date": "", "end_date": null, "description": "", "is_current": false}],\n'
-                '  "education": [{"school": "", "degree": "", "field_of_study": "", '
-                '"graduation_date": "", "gpa": null}],\n'
-                '  "certifications": [{"name": "", "issuer": "", "date_obtained": "", '
-                '"expiry_date": null, "in_progress": false}]\n'
-                "}\n"
-                "For dates, use YYYY-MM format. For end_date, use null if current position. "
-                "Set is_current=true for the most recent position if end_date is recent or blank."
-            ),
-            messages=[{"role": "user", "content": resume_text}],
-        )
-
-        raw = response.content[0].text
-        data = json.loads(raw)
+        data = router.complete(task="profile_extract", prompt=resume_text)
         self._apply_import_data(data)
         return data
 

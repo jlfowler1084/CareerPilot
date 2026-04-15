@@ -120,7 +120,7 @@ class TestGetEmailDetails:
 
 class TestClassifyEmail:
     def test_valid_classification(self, scanner):
-        """Parses valid JSON classification from Claude."""
+        """Parses valid JSON classification from the router."""
         classification = {
             "category": "recruiter_outreach",
             "company": "Acme Corp",
@@ -129,11 +129,7 @@ class TestClassifyEmail:
             "summary": "Recruiter reaching out about SE role",
         }
 
-        with patch.object(scanner, "_get_claude_client") as mock_client_fn:
-            mock_client = MagicMock()
-            mock_client.messages.create.return_value = _mock_claude_response(classification)
-            mock_client_fn.return_value = mock_client
-
+        with patch("src.llm.router.router.complete", return_value=classification):
             result = scanner.classify_email({"subject": "Test", "body": "Test body"})
 
         assert result["category"] == "recruiter_outreach"
@@ -141,8 +137,8 @@ class TestClassifyEmail:
         assert result["role"] == "Systems Engineer"
         assert result["urgency"] == "high"
 
-    def test_classification_with_markdown_fences(self, scanner):
-        """Strips markdown code fences from Claude response."""
+    def test_classification_with_partial_fields(self, scanner):
+        """Router returns partial fields; defaults fill in the gaps."""
         classification = {
             "category": "job_alert",
             "company": "BigTech",
@@ -151,64 +147,39 @@ class TestClassifyEmail:
             "summary": "Job alert from board",
         }
 
-        with patch.object(scanner, "_get_claude_client") as mock_client_fn:
-            mock_client = MagicMock()
-            mock_content = MagicMock()
-            mock_content.text = "```json\n" + json.dumps(classification) + "\n```"
-            mock_response = MagicMock()
-            mock_response.content = [mock_content]
-            mock_client.messages.create.return_value = mock_response
-            mock_client_fn.return_value = mock_client
-
+        with patch("src.llm.router.router.complete", return_value=classification):
             result = scanner.classify_email({"subject": "Test", "body": "body"})
 
         assert result["category"] == "job_alert"
         assert result["company"] == "BigTech"
 
-    def test_malformed_json_returns_irrelevant(self, scanner):
-        """Falls back to irrelevant when Claude returns unparseable text."""
-        with patch.object(scanner, "_get_claude_client") as mock_client_fn:
-            mock_client = MagicMock()
-            mock_content = MagicMock()
-            mock_content.text = "This is not JSON at all"
-            mock_response = MagicMock()
-            mock_response.content = [mock_content]
-            mock_client.messages.create.return_value = mock_response
-            mock_client_fn.return_value = mock_client
-
+    def test_malformed_response_returns_irrelevant(self, scanner):
+        """Falls back to irrelevant when router raises an exception."""
+        with patch("src.llm.router.router.complete", side_effect=RuntimeError("fail")):
             result = scanner.classify_email({"subject": "Test", "body": "body"})
 
         assert result["category"] == "irrelevant"
         assert result["summary"] == "Classification failed"
 
-    def test_invalid_category_defaults_to_irrelevant(self, scanner):
-        """Corrects an unrecognized category to irrelevant."""
+    def test_missing_category_defaults_to_irrelevant(self, scanner):
+        """Router result without a category field defaults safely."""
         classification = {
-            "category": "spam",
             "company": "X",
             "role": "Y",
             "urgency": "low",
             "summary": "Unknown",
         }
 
-        with patch.object(scanner, "_get_claude_client") as mock_client_fn:
-            mock_client = MagicMock()
-            mock_client.messages.create.return_value = _mock_claude_response(classification)
-            mock_client_fn.return_value = mock_client
-
+        with patch("src.llm.router.router.complete", return_value=classification):
             result = scanner.classify_email({"subject": "Test", "body": "body"})
 
         assert result["category"] == "irrelevant"
 
     def test_missing_fields_use_defaults(self, scanner):
-        """Missing fields in Claude response get safe defaults."""
+        """Missing fields in router response get safe defaults."""
         classification = {"category": "offer"}
 
-        with patch.object(scanner, "_get_claude_client") as mock_client_fn:
-            mock_client = MagicMock()
-            mock_client.messages.create.return_value = _mock_claude_response(classification)
-            mock_client_fn.return_value = mock_client
-
+        with patch("src.llm.router.router.complete", return_value=classification):
             result = scanner.classify_email({"subject": "Test", "body": "body"})
 
         assert result["category"] == "offer"
@@ -218,12 +189,8 @@ class TestClassifyEmail:
         assert result["summary"] == ""
 
     def test_api_exception_returns_default(self, scanner):
-        """Returns default classification when API call raises."""
-        with patch.object(scanner, "_get_claude_client") as mock_client_fn:
-            mock_client = MagicMock()
-            mock_client.messages.create.side_effect = Exception("API down")
-            mock_client_fn.return_value = mock_client
-
+        """Returns default classification when router raises."""
+        with patch("src.llm.router.router.complete", side_effect=Exception("API down")):
             result = scanner.classify_email({"subject": "Test", "body": "body"})
 
         assert result["category"] == "irrelevant"
@@ -252,11 +219,7 @@ class TestScanInbox:
         mock_service.users().messages().get().execute.return_value = msg
         scanner._service = mock_service
 
-        with patch.object(scanner, "_get_claude_client") as mock_client_fn:
-            mock_client = MagicMock()
-            mock_client.messages.create.return_value = _mock_claude_response(classification)
-            mock_client_fn.return_value = mock_client
-
+        with patch("src.llm.router.router.complete", return_value=classification):
             results = scanner.scan_inbox(days_back=7)
 
         assert len(results) == 1
@@ -273,18 +236,6 @@ class TestScanInbox:
 
         good_msg = _make_gmail_message("msg_good", "a@b.com", "Hi", "Hello")
 
-        def get_side_effect(*args, **kwargs):
-            mock_get = MagicMock()
-            call_results = {"msg_good": good_msg}
-
-            def execute_fn():
-                msg_id = mock_service.users().messages().get.call_args
-                # We need to handle sequential calls
-                raise Exception("simulated failure")
-
-            mock_get.execute = execute_fn
-            return mock_get
-
         # Simpler approach: first call succeeds, second fails
         mock_get_chain = MagicMock()
         mock_get_chain.execute.side_effect = [good_msg, Exception("API error")]
@@ -299,11 +250,7 @@ class TestScanInbox:
             "summary": "Alert",
         }
 
-        with patch.object(scanner, "_get_claude_client") as mock_client_fn:
-            mock_client = MagicMock()
-            mock_client.messages.create.return_value = _mock_claude_response(classification)
-            mock_client_fn.return_value = mock_client
-
+        with patch("src.llm.router.router.complete", return_value=classification):
             results = scanner.scan_inbox(days_back=7)
 
         # At least one result (the good one), the bad one was skipped

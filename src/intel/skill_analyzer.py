@@ -14,26 +14,6 @@ from src.db import models
 
 logger = logging.getLogger(__name__)
 
-SKILL_EXTRACTION_PROMPT = """\
-You are a technical recruiter parsing a job description. Extract ALL technical \
-skills, tools, platforms, and certifications mentioned. Return a JSON array.
-
-For each skill, classify as "required" (must-have, listed under requirements/qualifications) \
-or "preferred" (nice-to-have, listed under preferred/bonus) or "mentioned" (referenced \
-but not explicitly required).
-
-Normalize skill names: use canonical names (e.g., "Kubernetes" not "K8s", \
-"PowerShell" not "PS", "Active Directory" not "AD"). Merge duplicates.
-
-Categorize each skill: cloud, scripting, networking, security, os, monitoring, \
-devops, database, soft_skill, other.
-
-Return ONLY valid JSON, no markdown fences, no commentary:
-[
-  {"skill": "Terraform", "category": "devops", "level": "required"},
-  {"skill": "Python", "category": "scripting", "level": "preferred"}
-]"""
-
 STUDY_PLAN_PROMPT = """\
 You are a practical career development advisor for an IT infrastructure \
 professional in Indianapolis transitioning toward cloud/DevOps roles.
@@ -94,14 +74,8 @@ class SkillGapAnalyzer:
             List of dicts with skill, category, level keys. Empty list on failure.
         """
         try:
-            client = self._get_client()
-            response = client.messages.create(
-                model="claude-sonnet-4-6",
-                max_tokens=2048,
-                system=SKILL_EXTRACTION_PROMPT,
-                messages=[{"role": "user", "content": job_description[:15000]}],
-            )
-            result = _parse_json_response(response.content[0].text)
+            from src.llm.router import router
+            result = router.complete(task="skill_extract", prompt=job_description[:15000])
             if isinstance(result, list):
                 return result
             return []

@@ -326,7 +326,7 @@ class TestProfileExports:
 
 class TestProfileImport:
     def test_import_from_resume_mocked(self, mgr):
-        """import_from_resume parses Claude response and populates tables."""
+        """import_from_resume passes resume to router and populates tables."""
         mock_response_data = {
             "personal": {
                 "full_name": "Jane Doe",
@@ -366,12 +366,7 @@ class TestProfileImport:
             ],
         }
 
-        mock_message = MagicMock()
-        mock_message.content = [MagicMock(text=json.dumps(mock_response_data))]
-        mock_client = MagicMock()
-        mock_client.messages.create.return_value = mock_message
-
-        with patch("anthropic.Anthropic", return_value=mock_client):
+        with patch("src.llm.router.router.complete", return_value=mock_response_data):
             data = mgr.import_from_resume("Some resume text here")
 
         assert data["personal"]["full_name"] == "Jane Doe"

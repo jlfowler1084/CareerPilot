@@ -385,49 +385,31 @@ class TestSaveJobDescription:
 
 
 class TestSkillExtraction:
-    def test_extract_skills_returns_list(self, monkeypatch):
-        """extract_skills should return a list of skill dicts."""
+    def test_extract_skills_returns_list(self):
+        """extract_skills should return a list of skill dicts from the router."""
+        from unittest.mock import patch
         from src.intel.skill_analyzer import SkillGapAnalyzer
 
-        mock_response = json.dumps([
+        mock_result = [
             {"skill": "Terraform", "category": "devops", "level": "required"},
             {"skill": "Python", "category": "scripting", "level": "preferred"},
-        ])
-
-        class MockContent:
-            def __init__(self):
-                self.text = mock_response
-
-        class MockResponse:
-            def __init__(self):
-                self.content = [MockContent()]
-
-        class MockClient:
-            class messages:
-                @staticmethod
-                def create(**kwargs):
-                    return MockResponse()
+        ]
 
         analyzer = SkillGapAnalyzer()
-        monkeypatch.setattr(analyzer, "_get_client", lambda: MockClient())
+        with patch("src.llm.router.router.complete", return_value=mock_result):
+            result = analyzer.extract_skills("Some job description")
 
-        result = analyzer.extract_skills("Some job description")
         assert len(result) == 2
         assert result[0]["skill"] == "Terraform"
         assert result[1]["level"] == "preferred"
 
-    def test_extract_skills_handles_failure(self, monkeypatch):
-        """extract_skills should return empty list on API failure."""
+    def test_extract_skills_handles_failure(self):
+        """extract_skills should return empty list on router failure."""
+        from unittest.mock import patch
         from src.intel.skill_analyzer import SkillGapAnalyzer
 
-        class MockClient:
-            class messages:
-                @staticmethod
-                def create(**kwargs):
-                    raise Exception("API error")
-
         analyzer = SkillGapAnalyzer()
-        monkeypatch.setattr(analyzer, "_get_client", lambda: MockClient())
+        with patch("src.llm.router.router.complete", side_effect=Exception("API error")):
+            result = analyzer.extract_skills("Some job description")
 
-        result = analyzer.extract_skills("Some job description")
         assert result == []

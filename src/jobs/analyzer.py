@@ -2,54 +2,14 @@
 
 from __future__ import annotations
 
-import json
 import logging
-import re
 from typing import Dict, Optional
 
-import anthropic
-
-from config import settings
-
 logger = logging.getLogger(__name__)
-
-FIT_ANALYSIS_PROMPT = """\
-You are a career advisor analyzing job fit. Compare the job description against the candidate's resume/skills and return a JSON object with exactly these keys:
-
-{
-  "match_score": 7,
-  "matching_skills": ["skill 1", "skill 2"],
-  "gap_skills": ["skill the job wants that the candidate lacks"],
-  "resume_tweaks": ["specific bullet points to emphasize for this application"],
-  "red_flags": ["anything suspicious about the posting - fake listings, unrealistic requirements, etc."]
-}
-
-match_score is 1-10. Return ONLY valid JSON, no markdown fences, no commentary."""
-
-
-def _parse_json_response(text: str) -> Optional[Dict]:
-    """Parse a JSON response, stripping markdown fences if present."""
-    text = text.strip()
-    text = re.sub(r"^```(?:json)?\s*", "", text)
-    text = re.sub(r"\s*```$", "", text)
-    try:
-        return json.loads(text)
-    except json.JSONDecodeError:
-        logger.error("Failed to parse analysis JSON: %s...", text[:200])
-        return None
 
 
 class JobAnalyzer:
     """Analyze job descriptions for fit against candidate profile."""
-
-    def __init__(self, anthropic_api_key: str = None):
-        self._api_key = anthropic_api_key or settings.ANTHROPIC_API_KEY
-        self._client = None
-
-    def _get_client(self):
-        if self._client is None:
-            self._client = anthropic.Anthropic(api_key=self._api_key)
-        return self._client
 
     def analyze_fit(
         self,
@@ -75,20 +35,13 @@ class JobAnalyzer:
         )
 
         try:
-            client = self._get_client()
-            response = client.messages.create(
-                model="claude-sonnet-4-6",
-                max_tokens=2048,
-                system=FIT_ANALYSIS_PROMPT,
-                messages=[{"role": "user", "content": user_msg[:20000]}],
-            )
-            result = _parse_json_response(response.content[0].text)
-            if result:
-                result.setdefault("match_score", 0)
-                result.setdefault("matching_skills", [])
-                result.setdefault("gap_skills", [])
-                result.setdefault("resume_tweaks", [])
-                result.setdefault("red_flags", [])
+            from src.llm.router import router
+            result = router.complete(task="job_analyze", prompt=user_msg[:20000])
+            result.setdefault("match_score", 0)
+            result.setdefault("matching_skills", [])
+            result.setdefault("gap_skills", [])
+            result.setdefault("resume_tweaks", [])
+            result.setdefault("red_flags", [])
             return result
         except Exception:
             logger.error("Fit analysis failed", exc_info=True)
