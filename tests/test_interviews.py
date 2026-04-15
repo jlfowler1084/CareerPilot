@@ -355,43 +355,56 @@ class TestMockInterview:
 
 
 class TestSaveAndRetrieveAnalysis:
-    def test_save_and_get_all(self, coach):
-        """Saves analysis and retrieves it."""
-        analysis = {"overall_score": 7, "technical_gaps": ["Docker"]}
-        row_id = coach.save_analysis("test.txt", analysis, company="Acme", role="SysEng")
+    """Rewritten for CAR-145: save_analysis now writes to transcripts.analysis_json."""
 
-        assert row_id > 0
+    def _store(self, coach, kind: str = "interview") -> int:
+        """Store a transcript in the coach's DB and return its id."""
+        from src.transcripts.transcript_store import store_transcript
+        from src.transcripts.transcript_parser import TranscriptRecord
+        record = TranscriptRecord(
+            source="otter", segments=[], full_text="Interview text",
+            duration_seconds=60, language="en", audio_path=None, raw_metadata={}, kind=kind,
+        )
+        return store_transcript(record, db_path=coach._db_path)
+
+    def test_save_and_get_all(self, coach):
+        """Saves analysis to transcript row and retrieves via get_all_analyses."""
+        t_id = self._store(coach)
+        analysis = {"overall_score": 7, "technical_gaps": ["Docker"]}
+        coach.save_analysis(transcript_id=t_id, analysis=analysis)
 
         all_analyses = coach.get_all_analyses()
         assert len(all_analyses) == 1
-        assert all_analyses[0]["company"] == "Acme"
         assert all_analyses[0]["analysis"]["overall_score"] == 7
+        assert all_analyses[0]["id"] == t_id
 
     def test_get_single_analysis(self, coach):
-        """Retrieves a single analysis by ID."""
+        """Retrieves a single analysis by transcript id."""
+        t_id = self._store(coach)
         analysis = {"overall_score": 8, "technical_gaps": []}
-        row_id = coach.save_analysis("interview.txt", analysis, company="Corp", role="DevOps")
+        coach.save_analysis(transcript_id=t_id, analysis=analysis)
 
-        result = coach.get_analysis(row_id)
+        result = coach.get_analysis(t_id)
         assert result is not None
-        assert result["role"] == "DevOps"
         assert result["analysis"]["overall_score"] == 8
 
     def test_get_nonexistent_returns_none(self, coach):
-        """Returns None for nonexistent ID."""
+        """Returns None for nonexistent transcript id."""
         result = coach.get_analysis(999)
         assert result is None
 
     def test_multiple_analyses_ordered(self, coach):
-        """Multiple analyses returned in reverse chronological order."""
-        coach.save_analysis("first.txt", {"overall_score": 5}, company="A")
-        coach.save_analysis("second.txt", {"overall_score": 7}, company="B")
+        """Multiple analyses returned newest-analyzed first."""
+        t1 = self._store(coach)
+        t2 = self._store(coach)
+        coach.save_analysis(transcript_id=t1, analysis={"overall_score": 5})
+        coach.save_analysis(transcript_id=t2, analysis={"overall_score": 7})
 
         all_analyses = coach.get_all_analyses()
         assert len(all_analyses) == 2
-        # Most recent first
-        assert all_analyses[0]["company"] == "B"
-        assert all_analyses[1]["company"] == "A"
+        # Newest first (t2 was saved after t1)
+        assert all_analyses[0]["analysis"]["overall_score"] == 7
+        assert all_analyses[1]["analysis"]["overall_score"] == 5
 
 
 class TestJournalIntegration:
@@ -428,21 +441,32 @@ class TestJournalIntegration:
 
 
 class TestCompareFromSQLite:
-    def test_compare_pulls_from_db(self, coach):
-        """Compare function loads analyses from SQLite when none provided."""
-        coach.save_analysis("a.txt", {"overall_score": 5, "technical_gaps": ["Docker"], "top_improvements": ["A"]})
-        coach.save_analysis("b.txt", {"overall_score": 7, "technical_gaps": ["CI/CD"], "top_improvements": ["B"]})
+    """Rewritten for CAR-145: compare loads from transcripts.analysis_json."""
 
-        comparison_json = json.dumps({
+    def _save(self, coach, analysis: dict) -> int:
+        from src.transcripts.transcript_store import store_transcript
+        from src.transcripts.transcript_parser import TranscriptRecord
+        record = TranscriptRecord(
+            source="otter", segments=[], full_text="text",
+            duration_seconds=60, language="en", audio_path=None, raw_metadata={},
+        )
+        t_id = store_transcript(record, db_path=coach._db_path)
+        coach.save_analysis(transcript_id=t_id, analysis=analysis)
+        return t_id
+
+    def test_compare_pulls_from_db(self, coach):
+        """Compare function loads analyses from transcripts table when none provided."""
+        self._save(coach, {"overall_score": 5, "technical_gaps": ["Docker"], "top_improvements": ["A"]})
+        self._save(coach, {"overall_score": 7, "technical_gaps": ["CI/CD"], "top_improvements": ["B"]})
+
+        mock_result = {
             "recurring_weak_topics": ["containers"],
             "improved_skills": [],
             "persistent_gaps": ["Docker"],
             "trajectory": "improving",
             "trajectory_explanation": "Getting better",
             "recommendations": ["Study more"],
-        })
-
-        mock_result = json.loads(comparison_json)
+        }
         with patch("src.llm.router.router.complete", return_value=mock_result):
             result = coach.compare_interviews()
 
@@ -451,7 +475,7 @@ class TestCompareFromSQLite:
 
     def test_compare_fails_with_one_analysis(self, coach):
         """Returns None when only 1 analysis in DB."""
-        coach.save_analysis("a.txt", {"overall_score": 5, "technical_gaps": []})
+        self._save(coach, {"overall_score": 5, "technical_gaps": []})
 
         result = coach.compare_interviews()
         assert result is None
