@@ -49,15 +49,6 @@ CREATE TABLE IF NOT EXISTS applications (
     profile_id TEXT DEFAULT ''
 );
 
-CREATE TABLE IF NOT EXISTS interview_analyses (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    transcript_file TEXT NOT NULL,
-    analysis_json TEXT NOT NULL,
-    analyzed_at TEXT NOT NULL,
-    company TEXT DEFAULT '',
-    role TEXT DEFAULT ''
-);
-
 CREATE TABLE IF NOT EXISTS contacts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
@@ -137,7 +128,11 @@ CREATE TABLE IF NOT EXISTS transcripts (
     application_id INTEGER REFERENCES applications(id),
     analyzed_at TEXT,
     analysis_json TEXT,
-    imported_at TEXT NOT NULL DEFAULT (datetime('now'))
+    imported_at TEXT NOT NULL DEFAULT (datetime('now')),
+    kind TEXT NOT NULL DEFAULT 'interview' CHECK(kind IN (
+        'recruiter_intro','recruiter_prep','phone_screen','technical',
+        'panel','debrief','mock','interview'
+    ))
 );
 
 CREATE TABLE IF NOT EXISTS company_intel (
@@ -250,6 +245,64 @@ def _migrate_llm_calls(conn):
     conn.commit()
 
 
+def _migrate_transcripts_kind(conn):
+    """Add kind column to transcripts if it doesn't exist (for pre-CAR-145 DBs)."""
+    if not _column_exists(conn, "transcripts", "kind"):
+        try:
+            conn.execute(
+                "ALTER TABLE transcripts ADD COLUMN kind TEXT NOT NULL DEFAULT 'interview'"
+            )
+            logger.debug("Migrated transcripts: added column 'kind'")
+        except sqlite3.OperationalError:
+            logger.warning("Failed to add column 'kind' to transcripts")
+    conn.commit()
+
+
+def _backfill_interview_analyses(conn):
+    """Copy all interview_analyses rows into transcripts, then drop the legacy table.
+
+    Idempotent: if interview_analyses no longer exists, this is a no-op.
+    Backfill policy (per CAR-145 plan):
+      - application_id = NULL
+      - kind = 'interview'
+      - source = 'legacy_interview_analyses'
+      - segments_json = '[]'
+      - full_text = file contents if transcript_file is readable, else ''
+      - analysis_json preserved verbatim
+      - analyzed_at preserved verbatim
+    """
+    table_exists = conn.execute(
+        "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='interview_analyses'"
+    ).fetchone()[0]
+
+    if not table_exists:
+        return
+
+    rows = conn.execute(
+        "SELECT transcript_file, analysis_json, analyzed_at FROM interview_analyses"
+    ).fetchall()
+
+    for row in rows:
+        transcript_file, analysis_json, analyzed_at = row[0], row[1], row[2]
+        try:
+            full_text = Path(transcript_file).read_text(encoding="utf-8")
+        except (OSError, IOError):
+            full_text = ""
+
+        conn.execute(
+            "INSERT INTO transcripts "
+            "(source, full_text, segments_json, duration_seconds, language, "
+            " raw_metadata, application_id, analyzed_at, analysis_json, kind) "
+            "VALUES ('legacy_interview_analyses', ?, '[]', 0, 'en', '{}', NULL, ?, ?, 'interview')",
+            (full_text, analyzed_at, analysis_json),
+        )
+        logger.debug("Backfilled legacy row analyzed_at=%s into transcripts", analyzed_at)
+
+    conn.execute("DROP TABLE interview_analyses")
+    conn.commit()
+    logger.info("Backfilled %d interview_analyses rows into transcripts; legacy table dropped", len(rows))
+
+
 def get_connection(db_path: Path = None) -> sqlite3.Connection:
     """Get a SQLite connection, creating the database and schema if needed."""
     db_path = db_path or settings.DB_PATH
@@ -263,6 +316,8 @@ def get_connection(db_path: Path = None) -> sqlite3.Connection:
     # --- Migrations ---
     _migrate_applications(conn)
     _migrate_llm_calls(conn)
+    _migrate_transcripts_kind(conn)
+    _backfill_interview_analyses(conn)
     migrate_recruiters_to_contacts(conn)
     migrate_applications_description(conn)
 
