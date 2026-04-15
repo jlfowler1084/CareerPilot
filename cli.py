@@ -1812,33 +1812,59 @@ def interview():
 @click.argument("source")
 @click.option("--job-title", default=None, help="Job title for context.")
 @click.option("--company", default=None, help="Company name for context.")
-def interview_analyze(source, job_title, company):
+@click.option("--kind", type=click.Choice(CANONICAL_KINDS), default=None,
+              help="Override the transcript's stored kind (ID path only).")
+def interview_analyze(source, job_title, company, kind):
     """Analyze an interview transcript (file path or transcript ID)."""
     from src.interviews.coach import InterviewCoach
     from src.interviews.transcripts import TranscriptLoader
 
-    if source.isdigit():
+    transcript_id = None
+    transcript_app_id = None
+    is_id_path = source.isdigit()
+
+    if is_id_path:
         # Load from transcripts table by ID
-        from src.transcripts.transcript_store import get_transcript, update_analysis
+        from src.transcripts.transcript_store import get_transcript
         from src.transcripts.transcript_parser import to_coach_turns
+        from src.db import models as _models
 
         record = get_transcript(int(source))
         if not record:
             console.print(f"[red]Transcript ID {source} not found.[/red]")
             return
         turns = to_coach_turns(record)
-        console.print(f"[dim]Loaded transcript #{source} ({len(turns)} turns, {record.source} source). Analyzing...[/dim]")
+        transcript_id = int(source)
+        transcript_kind = kind or record.kind  # --kind overrides stored kind
+
+        # Get application_id (not on TranscriptRecord dataclass; query directly)
+        _conn = _models.get_connection()
+        _row = _conn.execute(
+            "SELECT application_id FROM transcripts WHERE id = ?", (transcript_id,)
+        ).fetchone()
+        _conn.close()
+        transcript_app_id = _row["application_id"] if _row else None
+
+        console.print(
+            f"[dim]Loaded transcript #{source} "
+            f"(kind: {transcript_kind}, {len(turns)} turns, {record.source} source). "
+            f"Analyzing...[/dim]"
+        )
     else:
-        # Existing file path flow
+        # File path flow — kind forced to generic 'interview', no context aggregation
         loader = TranscriptLoader()
         turns = loader.load_transcript(source)
         if not turns:
             console.print("[red]Failed to load transcript. Check file path and format.[/red]")
             return
+        transcript_kind = "interview"
         console.print(f"[dim]Loaded {len(turns)} speaker turns. Analyzing...[/dim]")
 
     coach = InterviewCoach()
-    analysis = coach.analyze_interview(turns, job_title=job_title, company=company)
+    analysis = coach.analyze_interview(
+        turns, job_title=job_title, company=company,
+        kind=transcript_kind, application_id=transcript_app_id,
+    )
 
     if not analysis:
         console.print("[red]Analysis failed. Check logs.[/red]")
@@ -1848,23 +1874,32 @@ def interview_analyze(source, job_title, company):
     # Display results
     _display_analysis(analysis)
 
+    if not is_id_path:
+        console.print(
+            "\n[dim]Tip: For kind-aware analysis stored to your transcript history, "
+            "use 'interview import-otter', 'import-samsung', or 'transcribe' first.[/dim]"
+        )
+
     # Offer to save
     save = console.input("\nSave analysis and create journal entry? [bold][y][/bold]/[bold][n][/bold]: ").strip().lower()
     if save == "y":
-        analysis_id = coach.save_analysis(source, analysis, company=company or "", role=job_title or "")
-
-        # If loaded by ID, also update the transcripts table
-        if source.isdigit():
-            update_analysis(int(source), analysis)
+        if is_id_path:
+            # Consolidated single write — coach.save_analysis now writes to transcripts.analysis_json
+            coach.save_analysis(transcript_id=transcript_id, analysis=analysis)
+            save_label = f"transcript #{transcript_id}"
+        else:
+            # File-path flow: no write to transcripts table
+            save_label = None
 
         # Auto-create journal entry
         from src.journal.entries import JournalManager
         manager = JournalManager()
         content = (
             f"## Interview Analysis\n\n"
-            f"**File:** {source}\n"
+            f"**Source:** {source}\n"
             f"**Company:** {company or 'N/A'}\n"
             f"**Role:** {job_title or 'N/A'}\n"
+            f"**Kind:** {transcript_kind}\n"
             f"**Overall Score:** {analysis.get('overall_score', '?')}/10\n\n"
             f"### Technical Gaps\n"
             + "\n".join(f"- {g}" for g in analysis.get("technical_gaps", [])) + "\n\n"
@@ -1872,12 +1907,16 @@ def interview_analyze(source, job_title, company):
             + "\n".join(f"- {imp}" for imp in analysis.get("top_improvements", []))
         )
         journal_file = manager.create_entry("interview", content, tags=["interview", "analysis"])
-        console.print(f"[green]Analysis saved (id={analysis_id}). Journal entry: {journal_file}[/green]")
+        if save_label:
+            console.print(f"[green]Analysis saved ({save_label}). Journal entry: {journal_file}[/green]")
+        else:
+            console.print(f"[green]Journal entry: {journal_file}[/green]")
 
         # Cross-reference gaps with skill tracker
         _check_skill_gaps(analysis.get("technical_gaps", []))
     else:
         console.print("[dim]Analysis not saved.[/dim]")
+    coach.close()
 
     coach.close()
 
