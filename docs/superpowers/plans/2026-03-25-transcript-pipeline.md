@@ -1,5 +1,7 @@
 # Interview Transcription Pipeline Implementation Plan
 
+> **Historical reference (CAR-145, 2026-04-15).** This plan was executed against the original SCRUM-102 spec. Since then: a `kind` column was added to `transcripts`, the `interview_analyses` table was backfilled and dropped, and `update_analysis()` was replaced by `save_analysis(transcript_id, analysis)`. See [`docs/solutions/workflow-issues/transcripts-kind-consolidation-2026-04-15.md`](../solutions/workflow-issues/transcripts-kind-consolidation-2026-04-15.md) for current patterns before extending this pipeline.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Three-tier interview recording import pipeline (Samsung, Otter.ai, Whisper) producing unified TranscriptRecords stored in SQLite, with CLI commands and analysis bridge.

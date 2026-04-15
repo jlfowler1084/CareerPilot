@@ -14,6 +14,9 @@ if sys.platform == "win32":
 
 console = Console()
 
+# Canonical transcript kind values — imported at module level for click.Choice
+from src.transcripts.transcript_parser import CANONICAL_KINDS  # noqa: E402
+
 # Categories that support interactive response
 ACTIONABLE_CATEGORIES = {"recruiter_outreach", "interview_request", "offer"}
 
@@ -1809,33 +1812,59 @@ def interview():
 @click.argument("source")
 @click.option("--job-title", default=None, help="Job title for context.")
 @click.option("--company", default=None, help="Company name for context.")
-def interview_analyze(source, job_title, company):
+@click.option("--kind", type=click.Choice(CANONICAL_KINDS), default=None,
+              help="Override the transcript's stored kind (ID path only).")
+def interview_analyze(source, job_title, company, kind):
     """Analyze an interview transcript (file path or transcript ID)."""
     from src.interviews.coach import InterviewCoach
     from src.interviews.transcripts import TranscriptLoader
 
-    if source.isdigit():
+    transcript_id = None
+    transcript_app_id = None
+    is_id_path = source.isdigit()
+
+    if is_id_path:
         # Load from transcripts table by ID
-        from src.transcripts.transcript_store import get_transcript, update_analysis
+        from src.transcripts.transcript_store import get_transcript
         from src.transcripts.transcript_parser import to_coach_turns
+        from src.db import models as _models
 
         record = get_transcript(int(source))
         if not record:
             console.print(f"[red]Transcript ID {source} not found.[/red]")
             return
         turns = to_coach_turns(record)
-        console.print(f"[dim]Loaded transcript #{source} ({len(turns)} turns, {record.source} source). Analyzing...[/dim]")
+        transcript_id = int(source)
+        transcript_kind = kind or record.kind  # --kind overrides stored kind
+
+        # Get application_id (not on TranscriptRecord dataclass; query directly)
+        _conn = _models.get_connection()
+        _row = _conn.execute(
+            "SELECT application_id FROM transcripts WHERE id = ?", (transcript_id,)
+        ).fetchone()
+        _conn.close()
+        transcript_app_id = _row["application_id"] if _row else None
+
+        console.print(
+            f"[dim]Loaded transcript #{source} "
+            f"(kind: {transcript_kind}, {len(turns)} turns, {record.source} source). "
+            f"Analyzing...[/dim]"
+        )
     else:
-        # Existing file path flow
+        # File path flow — kind forced to generic 'interview', no context aggregation
         loader = TranscriptLoader()
         turns = loader.load_transcript(source)
         if not turns:
             console.print("[red]Failed to load transcript. Check file path and format.[/red]")
             return
+        transcript_kind = "interview"
         console.print(f"[dim]Loaded {len(turns)} speaker turns. Analyzing...[/dim]")
 
     coach = InterviewCoach()
-    analysis = coach.analyze_interview(turns, job_title=job_title, company=company)
+    analysis = coach.analyze_interview(
+        turns, job_title=job_title, company=company,
+        kind=transcript_kind, application_id=transcript_app_id,
+    )
 
     if not analysis:
         console.print("[red]Analysis failed. Check logs.[/red]")
@@ -1845,23 +1874,32 @@ def interview_analyze(source, job_title, company):
     # Display results
     _display_analysis(analysis)
 
+    if not is_id_path:
+        console.print(
+            "\n[dim]Tip: For kind-aware analysis stored to your transcript history, "
+            "use 'interview import-otter', 'import-samsung', or 'transcribe' first.[/dim]"
+        )
+
     # Offer to save
     save = console.input("\nSave analysis and create journal entry? [bold][y][/bold]/[bold][n][/bold]: ").strip().lower()
     if save == "y":
-        analysis_id = coach.save_analysis(source, analysis, company=company or "", role=job_title or "")
-
-        # If loaded by ID, also update the transcripts table
-        if source.isdigit():
-            update_analysis(int(source), analysis)
+        if is_id_path:
+            # Consolidated single write — coach.save_analysis now writes to transcripts.analysis_json
+            coach.save_analysis(transcript_id=transcript_id, analysis=analysis)
+            save_label = f"transcript #{transcript_id}"
+        else:
+            # File-path flow: no write to transcripts table
+            save_label = None
 
         # Auto-create journal entry
         from src.journal.entries import JournalManager
         manager = JournalManager()
         content = (
             f"## Interview Analysis\n\n"
-            f"**File:** {source}\n"
+            f"**Source:** {source}\n"
             f"**Company:** {company or 'N/A'}\n"
             f"**Role:** {job_title or 'N/A'}\n"
+            f"**Kind:** {transcript_kind}\n"
             f"**Overall Score:** {analysis.get('overall_score', '?')}/10\n\n"
             f"### Technical Gaps\n"
             + "\n".join(f"- {g}" for g in analysis.get("technical_gaps", [])) + "\n\n"
@@ -1869,12 +1907,16 @@ def interview_analyze(source, job_title, company):
             + "\n".join(f"- {imp}" for imp in analysis.get("top_improvements", []))
         )
         journal_file = manager.create_entry("interview", content, tags=["interview", "analysis"])
-        console.print(f"[green]Analysis saved (id={analysis_id}). Journal entry: {journal_file}[/green]")
+        if save_label:
+            console.print(f"[green]Analysis saved ({save_label}). Journal entry: {journal_file}[/green]")
+        else:
+            console.print(f"[green]Journal entry: {journal_file}[/green]")
 
         # Cross-reference gaps with skill tracker
         _check_skill_gaps(analysis.get("technical_gaps", []))
     else:
         console.print("[dim]Analysis not saved.[/dim]")
+    coach.close()
 
     coach.close()
 
@@ -2045,7 +2087,9 @@ def _prompt_link_application():
 
 @interview.command("import-samsung")
 @click.argument("path")
-def interview_import_samsung(path):
+@click.option("--kind", type=click.Choice(CANONICAL_KINDS), default="interview",
+              help="Transcript kind (recruiter_prep, technical, etc.)")
+def interview_import_samsung(path, kind):
     """Import a Samsung call recording transcript or directory."""
     from src.transcripts.samsung_importer import import_samsung
     from src.transcripts.whisper_transcriber import transcribe
@@ -2071,6 +2115,7 @@ def interview_import_samsung(path):
             console.print("[red]No transcript or audio file found.[/red]")
             return
 
+    record.kind = kind
     # Show summary
     word_count = len(record.full_text.split())
     console.print(f"[green]Imported:[/green] {record.source} | {len(record.segments)} segments | {word_count} words | {record.duration_seconds:.0f}s")
@@ -2078,29 +2123,34 @@ def interview_import_samsung(path):
     # Application linking
     app_id = _prompt_link_application()
     row_id = store_transcript(record, application_id=app_id)
-    console.print(f"[green]Saved as transcript #{row_id}[/green]")
+    console.print(f"[green]Saved as transcript #{row_id} (kind: {kind})[/green]")
 
 
 @interview.command("import-otter")
 @click.argument("file")
-def interview_import_otter(file):
+@click.option("--kind", type=click.Choice(CANONICAL_KINDS), default="interview",
+              help="Transcript kind (recruiter_prep, technical, etc.)")
+def interview_import_otter(file, kind):
     """Import an Otter.ai transcript (.txt or .srt)."""
     from src.transcripts.otter_importer import import_otter
     from src.transcripts.transcript_store import store_transcript
 
     record = import_otter(file)
+    record.kind = kind
     word_count = len(record.full_text.split())
     console.print(f"[green]Imported:[/green] {record.source} | {len(record.segments)} segments | {word_count} words | {record.duration_seconds:.0f}s")
 
     app_id = _prompt_link_application()
     row_id = store_transcript(record, application_id=app_id)
-    console.print(f"[green]Saved as transcript #{row_id}[/green]")
+    console.print(f"[green]Saved as transcript #{row_id} (kind: {kind})[/green]")
 
 
 @interview.command("transcribe")
 @click.argument("audio_file")
 @click.option("--model", default="base", help="Whisper model size (tiny/base/small/medium/large-v3/turbo).")
-def interview_transcribe(audio_file, model):
+@click.option("--kind", type=click.Choice(CANONICAL_KINDS), default="interview",
+              help="Transcript kind (recruiter_prep, technical, etc.)")
+def interview_transcribe(audio_file, model, kind):
     """Transcribe an audio file with local Whisper."""
     from src.transcripts.whisper_transcriber import transcribe
     from src.transcripts.transcript_store import store_transcript
@@ -2112,20 +2162,23 @@ def interview_transcribe(audio_file, model):
         console.print(f"[red]{e}[/red]")
         return
 
+    record.kind = kind
     word_count = len(record.full_text.split())
     console.print(f"[green]Done:[/green] {len(record.segments)} segments | {word_count} words | {record.duration_seconds:.0f}s | Language: {record.language}")
 
     app_id = _prompt_link_application()
     row_id = store_transcript(record, application_id=app_id)
-    console.print(f"[green]Saved as transcript #{row_id}[/green]")
+    console.print(f"[green]Saved as transcript #{row_id} (kind: {kind})[/green]")
 
 
 @interview.command("watch")
 @click.option("--model", default="base", help="Whisper model for audio files.")
-def interview_watch(model):
+@click.option("--kind", type=click.Choice(CANONICAL_KINDS), default="interview",
+              help="Transcript kind applied to every auto-imported file in this session.")
+def interview_watch(model, kind):
     """Watch data/transcripts/ for new files and auto-import."""
     from src.transcripts.watch_folder import watch
-    watch(model_size=model)
+    watch(model_size=model, kind=kind)
 
 
 @interview.command("list")

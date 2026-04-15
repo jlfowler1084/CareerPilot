@@ -50,6 +50,7 @@ def process_file(
     processed_dir: Path,
     model_size: str = "base",
     db_path: Optional[Path] = None,
+    kind: str = "interview",
 ) -> Optional[int]:
     """Process a single transcript/audio file and store it.
 
@@ -77,6 +78,7 @@ def process_file(
     if record is None:
         return None
 
+    record.kind = kind
     row_id = store_transcript(record, db_path=db_path)
 
     # Move to processed directory
@@ -100,6 +102,7 @@ def watch(
     transcripts_dir: Optional[Path] = None,
     model_size: str = "base",
     db_path: Optional[Path] = None,
+    kind: str = "interview",
 ) -> None:
     """Watch a directory for new transcript/audio files and auto-import them.
 
@@ -118,9 +121,10 @@ def watch(
         while True:
             for path in watch_dir.iterdir():
                 if path.is_file() and not path.name.startswith("."):
-                    row_id = process_file(path, processed_dir, model_size=model_size, db_path=db_path)
+                    row_id = process_file(path, processed_dir, model_size=model_size,
+                                          db_path=db_path, kind=kind)
                     if row_id:
-                        console.print(f"  [green]Imported:[/green] {path.name} (id={row_id})")
+                        console.print(f"  [green]Imported:[/green] {path.name} (id={row_id}, kind: {kind})")
             time.sleep(2)
     except KeyboardInterrupt:
         console.print("\n[dim]Stopped watching.[/dim]")

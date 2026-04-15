@@ -13,7 +13,7 @@ from typing import Dict, List, Optional
 
 from config import settings
 from src.db import models
-from src.transcripts.transcript_parser import TranscriptRecord, TranscriptSegment
+from src.transcripts.transcript_parser import CANONICAL_KINDS, TranscriptRecord, TranscriptSegment
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +24,10 @@ def store_transcript(
     db_path: Optional[Path] = None,
 ) -> int:
     """Store a TranscriptRecord in the transcripts table. Returns the row id."""
+    if record.kind not in CANONICAL_KINDS:
+        raise ValueError(
+            f"Invalid transcript kind {record.kind!r}. Must be one of: {', '.join(CANONICAL_KINDS)}"
+        )
     conn = models.get_connection(db_path)
     try:
         segments_json = json.dumps([
@@ -32,8 +36,8 @@ def store_transcript(
         ])
         cursor = conn.execute(
             "INSERT INTO transcripts (source, full_text, segments_json, duration_seconds, "
-            "language, audio_path, raw_metadata, application_id) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            "language, audio_path, raw_metadata, application_id, kind) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 record.source,
                 record.full_text,
@@ -43,6 +47,7 @@ def store_transcript(
                 record.audio_path,
                 json.dumps(record.raw_metadata),
                 application_id,
+                record.kind,
             ),
         )
         conn.commit()
@@ -56,7 +61,7 @@ def list_transcripts(db_path: Optional[Path] = None) -> List[Dict]:
     conn = models.get_connection(db_path)
     try:
         rows = conn.execute(
-            "SELECT t.id, t.source, t.duration_seconds, t.language, t.application_id, "
+            "SELECT t.id, t.source, t.kind, t.duration_seconds, t.language, t.application_id, "
             "t.imported_at, t.analyzed_at, SUBSTR(t.full_text, 1, 80) AS preview, "
             "a.company, a.title AS app_title "
             "FROM transcripts t "
@@ -96,6 +101,7 @@ def get_transcript(transcript_id: int, db_path: Optional[Path] = None) -> Option
             audio_path=row["audio_path"],
             raw_metadata=json.loads(row["raw_metadata"]),
             id=row["id"],
+            kind=row["kind"],
         )
     finally:
         conn.close()
@@ -123,6 +129,47 @@ def link_application(transcript_id: int, application_id: int, db_path: Optional[
             (application_id, transcript_id),
         )
         conn.commit()
+    finally:
+        conn.close()
+
+
+def list_transcripts_for_application(
+    application_id: int,
+    kinds: Optional[List[str]] = None,
+    db_path: Optional[Path] = None,
+) -> List[Dict]:
+    """Return transcripts linked to application_id, optionally filtered by kind set.
+
+    Used by InterviewCoach to aggregate prior context transcripts (recruiter_intro,
+    recruiter_prep, debrief) when analyzing a performance-kind transcript.
+
+    Args:
+        application_id: The application to query.
+        kinds: If provided, restrict to rows whose kind is in this list.
+               If None or empty, return all transcripts for the application.
+
+    Returns:
+        List of dicts with keys: id, source, kind, analyzed_at, analysis_json, full_text.
+        Empty list when no matching rows exist.
+    """
+    conn = models.get_connection(db_path)
+    try:
+        if kinds:
+            placeholders = ",".join("?" * len(kinds))
+            rows = conn.execute(
+                f"SELECT id, source, kind, analyzed_at, analysis_json, full_text "
+                f"FROM transcripts WHERE application_id = ? AND kind IN ({placeholders}) "
+                f"ORDER BY imported_at",
+                (application_id, *kinds),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT id, source, kind, analyzed_at, analysis_json, full_text "
+                "FROM transcripts WHERE application_id = ? "
+                "ORDER BY imported_at",
+                (application_id,),
+            ).fetchall()
+        return [dict(r) for r in rows]
     finally:
         conn.close()
 

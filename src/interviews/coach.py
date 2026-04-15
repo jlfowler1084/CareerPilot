@@ -5,13 +5,35 @@ from __future__ import annotations
 import json
 import logging
 import re
-from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
 
 from src.db import models
+from src.transcripts.transcript_parser import CANONICAL_KINDS
 
 logger = logging.getLogger(__name__)
+
+# Kinds that produce context extraction (who is this person, what should I prep for)
+_CONTEXT_KINDS = frozenset({"recruiter_intro", "recruiter_prep", "debrief"})
+# Kinds that produce performance grading (how did I do)
+_PERFORMANCE_KINDS = frozenset({"phone_screen", "technical", "panel", "mock", "interview"})
+
+CONTEXT_EXTRACTION_PROMPT = """\
+You are an interview preparation coach analyzing a conversation to extract context for an upcoming interview.
+
+{context}Transcript:
+{transcript}
+
+Analyze this conversation and return a JSON object:
+{{
+  "topics_emphasized": ["topics the interviewer or recruiter emphasized"],
+  "interviewer_style": "brief description of communication style and approach",
+  "things_to_drill": ["specific technical or behavioral areas to prepare"],
+  "red_flags": ["any concerns or warnings raised"],
+  "key_logistics": ["scheduling, process, or format details mentioned"]
+}}
+
+Return ONLY valid JSON, no markdown fences."""
 
 MOCK_QUESTION_PROMPT = """\
 You are an interviewer conducting a technical/behavioral interview for this role:
@@ -78,35 +100,68 @@ class InterviewCoach:
         transcript_turns: List[Dict],
         job_title: str = None,
         company: str = None,
+        kind: str = "interview",
+        application_id: Optional[int] = None,
     ) -> Optional[Dict]:
         """Analyze an interview transcript using Claude.
+
+        Branches on kind:
+          - Context kinds (recruiter_intro, recruiter_prep, debrief): extracts prep context
+            (topics, style, things to drill, red flags).
+          - Performance kinds (phone_screen, technical, panel, mock, interview): grades
+            candidate performance; optionally prepends prior context transcripts for the
+            same application (excluding 'mock', which is self-driven).
 
         Args:
             transcript_turns: List of {speaker, text, timestamp} dicts.
             job_title: Optional job title for context.
             company: Optional company name for context.
+            kind: Transcript kind (must be in CANONICAL_KINDS). Default 'interview'.
+            application_id: Optional application FK; enables context aggregation for
+                            performance kinds.
 
         Returns:
             Structured analysis dict, or None on failure.
         """
-        # Format turns into readable transcript
-        transcript_text = self._format_turns(transcript_turns)
+        if kind not in CANONICAL_KINDS:
+            raise ValueError(
+                f"Invalid kind {kind!r}. Must be one of: {', '.join(CANONICAL_KINDS)}"
+            )
 
+        transcript_text = self._format_turns(transcript_turns)
         context_parts = []
         if job_title:
             context_parts.append(f"Role: {job_title}")
         if company:
             context_parts.append(f"Company: {company}")
-        context = "\n".join(context_parts)
-
-        user_message = f"{context}\n\nTranscript:\n{transcript_text}" if context else f"Transcript:\n{transcript_text}"
+        context_header = "\n".join(context_parts)
 
         try:
             from src.llm.router import router
-            result = router.complete(
-                task="interview_transcript_analyze",
-                prompt=user_message[:30000],
-            )
+
+            if kind in _CONTEXT_KINDS:
+                ctx_prefix = (context_header + "\n\n") if context_header else ""
+                prompt = CONTEXT_EXTRACTION_PROMPT.format(
+                    context=ctx_prefix,
+                    transcript=transcript_text,
+                )[:30000]
+                result = router.complete(task="interview_transcript_analyze", prompt=prompt)
+                return result
+
+            # Performance-grading path
+            prior_block = ""
+            if application_id is not None and kind != "mock":
+                prior_block = self._build_prior_context(application_id)
+
+            parts = []
+            if context_header:
+                parts.append(context_header)
+            if prior_block:
+                parts.append(prior_block)
+            parts.append(f"Transcript:\n{transcript_text}")
+            user_message = "\n\n".join(parts)[:30000]
+
+            result = router.complete(task="interview_transcript_analyze", prompt=user_message)
             if result:
                 result.setdefault("questions_asked", [])
                 result.setdefault("response_quality", [])
@@ -117,9 +172,48 @@ class InterviewCoach:
                 result.setdefault("top_improvements", [])
                 result.setdefault("practice_questions", [])
             return result
+        except (ValueError, TypeError):
+            raise
         except Exception:
             logger.error("Interview analysis failed", exc_info=True)
             return None
+
+    def _build_prior_context(self, application_id: int) -> str:
+        """Aggregate prior context transcripts (recruiter_intro, recruiter_prep, debrief)
+        for the given application. Returns a prompt block, or '' if none exist.
+
+        Combined context is truncated to 10k chars to avoid blowing the 30k prompt cap.
+        """
+        from src.transcripts.transcript_store import list_transcripts_for_application
+
+        rows = list_transcripts_for_application(
+            application_id,
+            kinds=["recruiter_intro", "recruiter_prep", "debrief"],
+            db_path=self._db_path,
+        )
+        if not rows:
+            return ""
+
+        parts = []
+        for row in rows:
+            if row.get("analysis_json"):
+                try:
+                    analysis_text = json.dumps(json.loads(row["analysis_json"]))
+                except (json.JSONDecodeError, TypeError):
+                    analysis_text = row.get("full_text", "")
+            else:
+                analysis_text = row.get("full_text", "") or ""
+            if analysis_text:
+                parts.append(f"[{row['kind']}] {analysis_text}")
+
+        if not parts:
+            return ""
+
+        combined = "\n\n".join(parts)
+        if len(combined) > 10000:
+            combined = combined[:10000] + "\n[... context truncated ...]"
+
+        return f"Prior context from earlier transcripts for this application:\n{combined}"
 
     def compare_interviews(self, analyses: List[Dict] = None) -> Optional[Dict]:
         """Compare multiple past analyses to identify trends.
@@ -305,39 +399,31 @@ class InterviewCoach:
         assessment["qa_pairs"] = qa_pairs
         return assessment
 
-    def save_analysis(
-        self,
-        transcript_file: str,
-        analysis: Dict,
-        company: str = "",
-        role: str = "",
-    ) -> int:
-        """Store an analysis in SQLite.
+    def save_analysis(self, transcript_id: int, analysis: Dict) -> None:
+        """Write analysis result to transcripts.analysis_json.
 
-        Returns:
-            The row id of the inserted analysis.
+        Args:
+            transcript_id: The transcripts.id to update.
+            analysis: Analysis dict to store as JSON.
         """
-        conn = self._get_conn()
-        cursor = conn.execute(
-            "INSERT INTO interview_analyses (transcript_file, analysis_json, analyzed_at, company, role) "
-            "VALUES (?, ?, ?, ?, ?)",
-            (
-                transcript_file,
-                json.dumps(analysis),
-                datetime.now().isoformat(),
-                company,
-                role,
-            ),
-        )
-        conn.commit()
-        logger.info("Saved analysis for %s (id=%d)", transcript_file, cursor.lastrowid)
-        return cursor.lastrowid
+        from src.transcripts.transcript_store import update_analysis
+        update_analysis(transcript_id, analysis, db_path=self._db_path)
+        logger.info("Saved analysis for transcript_id=%d", transcript_id)
 
     def get_all_analyses(self) -> List[Dict]:
-        """Retrieve all stored analyses from SQLite."""
+        """Retrieve all transcripts that have been analyzed (analysis_json IS NOT NULL).
+
+        Returns list of dicts with keys: id, kind, analyzed_at, analysis_json, analysis,
+        application_id, company, role. Ordered newest-analyzed first.
+        """
         conn = self._get_conn()
         rows = conn.execute(
-            "SELECT * FROM interview_analyses ORDER BY analyzed_at DESC"
+            "SELECT t.id, t.kind, t.analyzed_at, t.analysis_json, "
+            "t.application_id, a.company, a.title AS role "
+            "FROM transcripts t "
+            "LEFT JOIN applications a ON t.application_id = a.id "
+            "WHERE t.analysis_json IS NOT NULL "
+            "ORDER BY t.analyzed_at DESC, t.id DESC"
         ).fetchall()
         results = []
         for row in rows:
@@ -350,16 +436,25 @@ class InterviewCoach:
         return results
 
     def get_analysis(self, analysis_id: int) -> Optional[Dict]:
-        """Retrieve a single analysis by id."""
+        """Retrieve a single analysis by transcript id.
+
+        Returns dict with keys including 'analysis' (parsed JSON), or None if not found
+        or not yet analyzed.
+        """
         conn = self._get_conn()
         row = conn.execute(
-            "SELECT * FROM interview_analyses WHERE id = ?", (analysis_id,)
+            "SELECT t.id, t.kind, t.analyzed_at, t.analysis_json, "
+            "t.application_id, a.company, a.title AS role "
+            "FROM transcripts t "
+            "LEFT JOIN applications a ON t.application_id = a.id "
+            "WHERE t.id = ?",
+            (analysis_id,),
         ).fetchone()
         if not row:
             return None
         d = dict(row)
         try:
-            d["analysis"] = json.loads(d["analysis_json"])
+            d["analysis"] = json.loads(d["analysis_json"]) if d.get("analysis_json") else {}
         except (json.JSONDecodeError, KeyError):
             d["analysis"] = {}
         return d

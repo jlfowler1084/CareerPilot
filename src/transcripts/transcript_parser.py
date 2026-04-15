@@ -5,6 +5,19 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
+# Canonical transcript kind values (enforced at DB layer via CHECK constraint on fresh DBs,
+# and at app layer via store_transcript validation + click.Choice in importer commands).
+CANONICAL_KINDS = (
+    "recruiter_intro",
+    "recruiter_prep",
+    "phone_screen",
+    "technical",
+    "panel",
+    "debrief",
+    "mock",
+    "interview",
+)
+
 
 @dataclass
 class TranscriptSegment:
@@ -26,6 +39,7 @@ class TranscriptRecord:
     audio_path: Optional[str]
     raw_metadata: Dict
     id: Optional[int] = None
+    kind: str = "interview"
 
 
 def format_timestamp(seconds: float) -> str:
