@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-# Unit 4 implementation
+import hashlib
+from typing import Optional
 
 
 def log_llm_call(
@@ -13,10 +14,12 @@ def log_llm_call(
     prompt: str,
     response_text: str,
     schema_invalid: bool = False,
-    fallback_reason: str = None,
-    latency_ms: int = None,
+    fallback_reason: Optional[str] = None,
+    latency_ms: Optional[int] = None,
 ) -> int:
     """Log an LLM call to the llm_calls table.
+
+    Does NOT commit — the caller manages the transaction.
 
     Args:
         conn: SQLite connection.
@@ -32,4 +35,36 @@ def log_llm_call(
     Returns:
         Inserted row id.
     """
-    raise NotImplementedError("Unit 4 not yet implemented")
+    from config import settings
+    task_cfg = settings.TASK_CONFIG.get(task, {})
+    pii_bearing = task_cfg.get("fallback_policy") == "prompt"
+
+    if pii_bearing:
+        limit = 512
+        prompt_sha = hashlib.sha256((prompt or "").encode("utf-8")).hexdigest()
+        resp_sha = hashlib.sha256((response_text or "").encode("utf-8")).hexdigest()
+    else:
+        limit = 16384
+        prompt_sha = None
+        resp_sha = None
+
+    cur = conn.execute(
+        "INSERT INTO llm_calls "
+        "(task, provider_used, model, prompt, prompt_sha256, response, response_sha256, "
+        "schema_invalid, pii_bearing, fallback_reason, latency_ms) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (
+            task,
+            provider_used,
+            model,
+            (prompt or "")[:limit],
+            prompt_sha,
+            (response_text or "")[:limit],
+            resp_sha,
+            1 if schema_invalid else 0,
+            1 if pii_bearing else 0,
+            fallback_reason,
+            latency_ms,
+        ),
+    )
+    return cur.lastrowid

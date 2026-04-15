@@ -2,7 +2,16 @@
 
 from __future__ import annotations
 
-# Unit 4 implementation
+import os
+
+# ---------------------------------------------------------------------------
+# Infra-countable failure reasons — these count toward the daily fallback budget.
+# ---------------------------------------------------------------------------
+
+INFRA_COUNTABLE_REASONS = frozenset({
+    "connection_error", "timeout", "http_5xx",
+    "empty_response", "truncated_finish_reason", "json_parse_error",
+})
 
 
 class ProviderInfraError(Exception):
@@ -24,18 +33,43 @@ class FallbackBudgetExhausted(Exception):
 class FallbackBudget:
     """Tracks and enforces the daily Claude fallback budget."""
 
+    def __init__(self, daily_limit: int = 50) -> None:
+        self._limit = daily_limit
+
     def consume_slot(self, conn) -> None:
-        """Attempt to consume one fallback slot.
+        """Check budget. Raises FallbackBudgetExhausted if at/over limit.
+
+        MUST be called inside a BEGIN IMMEDIATE transaction — the check and
+        subsequent write are atomic only within the same transaction.
 
         Raises:
-            FallbackBudgetExhausted: If the budget is exhausted.
+            FallbackBudgetExhausted: If the daily budget is exhausted.
         """
-        raise NotImplementedError("Unit 4 not yet implemented")
+        placeholders = ",".join("?" * len(INFRA_COUNTABLE_REASONS))
+        count = conn.execute(
+            f"SELECT COUNT(*) FROM llm_calls "
+            f"WHERE provider_used='local' "
+            f"AND fallback_reason IN ({placeholders}) "
+            f"AND created_at > datetime('now','-24 hours') "
+            f"AND created_at > COALESCE("
+            f"  (SELECT last_reset_at FROM llm_budget_resets), '1970-01-01'"
+            f")",
+            tuple(INFRA_COUNTABLE_REASONS),
+        ).fetchone()[0]
+        if count >= self._limit:
+            raise FallbackBudgetExhausted(
+                f"Daily fallback budget exhausted: {count}/{self._limit} in last 24h"
+            )
 
 
 def is_interactive_session() -> bool:
     """Return True if running in an interactive terminal (not unattended/scheduled)."""
-    raise NotImplementedError("Unit 4 not yet implemented")
+    import sys
+    return (
+        sys.stdin.isatty()
+        and sys.stdout.isatty()
+        and os.environ.get("CAREERPILOT_UNATTENDED") != "1"
+    )
 
 
 def prompt_for_pii_fallback(task: str) -> bool:
@@ -44,4 +78,11 @@ def prompt_for_pii_fallback(task: str) -> bool:
     Returns:
         True if approved, False if denied.
     """
-    raise NotImplementedError("Unit 4 not yet implemented")
+    import click
+    try:
+        return click.confirm(
+            f"Local provider failed for PII-bearing task '{task}'. Send to Claude?",
+            default=False,
+        )
+    except (KeyboardInterrupt, EOFError):
+        return False
