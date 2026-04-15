@@ -109,6 +109,8 @@ class ClaudeProvider(Provider):
             parsed=parsed,
             model=model,
             latency_ms=latency_ms,
+            tokens_in=response.usage.input_tokens,
+            tokens_out=response.usage.output_tokens,
         )
 
     def _complete_prose(
@@ -142,6 +144,8 @@ class ClaudeProvider(Provider):
             parsed=None,
             model=model,
             latency_ms=latency_ms,
+            tokens_in=response.usage.input_tokens,
+            tokens_out=response.usage.output_tokens,
         )
 
     def embed(self, task: str, text: str, model: str) -> List:

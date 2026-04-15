@@ -143,6 +143,7 @@ class LLMRouter:
                 prompt=prompt, response_text=_resp_text(response),
                 fallback_reason="kill_switch",
                 latency_ms=int((time.monotonic() - t0) * 1000),
+                tokens_in=response.tokens_in, tokens_out=response.tokens_out,
             )
             conn.commit()
             return _return(response)
@@ -157,7 +158,17 @@ class LLMRouter:
                     temperature=temperature, schema=effective_schema,
                 )
                 prov, mdl = "local", settings.LLM_LOCAL_MODEL_CHAT
+            elif env_override == "claude":
+                # "claude" means "use Claude with the task's configured model"
+                mdl = overrides.get("model") or self._resolve_model(task)
+                response = self._claude.complete(
+                    task=task, system_prompt=system_prompt, prompt=prompt,
+                    model=mdl, max_tokens=max_tokens, temperature=temperature,
+                    schema=effective_schema,
+                )
+                prov = "claude"
             else:
+                # Treat as a literal Claude model ID (e.g. "claude-opus-4-6")
                 response = self._claude.complete(
                     task=task, system_prompt=system_prompt, prompt=prompt,
                     model=env_override, max_tokens=max_tokens, temperature=temperature,
@@ -169,6 +180,7 @@ class LLMRouter:
                 prompt=prompt, response_text=_resp_text(response),
                 fallback_reason="env_override",
                 latency_ms=int((time.monotonic() - t0) * 1000),
+                tokens_in=response.tokens_in, tokens_out=response.tokens_out,
             )
             conn.commit()
             return _return(response)
@@ -188,6 +200,7 @@ class LLMRouter:
                 prompt=prompt, response_text=_resp_text(response),
                 fallback_reason=None,
                 latency_ms=int((time.monotonic() - t0) * 1000),
+                tokens_in=response.tokens_in, tokens_out=response.tokens_out,
             )
             conn.commit()
             return _return(response)
@@ -209,6 +222,7 @@ class LLMRouter:
                 conn, task=task, provider_used="local", model=settings.LLM_LOCAL_MODEL_CHAT,
                 prompt=prompt, response_text=_resp_text(response),
                 fallback_reason=None, latency_ms=latency,
+                tokens_in=response.tokens_in, tokens_out=response.tokens_out,
             )
             conn.commit()
             return _return(response)
@@ -262,6 +276,7 @@ class LLMRouter:
                     conn, task=task, provider_used="claude", model=claude_model,
                     prompt=prompt, response_text=_resp_text(response),
                     fallback_reason=None, latency_ms=latency,
+                    tokens_in=response.tokens_in, tokens_out=response.tokens_out,
                 )
                 conn.execute("COMMIT")
                 committed = True

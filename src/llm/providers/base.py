@@ -14,6 +14,8 @@ class ProviderResponse:
     parsed: Optional[dict]  # None for prose tasks; parsed dict/list for schema tasks
     model: str
     latency_ms: int
+    tokens_in: int = 0
+    tokens_out: int = 0
 
 
 class Provider:

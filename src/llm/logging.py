@@ -16,6 +16,8 @@ def log_llm_call(
     schema_invalid: bool = False,
     fallback_reason: Optional[str] = None,
     latency_ms: Optional[int] = None,
+    tokens_in: int = 0,
+    tokens_out: int = 0,
 ) -> int:
     """Log an LLM call to the llm_calls table.
 
@@ -51,8 +53,8 @@ def log_llm_call(
     cur = conn.execute(
         "INSERT INTO llm_calls "
         "(task, provider_used, model, prompt, prompt_sha256, response, response_sha256, "
-        "schema_invalid, pii_bearing, fallback_reason, latency_ms) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "schema_invalid, pii_bearing, fallback_reason, latency_ms, tokens_in, tokens_out) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (
             task,
             provider_used,
@@ -65,6 +67,8 @@ def log_llm_call(
             1 if pii_bearing else 0,
             fallback_reason,
             latency_ms,
+            tokens_in,
+            tokens_out,
         ),
     )
     return cur.lastrowid

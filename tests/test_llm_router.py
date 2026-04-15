@@ -126,6 +126,21 @@ class TestRouterModelResolution:
         kw = mock_claude.complete.call_args[1]
         assert kw["model"] == "claude-opus-4-6"
 
+    def test_env_override_claude_uses_task_config_model(self, router, mock_claude, mock_conn):
+        """CAREERPILOT_LLM_TASK_EMAIL_CLASSIFY=claude uses task-config model, not literal 'claude'."""
+        from config import settings
+        mock_claude.complete.return_value = _make_schema_response({
+            "category": "irrelevant", "company": "", "role": "", "urgency": "low", "summary": "",
+        }, model=settings.MODEL_SONNET)
+        with patch("src.llm.router.get_connection", return_value=mock_conn):
+            with patch.dict(os.environ, {"CAREERPILOT_LLM_TASK_EMAIL_CLASSIFY": "claude"}):
+                router.complete(task="email_classify", prompt="test")
+        kw = mock_claude.complete.call_args[1]
+        # Must NOT be the literal string "claude" — must be the task's configured model
+        assert kw["model"] != "claude"
+        # email_classify is an R9 task (TASK_MODEL_MAP="local"), so resolve_model returns MODEL_SONNET
+        assert kw["model"] == settings.MODEL_SONNET
+
     def test_model_override_kwarg_takes_precedence(self, router, mock_claude, mock_conn):
         """Explicit model= kwarg overrides both TASK_MODEL_MAP and env var."""
         mock_claude.complete.return_value = _make_prose_response()

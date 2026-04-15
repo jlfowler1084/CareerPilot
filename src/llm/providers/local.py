@@ -207,6 +207,8 @@ class LocalProvider(Provider):
             parsed=parsed,
             model=self._chat_model,
             latency_ms=int((time.monotonic() - t0) * 1000),
+            tokens_in=response.usage.prompt_tokens if response.usage else 0,
+            tokens_out=response.usage.completion_tokens if response.usage else 0,
         )
 
     def embed(self, task: str, text: str, model: str) -> List[float]:

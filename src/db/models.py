@@ -201,6 +201,8 @@ CREATE TABLE IF NOT EXISTS llm_calls (
     reviewed_at TEXT,
     review_verdict TEXT,
     latency_ms INTEGER,
+    tokens_in INTEGER,
+    tokens_out INTEGER,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -236,6 +238,18 @@ def _migrate_applications(conn):
     conn.commit()
 
 
+def _migrate_llm_calls(conn):
+    """Add tokens_in/tokens_out columns to llm_calls if they don't exist."""
+    for col_name in ("tokens_in", "tokens_out"):
+        if not _column_exists(conn, "llm_calls", col_name):
+            try:
+                conn.execute(f"ALTER TABLE llm_calls ADD COLUMN {col_name} INTEGER")
+                logger.debug("Migrated llm_calls: added column '%s'", col_name)
+            except sqlite3.OperationalError:
+                logger.warning("Failed to add column '%s' to llm_calls", col_name)
+    conn.commit()
+
+
 def get_connection(db_path: Path = None) -> sqlite3.Connection:
     """Get a SQLite connection, creating the database and schema if needed."""
     db_path = db_path or settings.DB_PATH
@@ -248,6 +262,7 @@ def get_connection(db_path: Path = None) -> sqlite3.Connection:
 
     # --- Migrations ---
     _migrate_applications(conn)
+    _migrate_llm_calls(conn)
     migrate_recruiters_to_contacts(conn)
     migrate_applications_description(conn)
 

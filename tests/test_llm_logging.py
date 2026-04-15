@@ -19,6 +19,11 @@ def _make_conn():
     return conn
 
 
+@pytest.fixture
+def conn():
+    return _make_conn()
+
+
 class TestLogLlmCall:
     def test_non_pii_task_stores_full_prompt_up_to_16kb(self):
         conn = _make_conn()
@@ -95,3 +100,20 @@ class TestLogLlmCall:
         conn.commit()
         assert isinstance(row_id, int)
         assert row_id > 0
+
+    def test_tokens_in_and_out_stored(self, conn):
+        """log_llm_call stores tokens_in and tokens_out."""
+        row_id = log_llm_call(
+            conn,
+            task="roadmap_generate",
+            provider_used="claude",
+            model="claude-sonnet-4-6",
+            prompt="test prompt",
+            response_text="test response",
+            tokens_in=42,
+            tokens_out=17,
+        )
+        conn.commit()
+        row = conn.execute("SELECT tokens_in, tokens_out FROM llm_calls WHERE id = ?", (row_id,)).fetchone()
+        assert row[0] == 42
+        assert row[1] == 17
