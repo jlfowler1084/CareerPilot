@@ -10,26 +10,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, Optional
 
-import anthropic
-
 from config import settings
 
 logger = logging.getLogger(__name__)
-
-COVER_LETTER_SYSTEM_PROMPT = """\
-You are a cover letter writer for a senior IT professional. Write a compelling, \
-specific cover letter. Rules:
-- 3-4 paragraphs.
-- First paragraph: express interest in the specific role at the specific company.
-- Second paragraph: highlight 2-3 specific experiences from the candidate's background \
-that directly match what the job requires — use concrete details, not generic claims.
-- Third paragraph: address any skill gaps honestly as growth opportunities, mention \
-relevant certifications or learning in progress.
-- Final paragraph: express enthusiasm, mention availability, invite next steps.
-- Tone: professional but genuine — sounds like a real person, not a template.
-- NEVER make up experience. NEVER be generic — every sentence should be specific to \
-this company and role.
-- Return ONLY the cover letter text, no markdown formatting, no extra commentary."""
 
 
 def _sanitize_filename(text: str) -> str:
@@ -50,12 +33,6 @@ class CoverLetterGenerator:
                      If None, profile is loaded lazily when needed.
         """
         self._profile = profile
-        self._client = None
-
-    def _get_client(self):
-        if self._client is None:
-            self._client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
-        return self._client
 
     def _get_profile(self) -> Dict:
         """Get or load the candidate profile."""
@@ -123,14 +100,8 @@ class CoverLetterGenerator:
             )
 
         try:
-            client = self._get_client()
-            response = client.messages.create(
-                model="claude-sonnet-4-6",
-                max_tokens=2048,
-                system=COVER_LETTER_SYSTEM_PROMPT,
-                messages=[{"role": "user", "content": user_msg[:20000]}],
-            )
-            return response.content[0].text.strip()
+            from src.llm.router import router
+            return router.complete(task="cover_letter", prompt=user_msg[:20000])
         except Exception:
             logger.error("Cover letter generation failed", exc_info=True)
             return None

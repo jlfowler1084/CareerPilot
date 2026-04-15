@@ -233,6 +233,17 @@ class TestRouterProviderCallShape:
         kw = mock_local.complete.call_args[1]
         assert kw["task"] == "email_classify"
 
+    def test_claude_extra_forwarded_to_claude_provider(self, router, mock_claude, mock_conn):
+        """claude_extra from TASK_CONFIG is passed to ClaudeProvider.complete()."""
+        from config import settings
+        # skill_study_plan has claude_extra with web_search tool
+        mock_claude.complete.return_value = _make_prose_response("study plan text")
+        with patch("src.llm.router.get_connection", return_value=mock_conn):
+            router.complete(task="skill_study_plan", prompt="gaps: Terraform, Docker")
+        kw = mock_claude.complete.call_args[1]
+        assert kw.get("claude_extra") is not None
+        assert "tools" in kw["claude_extra"]
+
 
 class TestRouterEdgeCases:
     def test_unknown_task_raises_key_error(self, router, mock_conn):

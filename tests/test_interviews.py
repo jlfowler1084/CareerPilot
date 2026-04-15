@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch, call
 import pytest
 
 from src.interviews.transcripts import TranscriptLoader
-from src.interviews.coach import InterviewCoach, _parse_json_response
+from src.interviews.coach import InterviewCoach
 
 
 # --- Fixtures ---
@@ -18,14 +18,14 @@ from src.interviews.coach import InterviewCoach, _parse_json_response
 @pytest.fixture
 def tmp_transcripts(tmp_path):
     """Create a TranscriptLoader with a temp directory."""
-    return TranscriptLoader(transcripts_dir=tmp_path, anthropic_api_key="fake-key")
+    return TranscriptLoader(transcripts_dir=tmp_path)
 
 
 @pytest.fixture
 def coach(tmp_path):
     """Create an InterviewCoach with a temp database."""
     db_path = tmp_path / "test.db"
-    c = InterviewCoach(db_path=db_path, anthropic_api_key="fake-key")
+    c = InterviewCoach(db_path=db_path)
     yield c
     c.close()
 
@@ -177,17 +177,12 @@ class TestParseSpeakers:
         assert turns[0]["timestamp"] is not None
 
     def test_claude_fallback_for_unlabeled(self, tmp_transcripts):
-        """Falls back to Claude when no speaker patterns detected."""
+        """Falls back to router when no speaker patterns detected."""
         unlabeled = "Hi, welcome.\nThanks, glad to be here."
 
         labeled_response = "Interviewer: Hi, welcome.\nCandidate: Thanks, glad to be here."
-        mock_resp = _mock_claude_response(labeled_response)
 
-        with patch.object(tmp_transcripts, "_get_claude_client") as mock_fn:
-            mock_client = MagicMock()
-            mock_client.messages.create.return_value = mock_resp
-            mock_fn.return_value = mock_client
-
+        with patch("src.llm.router.router.complete", return_value=labeled_response):
             turns = tmp_transcripts.parse_speakers(unlabeled)
 
         assert len(turns) == 2
@@ -195,14 +190,10 @@ class TestParseSpeakers:
         assert turns[1]["speaker"] == "Candidate"
 
     def test_claude_fallback_on_error(self, tmp_transcripts):
-        """Returns raw text as single block when Claude fails."""
+        """Returns raw text as single block when router fails."""
         unlabeled = "Hi, welcome.\nThanks, glad to be here."
 
-        with patch.object(tmp_transcripts, "_get_claude_client") as mock_fn:
-            mock_client = MagicMock()
-            mock_client.messages.create.side_effect = Exception("API down")
-            mock_fn.return_value = mock_client
-
+        with patch("src.llm.router.router.complete", side_effect=Exception("API down")):
             turns = tmp_transcripts.parse_speakers(unlabeled)
 
         assert len(turns) == 1
@@ -214,8 +205,8 @@ class TestParseSpeakers:
 
 class TestAnalyzeInterview:
     def test_returns_structured_analysis(self, coach):
-        """Returns a structured dict from Claude's analysis."""
-        analysis_json = json.dumps({
+        """Returns a structured dict from the router's analysis."""
+        mock_result = {
             "questions_asked": ["Tell me about yourself"],
             "response_quality": [{
                 "question": "Tell me about yourself",
@@ -236,13 +227,9 @@ class TestAnalyzeInterview:
             "top_improvements": ["Learn Docker basics", "Practice STAR format", "Research company"],
             "practice_questions": ["Describe a Docker deployment", "Tell me about a time...",
                                    "What is CI/CD?", "Explain IaC", "Kubernetes basics"],
-        })
+        }
 
-        with patch.object(coach, "_get_claude_client") as mock_fn:
-            mock_client = MagicMock()
-            mock_client.messages.create.return_value = _mock_claude_response(analysis_json)
-            mock_fn.return_value = mock_client
-
+        with patch("src.llm.router.router.complete", return_value=mock_result):
             result = coach.analyze_interview(
                 [{"speaker": "Interviewer", "text": "Tell me about yourself", "timestamp": None},
                  {"speaker": "Joe", "text": "I'm a systems engineer", "timestamp": None}],
@@ -257,12 +244,8 @@ class TestAnalyzeInterview:
         assert len(result["practice_questions"]) == 5
 
     def test_handles_api_failure(self, coach):
-        """Returns None when Claude API fails."""
-        with patch.object(coach, "_get_claude_client") as mock_fn:
-            mock_client = MagicMock()
-            mock_client.messages.create.side_effect = Exception("API error")
-            mock_fn.return_value = mock_client
-
+        """Returns None when router fails."""
+        with patch("src.llm.router.router.complete", side_effect=Exception("API error")):
             result = coach.analyze_interview(
                 [{"speaker": "Interviewer", "text": "Hello", "timestamp": None}],
             )
@@ -270,12 +253,8 @@ class TestAnalyzeInterview:
         assert result is None
 
     def test_handles_bad_json(self, coach):
-        """Returns None when Claude returns unparseable JSON."""
-        with patch.object(coach, "_get_claude_client") as mock_fn:
-            mock_client = MagicMock()
-            mock_client.messages.create.return_value = _mock_claude_response("not json at all")
-            mock_fn.return_value = mock_client
-
+        """Returns None when router returns None."""
+        with patch("src.llm.router.router.complete", return_value=None):
             result = coach.analyze_interview(
                 [{"speaker": "Interviewer", "text": "Hello", "timestamp": None}],
             )
@@ -302,11 +281,8 @@ class TestCompareInterviews:
              "company": "Corp B", "role": "DevOps", "analyzed_at": "2026-03-15"},
         ]
 
-        with patch.object(coach, "_get_claude_client") as mock_fn:
-            mock_client = MagicMock()
-            mock_client.messages.create.return_value = _mock_claude_response(comparison_json)
-            mock_fn.return_value = mock_client
-
+        mock_result = json.loads(comparison_json)
+        with patch("src.llm.router.router.complete", return_value=mock_result):
             result = coach.compare_interviews(analyses)
 
         assert result is not None
@@ -327,36 +303,31 @@ class TestCompareInterviews:
 
 class TestMockInterview:
     def test_full_mock_flow(self, coach):
-        """Runs through full mock interview with mocked I/O and Claude."""
-        question_resp = _mock_claude_response("What is Active Directory?")
-        eval_resp = _mock_claude_response(json.dumps({
+        """Runs through full mock interview with mocked I/O and router."""
+        mock_eval = {
             "rating": 4,
             "strengths": "Good explanation",
             "weaknesses": "Could mention Group Policy",
             "ideal_answer_points": ["Domain services", "Group Policy", "LDAP"],
-        }))
-        summary_resp = _mock_claude_response(json.dumps({
+        }
+        mock_summary = {
             "overall_score": 7,
             "overall_justification": "Strong fundamentals",
             "top_improvements": ["Study Group Policy in depth"],
             "practice_questions": ["Explain GPO inheritance"],
             "technical_gaps": ["Group Policy"],
-        }))
+        }
 
-        # Mock client that returns different responses per call
-        call_count = [0]
-        responses = [question_resp, eval_resp, summary_resp]
+        def side_effect(task, prompt, **kwargs):
+            if task == "interview_question_gen":
+                return "What is Active Directory?"
+            if task == "interview_answer_eval":
+                return mock_eval
+            if task == "interview_summary":
+                return mock_summary
+            raise ValueError(f"unexpected task: {task}")
 
-        def side_effect(**kwargs):
-            idx = min(call_count[0], len(responses) - 1)
-            call_count[0] += 1
-            return responses[idx]
-
-        with patch.object(coach, "_get_claude_client") as mock_fn:
-            mock_client = MagicMock()
-            mock_client.messages.create.side_effect = side_effect
-            mock_fn.return_value = mock_client
-
+        with patch("src.llm.router.router.complete", side_effect=side_effect):
             outputs = []
             result = coach.mock_interview(
                 role_description="Systems Engineer with AD experience",
@@ -372,11 +343,7 @@ class TestMockInterview:
 
     def test_handles_question_generation_failure(self, coach):
         """Returns None when question generation fails."""
-        with patch.object(coach, "_get_claude_client") as mock_fn:
-            mock_client = MagicMock()
-            mock_client.messages.create.side_effect = Exception("API error")
-            mock_fn.return_value = mock_client
-
+        with patch("src.llm.router.router.complete", side_effect=Exception("API error")):
             result = coach.mock_interview(
                 role_description="Test role",
                 num_questions=1,
@@ -433,7 +400,7 @@ class TestJournalIntegration:
         from src.journal.entries import JournalManager
 
         journal_dir = tmp_path / "journal"
-        manager = JournalManager(journal_dir=journal_dir, anthropic_api_key="fake-key")
+        manager = JournalManager(journal_dir=journal_dir)
 
         analysis = {
             "overall_score": 6,
@@ -475,11 +442,8 @@ class TestCompareFromSQLite:
             "recommendations": ["Study more"],
         })
 
-        with patch.object(coach, "_get_claude_client") as mock_fn:
-            mock_client = MagicMock()
-            mock_client.messages.create.return_value = _mock_claude_response(comparison_json)
-            mock_fn.return_value = mock_client
-
+        mock_result = json.loads(comparison_json)
+        with patch("src.llm.router.router.complete", return_value=mock_result):
             result = coach.compare_interviews()
 
         assert result is not None
@@ -496,15 +460,18 @@ class TestCompareFromSQLite:
 class TestParseJsonResponse:
     def test_parses_clean_json(self):
         """Parses clean JSON string."""
+        from src.intel.skill_analyzer import _parse_json_response
         result = _parse_json_response('{"key": "value"}')
         assert result == {"key": "value"}
 
     def test_strips_markdown_fences(self):
         """Strips markdown code fences."""
+        from src.intel.skill_analyzer import _parse_json_response
         result = _parse_json_response('```json\n{"key": "value"}\n```')
         assert result == {"key": "value"}
 
     def test_returns_none_for_bad_json(self):
         """Returns None for unparseable text."""
+        from src.intel.skill_analyzer import _parse_json_response
         result = _parse_json_response("not json")
         assert result is None

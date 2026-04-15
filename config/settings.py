@@ -243,29 +243,9 @@ TASK_CONFIG = {
         ),
         "max_tokens": 4096,
         "fallback_policy": "allow",
-        "schema": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "required": ["skill", "priority", "target_hours", "resources", "rationale"],
-                "properties": {
-                    "skill": {"type": "string"},
-                    "priority": {"type": "integer"},
-                    "target_hours": {"type": "number"},
-                    "resources": {
-                        "type": "array",
-                        "items": {
-                            "type": "object",
-                            "properties": {
-                                "title": {"type": "string"},
-                                "url": {"type": "string"},
-                                "type": {"type": "string"},
-                            },
-                        },
-                    },
-                    "rationale": {"type": "string"},
-                },
-            },
+        "schema": None,  # prose output — router returns raw string; caller parses JSON
+        "claude_extra": {
+            "tools": [{"type": "web_search_20250305", "name": "web_search"}],
         },
     },
     "company_intel": {

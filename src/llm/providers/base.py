@@ -30,6 +30,7 @@ class Provider:
         max_tokens: int,
         temperature: Optional[float],
         schema: Optional[dict],
+        claude_extra: Optional[dict] = None,
     ) -> ProviderResponse:
         """Send a completion request.
 
@@ -41,6 +42,8 @@ class Provider:
             max_tokens: Maximum tokens to generate.
             temperature: Sampling temperature, or None for model default.
             schema: JSON schema dict, or None for prose tasks.
+            claude_extra: Optional extra kwargs forwarded to the Anthropic API
+                (e.g. {"tools": [...]}). Ignored by non-Claude providers.
 
         Returns:
             ProviderResponse with raw_text and parsed.

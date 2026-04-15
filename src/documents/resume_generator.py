@@ -10,8 +10,6 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, Optional
 
-import anthropic
-
 from config import settings
 
 logger = logging.getLogger(__name__)
@@ -122,19 +120,6 @@ BASE_RESUME = {
     },
 }
 
-TAILOR_SYSTEM_PROMPT = """\
-You are a resume optimization expert. Given a base resume and a target job description, \
-produce a tailored version. Rules:
-- NEVER fabricate experience or add skills the candidate doesn't have.
-- ONLY reorder bullets to put the most relevant first.
-- Adjust the Professional Summary to emphasize what this job cares about.
-- Naturally weave in keywords from the job description into existing bullet points \
-where they genuinely apply.
-- Return the result as JSON matching the exact input structure \
-(professional_summary, core_skills, experience, education, certifications, technical_knowledge).
-- Return ONLY valid JSON, no markdown fences, no commentary."""
-
-
 def _sanitize_filename(text: str) -> str:
     """Remove characters that aren't safe for filenames."""
     text = re.sub(r'[<>:"/\\|?*]', "", text)
@@ -142,29 +127,11 @@ def _sanitize_filename(text: str) -> str:
     return text[:50]
 
 
-def _parse_json_response(text: str) -> Optional[Dict]:
-    """Parse a JSON response, stripping markdown fences if present."""
-    text = text.strip()
-    text = re.sub(r"^```(?:json)?\s*", "", text)
-    text = re.sub(r"\s*```$", "", text)
-    try:
-        return json.loads(text)
-    except json.JSONDecodeError:
-        logger.error("Failed to parse tailored resume JSON: %s...", text[:200])
-        return None
-
-
 class ResumeGenerator:
     """Generates tailored resumes using Claude + python-docx."""
 
     def __init__(self, base_resume: Dict = None):
         self._base = base_resume or BASE_RESUME
-        self._client = None
-
-    def _get_client(self):
-        if self._client is None:
-            self._client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
-        return self._client
 
     def tailor_resume(
         self,
@@ -190,16 +157,9 @@ class ResumeGenerator:
         )
 
         try:
-            client = self._get_client()
-            response = client.messages.create(
-                model="claude-sonnet-4-6",
-                max_tokens=4096,
-                system=TAILOR_SYSTEM_PROMPT,
-                messages=[{"role": "user", "content": user_msg[:30000]}],
-            )
-            tailored = _parse_json_response(response.content[0].text)
+            from src.llm.router import router
+            tailored = router.complete(task="resume_generate", prompt=user_msg[:30000])
             if tailored:
-                # Ensure all expected keys exist
                 for key in self._base:
                     tailored.setdefault(key, self._base[key])
             return tailored

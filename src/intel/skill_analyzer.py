@@ -7,40 +7,9 @@ import logging
 import re
 from typing import Dict, List, Optional
 
-import anthropic
-
-from config import settings
 from src.db import models
 
 logger = logging.getLogger(__name__)
-
-STUDY_PLAN_PROMPT = """\
-You are a practical career development advisor for an IT infrastructure \
-professional in Indianapolis transitioning toward cloud/DevOps roles.
-
-Given these skill gaps (skills the job market demands but the candidate lacks or \
-is weak in), create a prioritized study plan. Use web_search to find CURRENT, \
-working resource links.
-
-Rules:
-- Prioritize by job market demand (higher times_seen = higher priority)
-- Prefer free resources: Microsoft Learn, HashiCorp Learn, official docs, YouTube
-- Include realistic time estimates (hours to reach conversational competency)
-- Be concise and practical
-
-Return ONLY valid JSON, no markdown fences:
-[
-  {
-    "skill": "Terraform",
-    "priority": 1,
-    "target_hours": 8,
-    "resources": [
-      {"title": "HashiCorp Learn: Get Started", "url": "https://learn.hashicorp.com/terraform", "type": "course"},
-      {"title": "TechWorld with Nana Terraform", "url": "https://youtube.com/...", "type": "video"}
-    ],
-    "rationale": "Mentioned in 6/12 jobs, 5 as required."
-  }
-]"""
 
 
 def _parse_json_response(text):
@@ -57,15 +26,6 @@ def _parse_json_response(text):
 
 class SkillGapAnalyzer:
     """Analyzes job descriptions to identify skill gaps and generate study plans."""
-
-    def __init__(self, anthropic_api_key=None):
-        self._api_key = anthropic_api_key or settings.ANTHROPIC_API_KEY
-        self._client = None
-
-    def _get_client(self):
-        if self._client is None:
-            self._client = anthropic.Anthropic(api_key=self._api_key)
-        return self._client
 
     def extract_skills(self, job_description):
         """Extract skills from a single job description.
@@ -136,7 +96,7 @@ class SkillGapAnalyzer:
         models.update_match_levels(conn)
 
     def generate_study_plan(self, conn, gaps=None, max_items=5):
-        """Generate a study plan for top gap skills using Claude + web_search.
+        """Generate a study plan for top gap skills using the LLM router + web_search.
 
         Args:
             conn: Database connection.
@@ -159,26 +119,16 @@ class SkillGapAnalyzer:
         )
 
         try:
-            client = self._get_client()
-            response = client.messages.create(
-                model="claude-sonnet-4-6",
-                max_tokens=4096,
-                system=STUDY_PLAN_PROMPT,
-                messages=[{"role": "user", "content": f"Skill gaps to address:\n{gaps_text}"}],
-                tools=[{"type": "web_search_20250305", "name": "web_search"}],
+            from src.llm.router import router
+            # schema=None in TASK_CONFIG → router returns raw string; parse JSON here
+            text = router.complete(
+                task="skill_study_plan",
+                prompt=f"Skill gaps to address:\n{gaps_text}",
             )
-
-            # Extract text from response blocks
-            text = ""
-            for block in response.content:
-                if hasattr(block, "text"):
-                    text += block.text
-
             plan = _parse_json_response(text)
             if not isinstance(plan, list):
                 return []
 
-            # Persist to study_plan table
             for item in plan:
                 skill = item.get("skill", "").strip()
                 if not skill:

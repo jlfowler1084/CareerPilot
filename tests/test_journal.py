@@ -14,7 +14,7 @@ from src.journal.entries import JournalManager
 @pytest.fixture
 def tmp_journal(tmp_path):
     """Create a JournalManager with a temp directory."""
-    return JournalManager(journal_dir=tmp_path, anthropic_api_key="fake-key")
+    return JournalManager(journal_dir=tmp_path)
 
 
 def _mock_tag_response(tags):
@@ -58,23 +58,15 @@ class TestCreateEntry:
 
     def test_auto_tags_via_claude(self, tmp_journal):
         """Auto-generates tags when none provided."""
-        with patch.object(tmp_journal, "_get_claude_client") as mock_fn:
-            mock_client = MagicMock()
-            mock_client.messages.create.return_value = _mock_tag_response(["python", "api", "learning"])
-            mock_fn.return_value = mock_client
-
+        with patch("src.llm.router.router.complete", return_value=["python", "api", "learning"]):
             filename = tmp_journal.create_entry("study", "Studied Python API integration")
 
         entry = tmp_journal.get_entry(filename)
         assert entry["tags"] == ["python", "api", "learning"]
 
     def test_auto_tag_failure_uses_empty(self, tmp_journal):
-        """Falls back to empty tags when Claude fails."""
-        with patch.object(tmp_journal, "_get_claude_client") as mock_fn:
-            mock_client = MagicMock()
-            mock_client.messages.create.side_effect = Exception("API down")
-            mock_fn.return_value = mock_client
-
+        """Falls back to empty tags when router fails."""
+        with patch("src.llm.router.router.complete", side_effect=Exception("API down")):
             filename = tmp_journal.create_entry("daily", "Quick update")
 
         entry = tmp_journal.get_entry(filename)

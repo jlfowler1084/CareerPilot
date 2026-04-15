@@ -42,6 +42,7 @@ class ClaudeProvider(Provider):
         max_tokens: int,
         temperature: Optional[float],
         schema: Optional[Dict],
+        claude_extra: Optional[Dict] = None,
     ) -> ProviderResponse:
         """Send a completion request to the Anthropic Messages API.
 
@@ -52,14 +53,14 @@ class ClaudeProvider(Provider):
 
         if schema is not None:
             return self._complete_schema(
-                client, task, system_prompt, prompt, model, max_tokens, temperature, schema
+                client, task, system_prompt, prompt, model, max_tokens, temperature, schema, claude_extra
             )
         return self._complete_prose(
-            client, task, system_prompt, prompt, model, max_tokens, temperature
+            client, task, system_prompt, prompt, model, max_tokens, temperature, claude_extra
         )
 
     def _complete_schema(
-        self, client, task, system_prompt, prompt, model, max_tokens, temperature, schema
+        self, client, task, system_prompt, prompt, model, max_tokens, temperature, schema, claude_extra=None
     ) -> ProviderResponse:
         # Wrap array schemas: Claude tool input_schema must have object at top level.
         wrapped = schema.get("type") == "array"
@@ -114,7 +115,7 @@ class ClaudeProvider(Provider):
         )
 
     def _complete_prose(
-        self, client, task, system_prompt, prompt, model, max_tokens, temperature
+        self, client, task, system_prompt, prompt, model, max_tokens, temperature, claude_extra=None
     ) -> ProviderResponse:
         kwargs = {
             "model": model,
@@ -125,22 +126,25 @@ class ClaudeProvider(Provider):
             kwargs["system"] = system_prompt
         if temperature is not None:
             kwargs["temperature"] = temperature
+        if claude_extra:
+            kwargs.update(claude_extra)
 
         t0 = time.monotonic()
         response = client.messages.create(**kwargs)
         latency_ms = int((time.monotonic() - t0) * 1000)
 
-        # Iterate content blocks to find the text block.
-        text_block = None
-        for block in response.content:
-            if getattr(block, "type", None) == "text":
-                text_block = block
-                break
-        if text_block is None:
+        # Collect all text blocks — may be multiple when tools are used
+        text_parts = [
+            block.text
+            for block in response.content
+            if getattr(block, "type", None) == "text"
+        ]
+        raw_text = "\n".join(text_parts) if text_parts else ""
+        if not raw_text:
             raise ProviderInfraError("no text block in response")
 
         return ProviderResponse(
-            raw_text=text_block.text,
+            raw_text=raw_text,
             parsed=None,
             model=model,
             latency_ms=latency_ms,

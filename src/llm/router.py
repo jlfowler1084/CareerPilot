@@ -114,6 +114,7 @@ class LLMRouter:
         """
         cfg = settings.TASK_CONFIG[task]  # raises KeyError for unknown tasks
         conn = get_connection()
+        claude_extra = cfg.get("claude_extra") or None
 
         max_tokens = overrides.get("max_tokens") or cfg["max_tokens"]
         temperature = overrides.get("temperature")
@@ -136,7 +137,7 @@ class LLMRouter:
             response = self._claude.complete(
                 task=task, system_prompt=system_prompt, prompt=prompt,
                 model=model, max_tokens=max_tokens, temperature=temperature,
-                schema=effective_schema,
+                schema=effective_schema, claude_extra=claude_extra,
             )
             log_llm_call(
                 conn, task=task, provider_used="claude", model=model,
@@ -164,7 +165,7 @@ class LLMRouter:
                 response = self._claude.complete(
                     task=task, system_prompt=system_prompt, prompt=prompt,
                     model=mdl, max_tokens=max_tokens, temperature=temperature,
-                    schema=effective_schema,
+                    schema=effective_schema, claude_extra=claude_extra,
                 )
                 prov = "claude"
             else:
@@ -172,7 +173,7 @@ class LLMRouter:
                 response = self._claude.complete(
                     task=task, system_prompt=system_prompt, prompt=prompt,
                     model=env_override, max_tokens=max_tokens, temperature=temperature,
-                    schema=effective_schema,
+                    schema=effective_schema, claude_extra=claude_extra,
                 )
                 prov, mdl = "claude", env_override
             log_llm_call(
@@ -193,7 +194,7 @@ class LLMRouter:
             response = self._claude.complete(
                 task=task, system_prompt=system_prompt, prompt=prompt,
                 model=model, max_tokens=max_tokens, temperature=temperature,
-                schema=effective_schema,
+                schema=effective_schema, claude_extra=claude_extra,
             )
             log_llm_call(
                 conn, task=task, provider_used="claude", model=model,
@@ -269,7 +270,7 @@ class LLMRouter:
                 response = self._claude.complete(
                     task=task, system_prompt=system_prompt, prompt=prompt,
                     model=claude_model, max_tokens=max_tokens, temperature=temperature,
-                    schema=effective_schema,
+                    schema=effective_schema, claude_extra=claude_extra,
                 )
                 latency = int((time.monotonic() - t0) * 1000)
                 log_llm_call(

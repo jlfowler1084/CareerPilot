@@ -124,6 +124,7 @@ class LocalProvider(Provider):
         max_tokens: int,
         temperature: Optional[float],
         schema: Optional[dict],
+        claude_extra: Optional[dict] = None,
     ) -> ProviderResponse:
         """Send a chat completion request to the local endpoint.
 

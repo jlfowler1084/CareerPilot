@@ -3238,9 +3238,6 @@ def daily():
     """End-of-day AI summary of today's career activity."""
     from datetime import datetime
 
-    import anthropic
-
-    from config import settings
     from src.db import models
     from src.journal.entries import JournalManager
 
@@ -3311,7 +3308,7 @@ def daily():
     else:
         activity_text = "\n".join(f"- {p}" for p in activity_parts)
 
-    # Send to Claude
+    # Send to router
     prompt = (
         f"Today's date: {today}\n\n"
         f"Today's career activity:\n{activity_text}\n\n"
@@ -3322,13 +3319,8 @@ def daily():
     )
 
     try:
-        client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
-        response = client.messages.create(
-            model="claude-sonnet-4-6",
-            max_tokens=512,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        summary = response.content[0].text.strip()
+        from src.llm.router import router
+        summary = router.complete(task="daily_summary", prompt=prompt)
     except Exception:
         summary = (
             "Could not generate AI summary (API unavailable).\n\n"
