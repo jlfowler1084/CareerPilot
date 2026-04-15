@@ -457,6 +457,267 @@ class TestCompareFromSQLite:
         assert result is None
 
 
+# ============================================================================ #
+# Unit 3 — kind-aware coach (CAR-145). Written test-first.
+# ============================================================================ #
+
+_SAMPLE_TURNS = [
+    {"speaker": "Interviewer", "text": "Tell me about yourself", "timestamp": "00:00:05"},
+    {"speaker": "Candidate", "text": "I'm a systems engineer", "timestamp": "00:00:15"},
+]
+
+
+class TestAnalyzeInterviewKindBranching:
+    """analyze_interview branches on kind to the right prompt path."""
+
+    def test_context_kind_uses_extraction_prompt(self, coach):
+        """recruiter_prep kind → router called with context-extraction prompt (topics_emphasized)."""
+        mock_result = {
+            "topics_emphasized": ["cloud migration"],
+            "interviewer_style": "friendly",
+            "things_to_drill": ["AWS"],
+            "red_flags": [],
+        }
+        with patch("src.llm.router.router.complete", return_value=mock_result) as mock_call:
+            result = coach.analyze_interview(_SAMPLE_TURNS, kind="recruiter_prep")
+        assert mock_call.called
+        prompt_arg = mock_call.call_args[1].get("prompt") or mock_call.call_args[0][1]
+        assert "topics_emphasized" in prompt_arg, (
+            "context-extraction prompt must mention 'topics_emphasized'"
+        )
+
+    def test_performance_kind_prompt_does_not_use_extraction_prompt(self, coach):
+        """technical kind → router called without context-extraction language."""
+        mock_result = {
+            "overall_score": 7, "questions_asked": [], "response_quality": [],
+            "technical_gaps": [], "behavioral_assessment": {}, "overall_justification": "",
+            "top_improvements": [], "practice_questions": [],
+        }
+        with patch("src.llm.router.router.complete", return_value=mock_result) as mock_call:
+            coach.analyze_interview(_SAMPLE_TURNS, kind="technical")
+        prompt_arg = mock_call.call_args[1].get("prompt") or mock_call.call_args[0][1]
+        assert "topics_emphasized" not in prompt_arg
+
+    def test_default_kind_interview_uses_performance_path(self, coach):
+        """No kind argument defaults to 'interview', uses performance path."""
+        mock_result = {
+            "overall_score": 6, "questions_asked": [], "response_quality": [],
+            "technical_gaps": [], "behavioral_assessment": {}, "overall_justification": "",
+            "top_improvements": [], "practice_questions": [],
+        }
+        with patch("src.llm.router.router.complete", return_value=mock_result) as mock_call:
+            result = coach.analyze_interview(_SAMPLE_TURNS)
+        assert result is not None
+        prompt_arg = mock_call.call_args[1].get("prompt") or mock_call.call_args[0][1]
+        assert "topics_emphasized" not in prompt_arg
+
+    def test_invalid_kind_raises_value_error(self, coach):
+        with pytest.raises(ValueError, match="Invalid"):
+            coach.analyze_interview(_SAMPLE_TURNS, kind="garbage_kind")
+
+
+class TestAnalyzeInterviewContextAggregation:
+    """Performance-kind analysis pulls prior context transcripts for the same application."""
+
+    @pytest.fixture
+    def coach_with_prep_context(self, tmp_path):
+        """Coach + DB seeded with a recruiter_prep transcript for app 1."""
+        from src.transcripts.transcript_store import store_transcript, update_analysis
+        from src.transcripts.transcript_parser import TranscriptRecord
+
+        db_path = tmp_path / "test.db"
+        from src.db import models
+        conn = models.get_connection(db_path)
+        conn.execute("INSERT INTO applications (id, title, company) VALUES (1, 'SRE', 'Acme')")
+        conn.commit()
+        conn.close()
+
+        prep_record = TranscriptRecord(
+            source="otter", segments=[], full_text="Prep call text",
+            duration_seconds=300, language="en", audio_path=None, raw_metadata={},
+            kind="recruiter_prep",
+        )
+        prep_id = store_transcript(prep_record, application_id=1, db_path=db_path)
+        update_analysis(prep_id, {"topics_emphasized": ["cloud"], "things_to_drill": ["AWS"]}, db_path=db_path)
+
+        c = InterviewCoach(db_path=db_path)
+        yield c, db_path
+        c.close()
+
+    def test_prior_context_prepended_for_technical_kind(self, coach_with_prep_context):
+        """technical kind with application_id → prompt includes Prior context block."""
+        coach, _ = coach_with_prep_context
+        mock_result = {
+            "overall_score": 7, "questions_asked": [], "response_quality": [],
+            "technical_gaps": [], "behavioral_assessment": {}, "overall_justification": "",
+            "top_improvements": [], "practice_questions": [],
+        }
+        with patch("src.llm.router.router.complete", return_value=mock_result) as mock_call:
+            coach.analyze_interview(_SAMPLE_TURNS, kind="technical", application_id=1)
+        prompt_arg = mock_call.call_args[1].get("prompt") or mock_call.call_args[0][1]
+        assert "Prior context" in prompt_arg
+
+    def test_mock_kind_skips_context_query(self, coach_with_prep_context):
+        """mock kind → no Prior context block (mock is self-driven, no app context)."""
+        coach, _ = coach_with_prep_context
+        mock_result = {
+            "overall_score": 8, "questions_asked": [], "response_quality": [],
+            "technical_gaps": [], "behavioral_assessment": {}, "overall_justification": "",
+            "top_improvements": [], "practice_questions": [],
+        }
+        with patch("src.llm.router.router.complete", return_value=mock_result) as mock_call:
+            coach.analyze_interview(_SAMPLE_TURNS, kind="mock")
+        prompt_arg = mock_call.call_args[1].get("prompt") or mock_call.call_args[0][1]
+        assert "Prior context" not in prompt_arg
+
+    def test_no_prior_context_omits_context_block(self, tmp_path):
+        """Performance kind with application_id but zero prior context → no context block."""
+        from src.db import models
+        db_path = tmp_path / "test.db"
+        conn = models.get_connection(db_path)
+        conn.execute("INSERT INTO applications (id, title, company) VALUES (99, 'SRE', 'Acme')")
+        conn.commit()
+        conn.close()
+
+        mock_result = {
+            "overall_score": 5, "questions_asked": [], "response_quality": [],
+            "technical_gaps": [], "behavioral_assessment": {}, "overall_justification": "",
+            "top_improvements": [], "practice_questions": [],
+        }
+        coach = InterviewCoach(db_path=db_path)
+        with patch("src.llm.router.router.complete", return_value=mock_result) as mock_call:
+            coach.analyze_interview(_SAMPLE_TURNS, kind="technical", application_id=99)
+        coach.close()
+
+        prompt_arg = mock_call.call_args[1].get("prompt") or mock_call.call_args[0][1]
+        assert "Prior context" not in prompt_arg
+
+    def test_context_truncated_to_10k_chars(self, tmp_path):
+        """Combined prior context > 10k chars is truncated before prompt injection."""
+        from src.transcripts.transcript_store import store_transcript, update_analysis
+        from src.transcripts.transcript_parser import TranscriptRecord
+        from src.db import models
+
+        db_path = tmp_path / "test.db"
+        conn = models.get_connection(db_path)
+        conn.execute("INSERT INTO applications (id, title, company) VALUES (1, 'SRE', 'Acme')")
+        conn.commit()
+        conn.close()
+
+        # Seed a prep transcript with a huge analysis_json
+        big_analysis = {"topics_emphasized": ["x" * 11000]}
+        prep_record = TranscriptRecord(
+            source="otter", segments=[], full_text="",
+            duration_seconds=0, language="en", audio_path=None, raw_metadata={},
+            kind="recruiter_prep",
+        )
+        prep_id = store_transcript(prep_record, application_id=1, db_path=db_path)
+        update_analysis(prep_id, big_analysis, db_path=db_path)
+
+        mock_result = {
+            "overall_score": 7, "questions_asked": [], "response_quality": [],
+            "technical_gaps": [], "behavioral_assessment": {}, "overall_justification": "",
+            "top_improvements": [], "practice_questions": [],
+        }
+        coach = InterviewCoach(db_path=db_path)
+        with patch("src.llm.router.router.complete", return_value=mock_result) as mock_call:
+            coach.analyze_interview(_SAMPLE_TURNS, kind="technical", application_id=1)
+        coach.close()
+
+        prompt_arg = mock_call.call_args[1].get("prompt") or mock_call.call_args[0][1]
+        assert len(prompt_arg) <= 30000, "Overall prompt must respect the 30k cap"
+        # Context block exists but is truncated
+        assert "Prior context" in prompt_arg
+
+
+class TestSaveAnalysisConsolidated:
+    """save_analysis(transcript_id, analysis) writes to transcripts.analysis_json."""
+
+    def test_save_writes_analysis_json_to_transcript(self, tmp_path):
+        from src.transcripts.transcript_store import store_transcript
+        from src.transcripts.transcript_parser import TranscriptRecord
+
+        db_path = tmp_path / "test.db"
+        record = TranscriptRecord(
+            source="otter", segments=[], full_text="interview text",
+            duration_seconds=60, language="en", audio_path=None, raw_metadata={},
+        )
+        t_id = store_transcript(record, db_path=db_path)
+
+        coach = InterviewCoach(db_path=db_path)
+        analysis = {"overall_score": 8, "technical_gaps": ["Kubernetes"]}
+        coach.save_analysis(transcript_id=t_id, analysis=analysis)
+
+        result = coach.get_analysis(t_id)
+        coach.close()
+
+        assert result is not None
+        assert result["analysis"]["overall_score"] == 8
+        assert result["analysis"]["technical_gaps"] == ["Kubernetes"]
+
+    def test_get_analysis_returns_none_for_nonexistent_id(self, tmp_path):
+        db_path = tmp_path / "test.db"
+        coach = InterviewCoach(db_path=db_path)
+        result = coach.get_analysis(999)
+        coach.close()
+        assert result is None
+
+    def test_get_all_analyses_returns_analyzed_transcripts(self, tmp_path):
+        from src.transcripts.transcript_store import store_transcript
+        from src.transcripts.transcript_parser import TranscriptRecord
+
+        db_path = tmp_path / "test.db"
+        record = TranscriptRecord(
+            source="otter", segments=[], full_text="text",
+            duration_seconds=60, language="en", audio_path=None, raw_metadata={},
+        )
+        t1_id = store_transcript(record, db_path=db_path)
+        t2_id = store_transcript(record, db_path=db_path)
+
+        coach = InterviewCoach(db_path=db_path)
+        coach.save_analysis(transcript_id=t1_id, analysis={"overall_score": 5})
+        coach.save_analysis(transcript_id=t2_id, analysis={"overall_score": 7})
+
+        all_analyses = coach.get_all_analyses()
+        coach.close()
+
+        assert len(all_analyses) == 2
+        # Newest first
+        assert all_analyses[0]["analysis"]["overall_score"] == 7
+
+    def test_compare_interviews_works_after_consolidated_save(self, tmp_path):
+        """Integration: compare_interviews still works after save_analysis refactor."""
+        from src.transcripts.transcript_store import store_transcript
+        from src.transcripts.transcript_parser import TranscriptRecord
+
+        db_path = tmp_path / "test.db"
+        record = TranscriptRecord(
+            source="otter", segments=[], full_text="text",
+            duration_seconds=60, language="en", audio_path=None, raw_metadata={},
+        )
+        t1_id = store_transcript(record, db_path=db_path)
+        t2_id = store_transcript(record, db_path=db_path)
+
+        coach = InterviewCoach(db_path=db_path)
+        coach.save_analysis(transcript_id=t1_id, analysis={
+            "overall_score": 5, "technical_gaps": ["Docker"], "top_improvements": ["A"],
+        })
+        coach.save_analysis(transcript_id=t2_id, analysis={
+            "overall_score": 7, "technical_gaps": ["CI/CD"], "top_improvements": ["B"],
+        })
+
+        mock_result = {
+            "recurring_weak_topics": [], "improved_skills": [], "persistent_gaps": [],
+            "trajectory": "improving", "trajectory_explanation": "Better", "recommendations": [],
+        }
+        with patch("src.llm.router.router.complete", return_value=mock_result):
+            result = coach.compare_interviews()
+        coach.close()
+
+        assert result is not None
+        assert result["trajectory"] == "improving"
+
+
 class TestParseJsonResponse:
     def test_parses_clean_json(self):
         """Parses clean JSON string."""
