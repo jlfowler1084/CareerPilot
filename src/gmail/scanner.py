@@ -7,21 +7,10 @@ import re
 from datetime import datetime, timedelta
 from email.utils import parsedate_to_datetime
 
-import anthropic
-
 from config import settings
 from src.gmail.auth import get_gmail_service
 
 logger = logging.getLogger(__name__)
-
-CLASSIFICATION_SYSTEM_PROMPT = (
-    "You are an email classifier for a job seeker. "
-    "Classify this email into exactly one category. "
-    "Respond with JSON only, no markdown fences, no preamble: "
-    '{"category": "recruiter_outreach|job_alert|rejection|interview_request|offer|irrelevant", '
-    '"company": "...", "role": "...", "urgency": "low|medium|high", '
-    '"summary": "one sentence"}'
-)
 
 RECRUITER_SEARCH_QUERIES = [
     "from:(*recruiting* OR *talent* OR *staffing* OR *careers* OR *hiring*)",
@@ -43,9 +32,7 @@ class GmailScanner:
         self._credentials_file = config.get("credentials_file", settings.GOOGLE_CREDENTIALS_FILE)
         self._token_path = config.get("token_path", settings.GMAIL_TOKEN_PATH)
         self._scopes = config.get("scopes", settings.GMAIL_SCOPES)
-        self._anthropic_api_key = config.get("anthropic_api_key", settings.ANTHROPIC_API_KEY)
         self._service = None
-        self._claude_client = None
 
     def authenticate(self):
         """Authenticate with Gmail API via OAuth2.
@@ -72,12 +59,6 @@ class GmailScanner:
         except Exception:
             logger.error("Gmail authentication failed", exc_info=True)
             raise
-
-    def _get_claude_client(self):
-        """Lazily initialize the Anthropic client."""
-        if self._claude_client is None:
-            self._claude_client = anthropic.Anthropic(api_key=self._anthropic_api_key)
-        return self._claude_client
 
     def scan_inbox(self, days_back=7):
         """Search Gmail for recent recruiter-pattern emails and classify them.
@@ -228,7 +209,7 @@ class GmailScanner:
         return ""
 
     def classify_email(self, email_data):
-        """Classify an email using the Anthropic API.
+        """Classify an email using the LLM router.
 
         Args:
             email_data: Dict with at least subject and body keys.
@@ -241,7 +222,7 @@ class GmailScanner:
             Auto-classify emails from staffing agency domains as
             'recruiter_outreach': @teksystems.com, @roberthalf.com,
             @kforce.com, @insightglobal.com, @randstadusa.com,
-            @apexsystems.com. This would bypass the Claude API call
+            @apexsystems.com. This would bypass the LLM router call
             for known recruiter domains and feed into the recruiter
             relationship tracker.
         """
@@ -260,32 +241,9 @@ class GmailScanner:
         )
 
         try:
-            client = self._get_claude_client()
-            response = client.messages.create(
-                model=settings.MODEL_HAIKU,
-                max_tokens=256,
-                system=CLASSIFICATION_SYSTEM_PROMPT,
-                messages=[{"role": "user", "content": user_content}],
-            )
-
-            raw_text = response.content[0].text.strip()
-
-            # Strip markdown fences if present
-            if raw_text.startswith("```"):
-                raw_text = re.sub(r"^```(?:json)?\s*", "", raw_text)
-                raw_text = re.sub(r"\s*```$", "", raw_text)
-
-            result = json.loads(raw_text)
-
-            # Validate required fields
-            valid_categories = {
-                "recruiter_outreach", "job_alert", "rejection",
-                "interview_request", "offer", "irrelevant",
-            }
-            if result.get("category") not in valid_categories:
-                logger.warning("Invalid category '%s', defaulting to irrelevant", result.get("category"))
-                result["category"] = "irrelevant"
-
+            from src.llm.router import router
+            result = router.complete(task="email_classify", prompt=user_content)
+            # result is schema-validated dict from the router
             return {
                 "category": result.get("category", "irrelevant"),
                 "company": result.get("company", ""),
@@ -293,12 +251,8 @@ class GmailScanner:
                 "urgency": result.get("urgency", "low"),
                 "summary": result.get("summary", ""),
             }
-
-        except json.JSONDecodeError:
-            logger.warning("Failed to parse classification JSON: %s", raw_text[:200])
-            return default_result
         except Exception:
-            logger.error("Classification API call failed", exc_info=True)
+            logger.error("Classification failed", exc_info=True)
             return default_result
 
 

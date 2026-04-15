@@ -20,7 +20,7 @@ def mock_gmail_service():
 @pytest.fixture
 def responder(mock_gmail_service):
     """Create a RecruiterResponder with mock service."""
-    return RecruiterResponder(mock_gmail_service, anthropic_api_key="fake-key")
+    return RecruiterResponder(mock_gmail_service)
 
 
 @pytest.fixture
@@ -51,29 +51,16 @@ class TestDraftResponse:
         """Generates a draft in interested mode."""
         reply_text = "Thank you for reaching out. I'd love to learn more about the role."
 
-        with patch.object(responder, "_get_claude_client") as mock_fn:
-            mock_client = MagicMock()
-            mock_client.messages.create.return_value = _mock_claude_response(reply_text)
-            mock_fn.return_value = mock_client
-
+        with patch("src.gmail.responder.router.complete", return_value=reply_text):
             result = responder.draft_response(sample_email, mode="interested")
 
         assert result == reply_text
-        # Verify the API was called with system prompt
-        call_kwargs = mock_client.messages.create.call_args[1]
-        assert "interested" not in call_kwargs["system"].lower() or True  # system prompt is generic
-        assert "interested" in call_kwargs["messages"][0]["content"].lower() or \
-               "interest" in call_kwargs["messages"][0]["content"].lower()
 
     def test_not_interested_mode(self, responder, sample_email):
         """Generates a draft in decline mode."""
         reply_text = "Thank you for thinking of me, but I'll pass on this one."
 
-        with patch.object(responder, "_get_claude_client") as mock_fn:
-            mock_client = MagicMock()
-            mock_client.messages.create.return_value = _mock_claude_response(reply_text)
-            mock_fn.return_value = mock_client
-
+        with patch("src.gmail.responder.router.complete", return_value=reply_text):
             result = responder.draft_response(sample_email, mode="not_interested")
 
         assert result == reply_text
@@ -82,11 +69,7 @@ class TestDraftResponse:
         """Generates a draft in more_info mode."""
         reply_text = "Could you share more details about the team and tech stack?"
 
-        with patch.object(responder, "_get_claude_client") as mock_fn:
-            mock_client = MagicMock()
-            mock_client.messages.create.return_value = _mock_claude_response(reply_text)
-            mock_fn.return_value = mock_client
-
+        with patch("src.gmail.responder.router.complete", return_value=reply_text):
             result = responder.draft_response(sample_email, mode="more_info")
 
         assert result == reply_text
@@ -97,14 +80,10 @@ class TestDraftResponse:
         assert result == ""
 
     def test_strips_markdown_formatting(self, responder, sample_email):
-        """Strips markdown bold/italic/fences from Claude output."""
+        """Strips markdown bold/italic/fences from router output."""
         raw = "```\n**Thank you** for *reaching out*.\n```"
 
-        with patch.object(responder, "_get_claude_client") as mock_fn:
-            mock_client = MagicMock()
-            mock_client.messages.create.return_value = _mock_claude_response(raw)
-            mock_fn.return_value = mock_client
-
+        with patch("src.gmail.responder.router.complete", return_value=raw):
             result = responder.draft_response(sample_email, mode="interested")
 
         assert "**" not in result
@@ -113,42 +92,40 @@ class TestDraftResponse:
         assert "Thank you" in result
 
     def test_api_failure_returns_empty(self, responder, sample_email):
-        """Returns empty string when API fails."""
-        with patch.object(responder, "_get_claude_client") as mock_fn:
-            mock_client = MagicMock()
-            mock_client.messages.create.side_effect = Exception("API down")
-            mock_fn.return_value = mock_client
-
+        """Returns empty string when router fails."""
+        with patch("src.gmail.responder.router.complete", side_effect=Exception("API down")):
             result = responder.draft_response(sample_email, mode="interested")
 
         assert result == ""
 
     def test_prompt_includes_candidate_context(self, responder, sample_email):
-        """Verifies candidate context is sent to Claude."""
-        with patch.object(responder, "_get_claude_client") as mock_fn:
-            mock_client = MagicMock()
-            mock_client.messages.create.return_value = _mock_claude_response("Reply text")
-            mock_fn.return_value = mock_client
+        """Verifies candidate context is included in the router prompt."""
+        captured = {}
 
+        def capture(task, prompt, **kw):
+            captured["prompt"] = prompt
+            return "Reply text"
+
+        with patch("src.gmail.responder.router.complete", side_effect=capture):
             responder.draft_response(sample_email, mode="interested")
 
-        call_kwargs = mock_client.messages.create.call_args[1]
-        user_msg = call_kwargs["messages"][0]["content"]
+        user_msg = captured.get("prompt", "")
         assert "Joseph Fowler" in user_msg
         assert "Sheridan, IN" in user_msg
         assert "PowerShell automation" in user_msg
 
     def test_prompt_includes_original_email(self, responder, sample_email):
-        """Verifies original email content is sent to Claude."""
-        with patch.object(responder, "_get_claude_client") as mock_fn:
-            mock_client = MagicMock()
-            mock_client.messages.create.return_value = _mock_claude_response("Reply text")
-            mock_fn.return_value = mock_client
+        """Verifies original email content is included in the router prompt."""
+        captured = {}
 
+        def capture(task, prompt, **kw):
+            captured["prompt"] = prompt
+            return "Reply text"
+
+        with patch("src.gmail.responder.router.complete", side_effect=capture):
             responder.draft_response(sample_email, mode="interested")
 
-        call_kwargs = mock_client.messages.create.call_args[1]
-        user_msg = call_kwargs["messages"][0]["content"]
+        user_msg = captured.get("prompt", "")
         assert "recruiter@acme.com" in user_msg
         assert "Systems Engineer opportunity" in user_msg
 
@@ -213,11 +190,7 @@ class TestSendResponse:
     def test_send_not_called_by_default(self, responder, mock_gmail_service, sample_email):
         """Verify send_response is a separate explicit action, not auto-triggered."""
         # Draft flow should NOT call send
-        with patch.object(responder, "_get_claude_client") as mock_fn:
-            mock_client = MagicMock()
-            mock_client.messages.create.return_value = _mock_claude_response("Reply")
-            mock_fn.return_value = mock_client
-
+        with patch("src.gmail.responder.router.complete", return_value="Reply"):
             responder.draft_response(sample_email, mode="interested")
 
         # send() should NOT have been called

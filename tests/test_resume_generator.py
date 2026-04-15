@@ -83,63 +83,41 @@ class TestTailorResume:
         exp["bullets"] = [exp["bullets"][3]] + exp["bullets"][:3] + exp["bullets"][4:]
         return tailored
 
-    @patch("src.documents.resume_generator.anthropic")
-    def test_tailor_resume_returns_structure(self, mock_anthropic):
-        mock_response = MagicMock()
-        mock_response.content = [MagicMock(text=json.dumps(self._mock_tailored_response()))]
-        mock_client = MagicMock()
-        mock_client.messages.create.return_value = mock_response
-        mock_anthropic.Anthropic.return_value = mock_client
-
-        gen = ResumeGenerator()
-        result = gen.tailor_resume("DevOps Engineer needed with CI/CD experience", company="TestCo")
+    def test_tailor_resume_returns_structure(self):
+        with patch("src.llm.router.router.complete", return_value=self._mock_tailored_response()):
+            gen = ResumeGenerator()
+            result = gen.tailor_resume("DevOps Engineer needed with CI/CD experience", company="TestCo")
 
         assert result is not None
         assert "professional_summary" in result
         assert "core_skills" in result
         assert "experience" in result
 
-    @patch("src.documents.resume_generator.anthropic")
-    def test_tailored_skills_are_subset_of_base(self, mock_anthropic):
+    def test_tailored_skills_are_subset_of_base(self):
         """Output skills should be a subset of the input — no fabrication."""
         tailored = self._mock_tailored_response()
-        mock_response = MagicMock()
-        mock_response.content = [MagicMock(text=json.dumps(tailored))]
-        mock_client = MagicMock()
-        mock_client.messages.create.return_value = mock_response
-        mock_anthropic.Anthropic.return_value = mock_client
-
-        gen = ResumeGenerator()
-        result = gen.tailor_resume("Job description here")
+        with patch("src.llm.router.router.complete", return_value=tailored):
+            gen = ResumeGenerator()
+            result = gen.tailor_resume("Job description here")
 
         base_skills = set(BASE_RESUME["core_skills"])
         result_skills = set(result["core_skills"])
         assert result_skills.issubset(base_skills)
 
-    @patch("src.documents.resume_generator.anthropic")
-    def test_tailor_resume_preserves_all_keys(self, mock_anthropic):
-        """Even if Claude omits a key, defaults fill in from base."""
+    def test_tailor_resume_preserves_all_keys(self):
+        """Even if router omits a key, defaults fill in from base."""
         partial = {"professional_summary": "Updated summary"}
-        mock_response = MagicMock()
-        mock_response.content = [MagicMock(text=json.dumps(partial))]
-        mock_client = MagicMock()
-        mock_client.messages.create.return_value = mock_response
-        mock_anthropic.Anthropic.return_value = mock_client
-
-        gen = ResumeGenerator()
-        result = gen.tailor_resume("Job description")
+        with patch("src.llm.router.router.complete", return_value=partial):
+            gen = ResumeGenerator()
+            result = gen.tailor_resume("Job description")
 
         for key in BASE_RESUME:
             assert key in result
 
-    @patch("src.documents.resume_generator.anthropic")
-    def test_tailor_resume_failure_returns_none(self, mock_anthropic):
-        mock_client = MagicMock()
-        mock_client.messages.create.side_effect = Exception("API error")
-        mock_anthropic.Anthropic.return_value = mock_client
-
-        gen = ResumeGenerator()
-        result = gen.tailor_resume("Job description")
+    def test_tailor_resume_failure_returns_none(self):
+        with patch("src.llm.router.router.complete", side_effect=Exception("API error")):
+            gen = ResumeGenerator()
+            result = gen.tailor_resume("Job description")
         assert result is None
 
 
@@ -180,15 +158,8 @@ class TestGenerateDocx:
 
 
 class TestGenerateForApplication:
-    @patch("src.documents.resume_generator.anthropic")
-    def test_full_pipeline(self, mock_anthropic, tmp_path):
+    def test_full_pipeline(self, tmp_path):
         tailored = json.loads(json.dumps(BASE_RESUME))
-        mock_response = MagicMock()
-        mock_response.content = [MagicMock(text=json.dumps(tailored))]
-        mock_client = MagicMock()
-        mock_client.messages.create.return_value = mock_response
-        mock_anthropic.Anthropic.return_value = mock_client
-
         gen = ResumeGenerator()
         output_dir = str(tmp_path / "resumes")
         job_data = {
@@ -197,22 +168,19 @@ class TestGenerateForApplication:
             "title": "DevOps Engineer",
         }
 
-        path = gen.generate_for_application(job_data, output_dir=output_dir)
+        with patch("src.llm.router.router.complete", return_value=tailored):
+            path = gen.generate_for_application(job_data, output_dir=output_dir)
         assert path is not None
         assert os.path.exists(path)
         assert path.endswith(".docx")
         assert "Acme_Corp" in path
         assert "DevOps_Engineer" in path
 
-    @patch("src.documents.resume_generator.anthropic")
-    def test_pipeline_failure_returns_none(self, mock_anthropic, tmp_path):
-        mock_client = MagicMock()
-        mock_client.messages.create.side_effect = Exception("API error")
-        mock_anthropic.Anthropic.return_value = mock_client
-
-        gen = ResumeGenerator()
-        path = gen.generate_for_application(
-            {"description": "Test", "company": "X", "title": "Y"},
-            output_dir=str(tmp_path),
-        )
+    def test_pipeline_failure_returns_none(self, tmp_path):
+        with patch("src.llm.router.router.complete", side_effect=Exception("API error")):
+            gen = ResumeGenerator()
+            path = gen.generate_for_application(
+                {"description": "Test", "company": "X", "title": "Y"},
+                output_dir=str(tmp_path),
+            )
         assert path is None

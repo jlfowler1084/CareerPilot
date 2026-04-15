@@ -9,58 +9,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
 
-import anthropic
-
-from config import settings
-from config.settings import MODEL_HAIKU, MODEL_SONNET
 from src.db import models
 
 logger = logging.getLogger(__name__)
-
-ANALYSIS_SYSTEM_PROMPT = """\
-You are an expert interview coach. Analyze this interview transcript and return a JSON object with exactly these keys:
-
-{
-  "questions_asked": ["list of every distinct question the interviewer asked"],
-  "response_quality": [
-    {
-      "question": "the question",
-      "summary": "what the candidate said (brief)",
-      "rating": 3,
-      "strengths": "what was strong",
-      "weaknesses": "what was weak"
-    }
-  ],
-  "technical_gaps": ["specific technologies or concepts the candidate couldn't answer or was vague on"],
-  "behavioral_assessment": {
-    "star_usage": "assessment of STAR format usage",
-    "communication_clarity": "assessment",
-    "enthusiasm": "assessment",
-    "confidence": "assessment"
-  },
-  "overall_score": 7,
-  "overall_justification": "brief justification for the score",
-  "top_improvements": ["improvement 1", "improvement 2", "improvement 3"],
-  "practice_questions": ["question 1", "question 2", "question 3", "question 4", "question 5"]
-}
-
-Ratings are 1-5 per question, overall_score is 1-10.
-Return ONLY valid JSON, no markdown fences, no commentary."""
-
-COMPARE_SYSTEM_PROMPT = """\
-You are an expert interview coach reviewing multiple interview analyses over time.
-Analyze the patterns and return a JSON object with exactly these keys:
-
-{
-  "recurring_weak_topics": ["topics that appear as gaps across multiple interviews"],
-  "improved_skills": ["skills that show improvement over time"],
-  "persistent_gaps": ["gaps that remain unfixed and need focused study"],
-  "trajectory": "improving|plateauing|declining",
-  "trajectory_explanation": "brief explanation of the trajectory assessment",
-  "recommendations": ["top 3 actionable recommendations"]
-}
-
-Return ONLY valid JSON, no markdown fences, no commentary."""
 
 MOCK_QUESTION_PROMPT = """\
 You are an interviewer conducting a technical/behavioral interview for this role:
@@ -110,31 +61,12 @@ Provide a final assessment as JSON:
 Return ONLY valid JSON, no markdown fences."""
 
 
-def _parse_json_response(text: str) -> Optional[Dict]:
-    """Parse a JSON response from Claude, stripping markdown fences if present."""
-    text = text.strip()
-    text = re.sub(r"^```(?:json)?\s*", "", text)
-    text = re.sub(r"\s*```$", "", text)
-    try:
-        return json.loads(text)
-    except json.JSONDecodeError:
-        logger.error("Failed to parse JSON response: %s...", text[:200])
-        return None
-
-
 class InterviewCoach:
     """Claude-powered interview analysis, comparison, and mock coaching."""
 
-    def __init__(self, db_path: Path = None, anthropic_api_key: str = None):
+    def __init__(self, db_path: Path = None):
         self._db_path = db_path
-        self._api_key = anthropic_api_key or settings.ANTHROPIC_API_KEY
-        self._claude_client = None
         self._conn = None
-
-    def _get_claude_client(self):
-        if self._claude_client is None:
-            self._claude_client = anthropic.Anthropic(api_key=self._api_key)
-        return self._claude_client
 
     def _get_conn(self):
         if self._conn is None:
@@ -170,14 +102,11 @@ class InterviewCoach:
         user_message = f"{context}\n\nTranscript:\n{transcript_text}" if context else f"Transcript:\n{transcript_text}"
 
         try:
-            client = self._get_claude_client()
-            response = client.messages.create(
-                model=MODEL_SONNET,
-                max_tokens=4096,
-                system=ANALYSIS_SYSTEM_PROMPT,
-                messages=[{"role": "user", "content": user_message[:30000]}],
+            from src.llm.router import router
+            result = router.complete(
+                task="interview_transcript_analyze",
+                prompt=user_message[:30000],
             )
-            result = _parse_json_response(response.content[0].text)
             if result:
                 result.setdefault("questions_asked", [])
                 result.setdefault("response_quality", [])
@@ -232,14 +161,8 @@ class InterviewCoach:
         user_message = "\n\n".join(summaries)
 
         try:
-            client = self._get_claude_client()
-            response = client.messages.create(
-                model=MODEL_SONNET,
-                max_tokens=2048,
-                system=COMPARE_SYSTEM_PROMPT,
-                messages=[{"role": "user", "content": user_message}],
-            )
-            result = _parse_json_response(response.content[0].text)
+            from src.llm.router import router
+            result = router.complete(task="interview_compare", prompt=user_message)
             if result:
                 result.setdefault("recurring_weak_topics", [])
                 result.setdefault("improved_skills", [])
@@ -275,7 +198,7 @@ class InterviewCoach:
         if output_fn is None:
             output_fn = print
 
-        client = self._get_claude_client()
+        from src.llm.router import router
         qa_pairs = []
 
         for q_num in range(1, num_questions + 1):
@@ -293,20 +216,15 @@ class InterviewCoach:
 
             # Generate question
             try:
-                q_response = client.messages.create(
-                    model=MODEL_HAIKU,
-                    max_tokens=512,
-                    messages=[{
-                        "role": "user",
-                        "content": MOCK_QUESTION_PROMPT.format(
-                            role_description=role_description,
-                            question_num=q_num,
-                            total_questions=num_questions,
-                            previous_context=previous_context,
-                        ),
-                    }],
+                question = router.complete(
+                    task="interview_question_gen",
+                    prompt=MOCK_QUESTION_PROMPT.format(
+                        role_description=role_description,
+                        question_num=q_num,
+                        total_questions=num_questions,
+                        previous_context=previous_context,
+                    ),
                 )
-                question = q_response.content[0].text.strip()
             except Exception:
                 logger.error("Failed to generate question %d", q_num, exc_info=True)
                 return None
@@ -322,19 +240,14 @@ class InterviewCoach:
 
             # Evaluate response
             try:
-                eval_response = client.messages.create(
-                    model=MODEL_SONNET,
-                    max_tokens=1024,
-                    messages=[{
-                        "role": "user",
-                        "content": MOCK_EVALUATE_PROMPT.format(
-                            role_description=role_description,
-                            question=question,
-                            answer=answer,
-                        ),
-                    }],
+                evaluation = router.complete(
+                    task="interview_answer_eval",
+                    prompt=MOCK_EVALUATE_PROMPT.format(
+                        role_description=role_description,
+                        question=question,
+                        answer=answer,
+                    ),
                 )
-                evaluation = _parse_json_response(eval_response.content[0].text)
             except Exception:
                 logger.error("Failed to evaluate answer %d", q_num, exc_info=True)
                 evaluation = None
@@ -369,18 +282,13 @@ class InterviewCoach:
         )
 
         try:
-            summary_response = client.messages.create(
-                model=MODEL_SONNET,
-                max_tokens=2048,
-                messages=[{
-                    "role": "user",
-                    "content": MOCK_SUMMARY_PROMPT.format(
-                        role_description=role_description,
-                        qa_summary=qa_summary,
-                    ),
-                }],
+            assessment = router.complete(
+                task="interview_summary",
+                prompt=MOCK_SUMMARY_PROMPT.format(
+                    role_description=role_description,
+                    qa_summary=qa_summary,
+                ),
             )
-            assessment = _parse_json_response(summary_response.content[0].text)
         except Exception:
             logger.error("Failed to generate final assessment", exc_info=True)
             assessment = None

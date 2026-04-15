@@ -7,21 +7,11 @@ import re
 from pathlib import Path
 from typing import List, Dict, Optional
 
-import anthropic
-
 from config import settings
 
 logger = logging.getLogger(__name__)
 
 SUPPORTED_EXTENSIONS = {".txt", ".md", ".vtt", ".srt"}
-
-SPEAKER_LABEL_PROMPT = (
-    "Identify and label the speakers in this interview transcript. "
-    "Label the interviewer as 'Interviewer' and the candidate as 'Candidate'. "
-    "Return the transcript with clear speaker labels on each turn, formatted as:\n"
-    "Interviewer: <text>\nCandidate: <text>\n\n"
-    "Return ONLY the relabeled transcript, no commentary."
-)
 
 # Patterns for speaker detection
 # "Speaker Name:" at start of line
@@ -53,15 +43,8 @@ RE_TS_ARROW = re.compile(
 class TranscriptLoader:
     """Loads and parses interview transcripts into structured speaker turns."""
 
-    def __init__(self, transcripts_dir: Path = None, anthropic_api_key: str = None):
+    def __init__(self, transcripts_dir: Path = None):
         self._dir = transcripts_dir or settings.TRANSCRIPTS_DIR
-        self._api_key = anthropic_api_key or settings.ANTHROPIC_API_KEY
-        self._claude_client = None
-
-    def _get_claude_client(self):
-        if self._claude_client is None:
-            self._claude_client = anthropic.Anthropic(api_key=self._api_key)
-        return self._claude_client
 
     def load_transcript(self, filepath: str) -> Optional[List[Dict]]:
         """Load a transcript file and return structured speaker turns.
@@ -222,26 +205,18 @@ class TranscriptLoader:
         return turns
 
     def _claude_identify_speakers(self, text: str) -> List[Dict]:
-        """Send raw text to Claude to identify and label speakers."""
+        """Send raw text to the LLM router to identify and label speakers."""
         try:
-            client = self._get_claude_client()
-            response = client.messages.create(
-                model="claude-sonnet-4-6",
-                max_tokens=4096,
-                system=SPEAKER_LABEL_PROMPT,
-                messages=[{"role": "user", "content": text[:15000]}],
+            from src.llm.router import router
+            labeled_text = router.complete(
+                task="transcript_speaker_id",
+                prompt=text[:15000],
             )
-            labeled_text = response.content[0].text
-
-            # Parse the labeled output
             turns = self._parse_labeled(labeled_text)
             if turns:
                 return turns
-
-            # If parsing still fails, return as single block
-            logger.warning("Claude labeling produced unparseable output, returning raw")
+            logger.warning("Router labeling produced unparseable output, returning raw")
             return [{"speaker": "Unknown", "text": text.strip(), "timestamp": None}]
-
         except Exception:
-            logger.error("Claude speaker identification failed", exc_info=True)
+            logger.error("Speaker identification failed", exc_info=True)
             return [{"speaker": "Unknown", "text": text.strip(), "timestamp": None}]

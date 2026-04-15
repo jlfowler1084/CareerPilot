@@ -58,50 +58,37 @@ I am available for interviews at your convenience."""
 
 
 class TestGenerateCoverLetter:
-    @patch("src.documents.cover_letter_generator.anthropic")
-    def test_generates_text(self, mock_anthropic):
-        mock_response = MagicMock()
-        mock_response.content = [MagicMock(text=SAMPLE_COVER_LETTER)]
-        mock_client = MagicMock()
-        mock_client.messages.create.return_value = mock_response
-        mock_anthropic.Anthropic.return_value = mock_client
-
-        gen = CoverLetterGenerator(profile=SAMPLE_PROFILE)
-        text = gen.generate_cover_letter(
-            "Looking for DevOps Engineer with CI/CD",
-            company="Acme Corp",
-            role="DevOps Engineer",
-        )
+    def test_generates_text(self):
+        with patch("src.llm.router.router.complete", return_value=SAMPLE_COVER_LETTER):
+            gen = CoverLetterGenerator(profile=SAMPLE_PROFILE)
+            text = gen.generate_cover_letter(
+                "Looking for DevOps Engineer with CI/CD",
+                company="Acme Corp",
+                role="DevOps Engineer",
+            )
 
         assert text is not None
         assert len(text) > 100
 
-    @patch("src.documents.cover_letter_generator.anthropic")
-    def test_letter_includes_company_and_role(self, mock_anthropic):
-        mock_response = MagicMock()
-        mock_response.content = [MagicMock(text=SAMPLE_COVER_LETTER)]
-        mock_client = MagicMock()
-        mock_client.messages.create.return_value = mock_response
-        mock_anthropic.Anthropic.return_value = mock_client
-
-        gen = CoverLetterGenerator(profile=SAMPLE_PROFILE)
-        text = gen.generate_cover_letter(
-            "Job description",
-            company="Acme Corp",
-            role="DevOps Engineer",
-        )
+    def test_letter_includes_company_and_role(self):
+        with patch("src.llm.router.router.complete", return_value=SAMPLE_COVER_LETTER):
+            gen = CoverLetterGenerator(profile=SAMPLE_PROFILE)
+            text = gen.generate_cover_letter(
+                "Job description",
+                company="Acme Corp",
+                role="DevOps Engineer",
+            )
 
         assert "Acme Corp" in text
         assert "DevOps Engineer" in text
 
-    @patch("src.documents.cover_letter_generator.anthropic")
-    def test_includes_fit_analysis(self, mock_anthropic):
-        """Fit analysis is passed to Claude when provided."""
-        mock_response = MagicMock()
-        mock_response.content = [MagicMock(text=SAMPLE_COVER_LETTER)]
-        mock_client = MagicMock()
-        mock_client.messages.create.return_value = mock_response
-        mock_anthropic.Anthropic.return_value = mock_client
+    def test_includes_fit_analysis(self):
+        """Fit analysis is passed to the router prompt when provided."""
+        captured = {}
+
+        def capture(task, prompt, **kw):
+            captured["prompt"] = prompt
+            return SAMPLE_COVER_LETTER
 
         gen = CoverLetterGenerator(profile=SAMPLE_PROFILE)
         fit = {
@@ -109,24 +96,19 @@ class TestGenerateCoverLetter:
             "matching_skills": ["PowerShell", "Windows Server"],
             "gap_skills": ["Kubernetes"],
         }
-        text = gen.generate_cover_letter(
-            "Job description", "TestCo", "SRE", fit_analysis=fit,
-        )
+        with patch("src.llm.router.router.complete", side_effect=capture):
+            gen.generate_cover_letter(
+                "Job description", "TestCo", "SRE", fit_analysis=fit,
+            )
 
-        # Verify fit analysis was included in the API call
-        call_args = mock_client.messages.create.call_args
-        user_content = call_args[1]["messages"][0]["content"]
+        user_content = captured.get("prompt", "")
         assert "Match Score: 7/10" in user_content
         assert "Kubernetes" in user_content
 
-    @patch("src.documents.cover_letter_generator.anthropic")
-    def test_failure_returns_none(self, mock_anthropic):
-        mock_client = MagicMock()
-        mock_client.messages.create.side_effect = Exception("API error")
-        mock_anthropic.Anthropic.return_value = mock_client
-
-        gen = CoverLetterGenerator(profile=SAMPLE_PROFILE)
-        result = gen.generate_cover_letter("Desc", "Co", "Role")
+    def test_failure_returns_none(self):
+        with patch("src.llm.router.router.complete", side_effect=Exception("API error")):
+            gen = CoverLetterGenerator(profile=SAMPLE_PROFILE)
+            result = gen.generate_cover_letter("Desc", "Co", "Role")
         assert result is None
 
 
@@ -167,52 +149,40 @@ class TestGenerateDocx:
 
 
 class TestProfileIntegration:
-    @patch("src.documents.cover_letter_generator.anthropic")
-    def test_lazy_profile_loading(self, mock_anthropic):
+    def test_lazy_profile_loading(self):
         """When no profile is passed, it loads from ProfileManager."""
-        mock_response = MagicMock()
-        mock_response.content = [MagicMock(text=SAMPLE_COVER_LETTER)]
-        mock_client = MagicMock()
-        mock_client.messages.create.return_value = mock_response
-        mock_anthropic.Anthropic.return_value = mock_client
+        with patch("src.llm.router.router.complete", return_value=SAMPLE_COVER_LETTER):
+            with patch("src.profile.manager.ProfileManager") as MockPM:
+                mock_mgr = MagicMock()
+                mock_mgr.get_profile.return_value = SAMPLE_PROFILE
+                MockPM.return_value = mock_mgr
 
-        with patch("src.profile.manager.ProfileManager") as MockPM:
-            mock_mgr = MagicMock()
-            mock_mgr.get_profile.return_value = SAMPLE_PROFILE
-            MockPM.return_value = mock_mgr
-
-            gen = CoverLetterGenerator()  # No profile passed
-            text = gen.generate_cover_letter("Desc", "Co", "Role")
-            assert text is not None
-            mock_mgr.get_profile.assert_called_once()
-            mock_mgr.close.assert_called_once()
+                gen = CoverLetterGenerator()  # No profile passed
+                text = gen.generate_cover_letter("Desc", "Co", "Role")
+                assert text is not None
+                mock_mgr.get_profile.assert_called_once()
+                mock_mgr.close.assert_called_once()
 
 
 # --- Full pipeline ---
 
 
 class TestGenerateForApplication:
-    @patch("src.documents.cover_letter_generator.anthropic")
-    def test_full_pipeline(self, mock_anthropic, tmp_path):
-        mock_response = MagicMock()
-        mock_response.content = [MagicMock(text=SAMPLE_COVER_LETTER)]
-        mock_client = MagicMock()
-        mock_client.messages.create.return_value = mock_response
-        mock_anthropic.Anthropic.return_value = mock_client
-
+    def test_full_pipeline(self, tmp_path):
         gen = CoverLetterGenerator(profile=SAMPLE_PROFILE)
         output_dir = str(tmp_path / "cover_letters")
 
-        # Mock the fit analysis import to avoid API call
-        with patch("src.jobs.analyzer.JobAnalyzer") as MockAnalyzer:
-            mock_analyzer = MagicMock()
-            mock_analyzer.analyze_fit.return_value = {"match_score": 8}
-            MockAnalyzer.return_value = mock_analyzer
+        with patch("src.llm.router.router.complete", return_value=SAMPLE_COVER_LETTER):
+            # Mock the fit analysis import to avoid API call
+            with patch("src.jobs.analyzer.JobAnalyzer") as MockAnalyzer:
+                mock_analyzer = MagicMock()
+                mock_analyzer.analyze_fit.return_value = {"match_score": 8}
+                MockAnalyzer.return_value = mock_analyzer
 
-            path = gen.generate_for_application(
-                {"description": "DevOps role", "company": "Acme Corp", "title": "DevOps Engineer"},
-                output_dir=output_dir,
-            )
+                path = gen.generate_for_application(
+                    {"description": "DevOps role", "company": "Acme Corp", "title": "DevOps Engineer"},
+                    output_dir=output_dir,
+                )
 
         assert path is not None
         assert os.path.exists(path)

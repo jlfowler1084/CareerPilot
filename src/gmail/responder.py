@@ -7,24 +7,10 @@ import logging
 import re
 from email.mime.text import MIMEText
 
-import anthropic
-
-from config import settings
 from src.gmail.templates import format_context_block
+from src.llm.router import router
 
 logger = logging.getLogger(__name__)
-
-DRAFT_SYSTEM_PROMPT = (
-    "You are a professional reply writer for a job seeker. "
-    "Write a reply email based on the instructions below. "
-    "Rules:\n"
-    "- Professional but warm tone — not a corporate robot\n"
-    "- Be concise\n"
-    "- NEVER oversell or fabricate experience\n"
-    "- NEVER use markdown formatting — write plain email text only\n"
-    "- Do not include a subject line — just the body\n"
-    "- Sign off with the candidate's first name only"
-)
 
 MODE_INSTRUCTIONS = {
     "interested": (
@@ -54,22 +40,13 @@ MODE_INSTRUCTIONS = {
 class RecruiterResponder:
     """Generates recruiter email responses via Claude and manages Gmail drafts."""
 
-    def __init__(self, gmail_service, anthropic_api_key=None):
+    def __init__(self, gmail_service):
         """Initialize responder with an authenticated Gmail service.
 
         Args:
             gmail_service: Authenticated Gmail API service object.
-            anthropic_api_key: Anthropic API key (falls back to settings).
         """
         self._service = gmail_service
-        self._api_key = anthropic_api_key or settings.ANTHROPIC_API_KEY
-        self._claude_client = None
-
-    def _get_claude_client(self):
-        """Lazily initialize the Anthropic client."""
-        if self._claude_client is None:
-            self._claude_client = anthropic.Anthropic(api_key=self._api_key)
-        return self._claude_client
 
     def draft_response(self, email_data, mode="interested", availability_text=None):
         """Generate a personalized reply using Claude.
@@ -112,26 +89,13 @@ class RecruiterResponder:
         logger.info("Generating '%s' response for: %s", mode, email_data.get("subject", "(no subject)"))
 
         try:
-            client = self._get_claude_client()
-            response = client.messages.create(
-                model="claude-sonnet-4-6",
-                max_tokens=512,
-                system=DRAFT_SYSTEM_PROMPT,
-                messages=[{"role": "user", "content": user_content}],
-            )
-
-            draft_text = response.content[0].text.strip()
-
-            # Strip any markdown formatting Claude might add
+            draft_text = router.complete(task="recruiter_respond", prompt=user_content)
             draft_text = re.sub(r"^```\w*\s*", "", draft_text)
             draft_text = re.sub(r"\s*```$", "", draft_text)
-            # Remove bold/italic markdown
             draft_text = re.sub(r"\*\*(.+?)\*\*", r"\1", draft_text)
             draft_text = re.sub(r"\*(.+?)\*", r"\1", draft_text)
-
             logger.info("Draft generated (%d chars, mode=%s)", len(draft_text), mode)
             return draft_text
-
         except Exception:
             logger.error("Failed to generate draft response", exc_info=True)
             return ""

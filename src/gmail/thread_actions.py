@@ -6,26 +6,11 @@ import json
 import logging
 from datetime import datetime, timedelta, timezone
 
-import anthropic
-
 from config import settings
 from src.gmail.dashboard import EmailDashboard
 from src.gmail.templates import format_context_block
 
 logger = logging.getLogger(__name__)
-
-THREAD_REPLY_SYSTEM_PROMPT = (
-    "You are a professional reply writer for a job seeker. "
-    "Write a reply based on the full conversation thread below. "
-    "Rules:\n"
-    "- This is a reply in an ongoing conversation, not a cold email\n"
-    "- Professional but warm tone\n"
-    "- Be concise\n"
-    "- NEVER oversell or fabricate experience\n"
-    "- NEVER use markdown formatting — write plain email text only\n"
-    "- Do not include a subject line — just the body\n"
-    "- Sign off with the candidate's first name only"
-)
 
 
 class ThreadActions:
@@ -43,14 +28,6 @@ class ThreadActions:
         self._responder = responder
         self._cal_scheduler = cal_scheduler
         self._dashboard = EmailDashboard(gmail_service)
-        self._api_key = settings.ANTHROPIC_API_KEY
-        self._claude_client = None
-
-    def _get_claude_client(self):
-        """Lazily initialize the Anthropic client."""
-        if self._claude_client is None:
-            self._claude_client = anthropic.Anthropic(api_key=self._api_key)
-        return self._claude_client
 
     def reply(self, thread_id, mode="interested"):
         """Generate a Claude-powered reply using full thread context.
@@ -94,16 +71,9 @@ class ThreadActions:
         )
 
         try:
-            client = self._get_claude_client()
-            response = client.messages.create(
-                model="claude-sonnet-4-6",
-                max_tokens=512,
-                system=THREAD_REPLY_SYSTEM_PROMPT,
-                messages=[{"role": "user", "content": user_content}],
-            )
-            draft_text = response.content[0].text.strip()
-            # Strip markdown formatting
             import re
+            from src.llm.router import router
+            draft_text = router.complete(task="gmail_thread_actions", prompt=user_content)
             draft_text = re.sub(r"^```\w*\s*", "", draft_text)
             draft_text = re.sub(r"\s*```$", "", draft_text)
             draft_text = re.sub(r"\*\*(.+?)\*\*", r"\1", draft_text)
@@ -219,15 +189,9 @@ class ThreadActions:
         )
 
         try:
-            client = self._get_claude_client()
-            response = client.messages.create(
-                model="claude-sonnet-4-6",
-                max_tokens=512,
-                system=THREAD_REPLY_SYSTEM_PROMPT,
-                messages=[{"role": "user", "content": user_content}],
-            )
-            draft_text = response.content[0].text.strip()
             import re
+            from src.llm.router import router
+            draft_text = router.complete(task="gmail_thread_actions", prompt=user_content)
             draft_text = re.sub(r"^```\w*\s*", "", draft_text)
             draft_text = re.sub(r"\s*```$", "", draft_text)
             return draft_text, slots

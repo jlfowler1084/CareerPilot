@@ -36,24 +36,31 @@ def applicant(tmp_path):
     a.close()
 
 
-class TestGenerateApplicationDocs:
-    @patch("src.documents.cover_letter_generator.anthropic")
-    @patch("src.documents.resume_generator.anthropic")
-    def test_generates_both_files(self, mock_resume_api, mock_cl_api, applicant, tmp_path):
-        # Mock resume tailoring
-        tailored = json.loads(json.dumps(BASE_RESUME))
-        mock_resume_response = MagicMock()
-        mock_resume_response.content = [MagicMock(text=json.dumps(tailored))]
-        mock_resume_client = MagicMock()
-        mock_resume_client.messages.create.return_value = mock_resume_response
-        mock_resume_api.Anthropic.return_value = mock_resume_client
+def _make_router_side_effect(resume_result, cover_letter_result):
+    """Return a side_effect function that dispatches by task name."""
+    def _side_effect(task, prompt, **kwargs):
+        if task == "resume_generate":
+            if isinstance(resume_result, Exception):
+                raise resume_result
+            return resume_result
+        if task == "cover_letter":
+            if isinstance(cover_letter_result, Exception):
+                raise cover_letter_result
+            return cover_letter_result
+        raise KeyError(f"Unexpected task in test: {task!r}")
+    return _side_effect
 
-        # Mock cover letter generation
-        mock_cl_response = MagicMock()
-        mock_cl_response.content = [MagicMock(text=SAMPLE_COVER_LETTER)]
-        mock_cl_client = MagicMock()
-        mock_cl_client.messages.create.return_value = mock_cl_response
-        mock_cl_api.Anthropic.return_value = mock_cl_client
+
+class TestGenerateApplicationDocs:
+    def test_generates_both_files(self, applicant, tmp_path):
+        tailored = json.loads(json.dumps(BASE_RESUME))
+
+        def _router(task, prompt, **kwargs):
+            if task == "resume_generate":
+                return tailored
+            if task == "cover_letter":
+                return SAMPLE_COVER_LETTER
+            raise KeyError(task)
 
         job_data = {
             "description": "Looking for DevOps Engineer with CI/CD",
@@ -61,8 +68,8 @@ class TestGenerateApplicationDocs:
             "title": "DevOps Engineer",
         }
 
-        # Mock the fit analysis to avoid extra API call
-        with patch("src.jobs.analyzer.JobAnalyzer") as MockAnalyzer:
+        with patch("src.llm.router.router.complete", side_effect=_router), \
+             patch("src.jobs.analyzer.JobAnalyzer") as MockAnalyzer:
             mock_analyzer = MagicMock()
             mock_analyzer.analyze_fit.return_value = None
             MockAnalyzer.return_value = mock_analyzer
@@ -74,24 +81,16 @@ class TestGenerateApplicationDocs:
         assert os.path.exists(result["resume_path"])
         assert os.path.exists(result["cover_letter_path"])
 
-    @patch("src.documents.cover_letter_generator.anthropic")
-    @patch("src.documents.resume_generator.anthropic")
-    def test_resume_failure_still_generates_cover_letter(
-        self, mock_resume_api, mock_cl_api, applicant,
-    ):
-        # Resume API fails
-        mock_resume_client = MagicMock()
-        mock_resume_client.messages.create.side_effect = Exception("API error")
-        mock_resume_api.Anthropic.return_value = mock_resume_client
+    def test_resume_failure_still_generates_cover_letter(self, applicant):
+        def _router(task, prompt, **kwargs):
+            if task == "resume_generate":
+                raise Exception("API error")
+            if task == "cover_letter":
+                return SAMPLE_COVER_LETTER
+            raise KeyError(task)
 
-        # Cover letter succeeds
-        mock_cl_response = MagicMock()
-        mock_cl_response.content = [MagicMock(text=SAMPLE_COVER_LETTER)]
-        mock_cl_client = MagicMock()
-        mock_cl_client.messages.create.return_value = mock_cl_response
-        mock_cl_api.Anthropic.return_value = mock_cl_client
-
-        with patch("src.jobs.analyzer.JobAnalyzer") as MockAnalyzer:
+        with patch("src.llm.router.router.complete", side_effect=_router), \
+             patch("src.jobs.analyzer.JobAnalyzer") as MockAnalyzer:
             mock_analyzer = MagicMock()
             mock_analyzer.analyze_fit.return_value = None
             MockAnalyzer.return_value = mock_analyzer
@@ -103,25 +102,18 @@ class TestGenerateApplicationDocs:
         assert result["resume_path"] is None
         assert result["cover_letter_path"] is not None
 
-    @patch("src.documents.cover_letter_generator.anthropic")
-    @patch("src.documents.resume_generator.anthropic")
-    def test_cover_letter_failure_still_generates_resume(
-        self, mock_resume_api, mock_cl_api, applicant, tmp_path,
-    ):
-        # Resume succeeds
+    def test_cover_letter_failure_still_generates_resume(self, applicant, tmp_path):
         tailored = json.loads(json.dumps(BASE_RESUME))
-        mock_resume_response = MagicMock()
-        mock_resume_response.content = [MagicMock(text=json.dumps(tailored))]
-        mock_resume_client = MagicMock()
-        mock_resume_client.messages.create.return_value = mock_resume_response
-        mock_resume_api.Anthropic.return_value = mock_resume_client
 
-        # Cover letter API fails
-        mock_cl_client = MagicMock()
-        mock_cl_client.messages.create.side_effect = Exception("API error")
-        mock_cl_api.Anthropic.return_value = mock_cl_client
+        def _router(task, prompt, **kwargs):
+            if task == "resume_generate":
+                return tailored
+            if task == "cover_letter":
+                raise Exception("API error")
+            raise KeyError(task)
 
-        with patch("src.jobs.analyzer.JobAnalyzer") as MockAnalyzer:
+        with patch("src.llm.router.router.complete", side_effect=_router), \
+             patch("src.jobs.analyzer.JobAnalyzer") as MockAnalyzer:
             mock_analyzer = MagicMock()
             mock_analyzer.analyze_fit.side_effect = Exception("Analyzer error")
             MockAnalyzer.return_value = mock_analyzer

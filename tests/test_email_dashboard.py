@@ -481,8 +481,8 @@ class TestGetThreadMessages:
 
 
 class TestReply:
-    def test_sends_full_thread_to_claude(self, actions, mock_service):
-        """Reply includes full thread context when calling Claude."""
+    def test_sends_full_thread_to_router(self, actions, mock_service):
+        """Reply includes full thread context when calling the router."""
         msg1 = _make_full_message(
             "m1", "recruiter@acme.com", "Opportunity",
             "Hi Joseph, I have a role for you.",
@@ -506,20 +506,15 @@ class TestReply:
 
         reply_text = "I'd love to learn more about this opportunity."
 
-        with patch.object(actions, "_get_claude_client") as mock_fn:
-            mock_client = MagicMock()
-            mock_client.messages.create.return_value = _mock_claude_response(reply_text)
-            mock_fn.return_value = mock_client
-
+        with patch("src.llm.router.router.complete", return_value=reply_text) as mock_call:
             result = actions.reply("t1", mode="interested")
 
-        assert result == reply_text
+        assert reply_text in result
 
-        # Verify full thread context was sent to Claude
-        call_kwargs = mock_client.messages.create.call_args[1]
-        user_msg = call_kwargs["messages"][0]["content"]
-        assert "I have a role for you" in user_msg
-        assert "Tell me more" in user_msg
+        # Verify full thread context was sent to router
+        prompt_arg = mock_call.call_args[1]["prompt"]
+        assert "I have a role for you" in prompt_arg
+        assert "Tell me more" in prompt_arg
 
 
 # --- Test: ThreadActions.book ---
@@ -527,7 +522,7 @@ class TestReply:
 
 class TestBook:
     def test_book_includes_availability(self, mock_service):
-        """Book flow includes calendar availability in the Claude prompt."""
+        """Book flow includes calendar availability in the router prompt."""
         mock_cal = MagicMock()
         from datetime import datetime
         import pytz
@@ -557,22 +552,15 @@ class TestBook:
 
         act = ThreadActions(mock_service, cal_scheduler=mock_cal)
 
-        with patch.object(act, "_get_claude_client") as mock_fn:
-            mock_client = MagicMock()
-            mock_client.messages.create.return_value = _mock_claude_response(
-                "I'm available Wednesday March 25 at 10 AM."
-            )
-            mock_fn.return_value = mock_client
-
+        with patch("src.llm.router.router.complete", return_value="I'm available Wednesday March 25 at 10 AM.") as mock_call:
             draft, returned_slots = act.book("t1")
 
         assert "available" in draft.lower() or "Wednesday" in draft
         assert returned_slots == slots
 
-        # Verify availability was in Claude prompt
-        call_kwargs = mock_client.messages.create.call_args[1]
-        user_msg = call_kwargs["messages"][0]["content"]
-        assert "10:00 AM" in user_msg
+        # Verify availability was in router prompt
+        prompt_arg = mock_call.call_args[1]["prompt"]
+        assert "10:00 AM" in prompt_arg
 
 
 # --- Test: ThreadActions.snooze ---

@@ -4,11 +4,8 @@ from __future__ import annotations
 
 import json
 import logging
-import re
 from datetime import datetime, timedelta
 from pathlib import Path
-
-import anthropic
 
 from config import settings
 
@@ -16,26 +13,13 @@ logger = logging.getLogger(__name__)
 
 VALID_ENTRY_TYPES = {"daily", "interview", "study", "project", "reflection"}
 
-TAG_SYSTEM_PROMPT = (
-    "You are a tagging assistant. Given journal entry content, generate 3-5 "
-    "short, relevant tags. Respond with a JSON array of strings only, "
-    "no markdown fences, no explanation. Example: [\"python\", \"debugging\", \"api\"]"
-)
-
 
 class JournalManager:
     """Manages markdown journal entries in data/journal/."""
 
-    def __init__(self, journal_dir: Path = None, anthropic_api_key: str = None):
+    def __init__(self, journal_dir: Path = None):
         self._dir = journal_dir or settings.JOURNAL_DIR
         self._dir.mkdir(parents=True, exist_ok=True)
-        self._api_key = anthropic_api_key or settings.ANTHROPIC_API_KEY
-        self._claude_client = None
-
-    def _get_claude_client(self):
-        if self._claude_client is None:
-            self._claude_client = anthropic.Anthropic(api_key=self._api_key)
-        return self._claude_client
 
     def create_entry(self, entry_type, content, tags=None, mood=None, time_spent=None):
         """Create a new journal entry as a markdown file.
@@ -85,20 +69,11 @@ class JournalManager:
         return filename
 
     def _auto_tag(self, content):
-        """Generate tags for content using Claude API."""
+        """Generate tags for content using the LLM router."""
         try:
-            client = self._get_claude_client()
-            response = client.messages.create(
-                model=settings.MODEL_HAIKU,
-                max_tokens=128,
-                system=TAG_SYSTEM_PROMPT,
-                messages=[{"role": "user", "content": content[:2000]}],
-            )
-            raw = response.content[0].text.strip()
-            # Strip markdown fences
-            raw = re.sub(r"^```(?:json)?\s*", "", raw)
-            raw = re.sub(r"\s*```$", "", raw)
-            tags = json.loads(raw)
+            from src.llm.router import router
+            tags = router.complete(task="journal_entry", prompt=content[:2000])
+            # result is schema-validated list from the router
             if isinstance(tags, list):
                 return [str(t) for t in tags[:5]]
         except Exception:

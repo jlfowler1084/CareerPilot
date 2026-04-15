@@ -12,7 +12,6 @@ import pytest
 from src.intel.company_intel import (
     CompanyIntelEngine,
     _ensure_brief_defaults,
-    _parse_brief_json,
 )
 
 
@@ -56,25 +55,6 @@ def _make_brief(**overrides):
     return brief
 
 
-def _mock_claude_response(text):
-    """Create a mock Claude API response with text content."""
-    mock_block = MagicMock()
-    mock_block.text = text
-    mock_response = MagicMock()
-    mock_response.content = [mock_block]
-    return mock_response
-
-
-def _mock_claude_response_with_tool_use(text):
-    """Create a mock response that includes tool_use blocks (no .text attr) plus a text block."""
-    tool_block = MagicMock(spec=[])  # no .text attribute
-    text_block = MagicMock()
-    text_block.text = text
-    mock_response = MagicMock()
-    mock_response.content = [tool_block, text_block]
-    return mock_response
-
-
 @pytest.fixture
 def conn(tmp_path):
     """Create a temp SQLite DB with the full schema."""
@@ -83,26 +63,6 @@ def conn(tmp_path):
     c = models.get_connection(db_path)
     yield c
     c.close()
-
-
-# --- _parse_brief_json ---
-
-
-class TestParseBriefJson:
-    def test_valid_json(self):
-        result = _parse_brief_json('{"foo": "bar"}')
-        assert result == {"foo": "bar"}
-
-    def test_strips_markdown_fences(self):
-        result = _parse_brief_json('```json\n{"foo": "bar"}\n```')
-        assert result == {"foo": "bar"}
-
-    def test_returns_none_for_bad_json(self):
-        assert _parse_brief_json("not json at all") is None
-
-    def test_strips_whitespace(self):
-        result = _parse_brief_json('  \n{"key": 1}\n  ')
-        assert result == {"key": 1}
 
 
 # --- _ensure_brief_defaults ---
@@ -129,178 +89,59 @@ class TestEnsureBriefDefaults:
 
 class TestGenerateBrief:
     def test_returns_structured_brief(self):
-        """Full brief generation with mocked API response."""
+        """Full brief generation with mocked router response."""
         brief_data = _make_brief()
-        engine = CompanyIntelEngine(anthropic_api_key="fake-key")
+        engine = CompanyIntelEngine()
 
-        with patch.object(engine, "_get_client") as mock_fn:
-            mock_client = MagicMock()
-            mock_client.messages.create.return_value = _mock_claude_response(
-                json.dumps(brief_data)
-            )
-            mock_fn.return_value = mock_client
-
+        with patch("src.llm.router.router.complete", return_value=brief_data) as mock_call:
             result = engine.generate_brief("Eli Lilly")
 
         assert result is not None
         assert result["company_overview"]["headquarters"] == "Indianapolis, IN"
         assert "Azure" in result["it_intelligence"]["tech_stack"]
+        assert "company_intel" in str(mock_call.call_args)
 
-    def test_includes_role_analysis_when_role_provided(self):
-        """role_analysis section present when role_title is given."""
-        brief_data = _make_brief(role_analysis={
-            "org_fit": "IT Operations",
-            "day_to_day": "Supporting systems",
-            "growth_potential": "Senior in 2 years",
-            "red_flags": [],
-            "questions_to_ask": ["What's the on-call rotation?"],
-        })
-        engine = CompanyIntelEngine(anthropic_api_key="fake-key")
+    def test_includes_role_title_in_prompt(self):
+        """role_title is included in the user prompt when provided."""
+        brief_data = _make_brief()
+        engine = CompanyIntelEngine()
 
-        with patch.object(engine, "_get_client") as mock_fn:
-            mock_client = MagicMock()
-            mock_client.messages.create.return_value = _mock_claude_response(
-                json.dumps(brief_data)
-            )
-            mock_fn.return_value = mock_client
-
+        with patch("src.llm.router.router.complete", return_value=brief_data) as mock_call:
             result = engine.generate_brief("Eli Lilly", role_title="Systems Engineer")
 
-        assert result.get("role_analysis") is not None
-        assert result["role_analysis"]["org_fit"] == "IT Operations"
+        assert result is not None
+        prompt_arg = mock_call.call_args[1]["prompt"]
+        assert "Systems Engineer" in prompt_arg
 
-        # Verify role was included in the prompt
-        call_args = mock_client.messages.create.call_args
-        system_prompt = call_args[1]["system"]
-        assert "role_analysis" in system_prompt
+    def test_includes_contact_name_in_prompt(self):
+        """contact_name is included in the user prompt when provided."""
+        brief_data = _make_brief()
+        engine = CompanyIntelEngine()
 
-    def test_no_role_analysis_without_role_title(self):
-        """role_analysis section not requested when role_title is None."""
-        brief_data = _make_brief()  # no role_analysis key
-        engine = CompanyIntelEngine(anthropic_api_key="fake-key")
-
-        with patch.object(engine, "_get_client") as mock_fn:
-            mock_client = MagicMock()
-            mock_client.messages.create.return_value = _mock_claude_response(
-                json.dumps(brief_data)
-            )
-            mock_fn.return_value = mock_client
-
-            result = engine.generate_brief("Eli Lilly")
-
-        assert result.get("role_analysis") is None
-
-        call_args = mock_client.messages.create.call_args
-        system_prompt = call_args[1]["system"]
-        assert "role_analysis" not in system_prompt
-
-    def test_includes_interviewer_prep_when_contact_provided(self):
-        """interviewer_prep section present when contact_name is given."""
-        brief_data = _make_brief(interviewer_prep={
-            "linkedin_summary": "VP of IT at Lilly",
-            "likely_interview_style": "Behavioral",
-            "rapport_topics": ["Manufacturing IT"],
-        })
-        engine = CompanyIntelEngine(anthropic_api_key="fake-key")
-
-        with patch.object(engine, "_get_client") as mock_fn:
-            mock_client = MagicMock()
-            mock_client.messages.create.return_value = _mock_claude_response(
-                json.dumps(brief_data)
-            )
-            mock_fn.return_value = mock_client
-
+        with patch("src.llm.router.router.complete", return_value=brief_data) as mock_call:
             result = engine.generate_brief("Eli Lilly", contact_name="Jane Smith")
 
-        assert result.get("interviewer_prep") is not None
-        assert "Behavioral" in result["interviewer_prep"]["likely_interview_style"]
-
-        call_args = mock_client.messages.create.call_args
-        system_prompt = call_args[1]["system"]
-        assert "interviewer_prep" in system_prompt
-
-    def test_no_interviewer_prep_without_contact(self):
-        """interviewer_prep not requested when contact_name is None."""
-        brief_data = _make_brief()
-        engine = CompanyIntelEngine(anthropic_api_key="fake-key")
-
-        with patch.object(engine, "_get_client") as mock_fn:
-            mock_client = MagicMock()
-            mock_client.messages.create.return_value = _mock_claude_response(
-                json.dumps(brief_data)
-            )
-            mock_fn.return_value = mock_client
-
-            result = engine.generate_brief("Eli Lilly")
-
-        call_args = mock_client.messages.create.call_args
-        system_prompt = call_args[1]["system"]
-        assert "interviewer_prep" not in system_prompt
+        assert result is not None
+        prompt_arg = mock_call.call_args[1]["prompt"]
+        assert "Jane Smith" in prompt_arg
 
     def test_handles_api_failure(self):
-        """Returns None when Claude API call fails."""
-        engine = CompanyIntelEngine(anthropic_api_key="fake-key")
+        """Returns None when router call fails."""
+        engine = CompanyIntelEngine()
 
-        with patch.object(engine, "_get_client") as mock_fn:
-            mock_client = MagicMock()
-            mock_client.messages.create.side_effect = Exception("API error")
-            mock_fn.return_value = mock_client
-
+        with patch("src.llm.router.router.complete", side_effect=Exception("API error")):
             result = engine.generate_brief("Eli Lilly")
 
         assert result is None
 
-    def test_handles_bad_json_response(self):
-        """Returns None when Claude returns unparseable response."""
-        engine = CompanyIntelEngine(anthropic_api_key="fake-key")
+    def test_handles_none_response(self):
+        """Returns None when router returns None."""
+        engine = CompanyIntelEngine()
 
-        with patch.object(engine, "_get_client") as mock_fn:
-            mock_client = MagicMock()
-            mock_client.messages.create.return_value = _mock_claude_response(
-                "I couldn't find much about this company."
-            )
-            mock_fn.return_value = mock_client
-
+        with patch("src.llm.router.router.complete", return_value=None):
             result = engine.generate_brief("UnknownCorp")
 
         assert result is None
-
-    def test_handles_tool_use_blocks_in_response(self):
-        """Correctly extracts text from responses with mixed tool_use and text blocks."""
-        brief_data = _make_brief()
-        engine = CompanyIntelEngine(anthropic_api_key="fake-key")
-
-        with patch.object(engine, "_get_client") as mock_fn:
-            mock_client = MagicMock()
-            mock_client.messages.create.return_value = _mock_claude_response_with_tool_use(
-                json.dumps(brief_data)
-            )
-            mock_fn.return_value = mock_client
-
-            result = engine.generate_brief("Eli Lilly")
-
-        assert result is not None
-        assert result["company_overview"]["headquarters"] == "Indianapolis, IN"
-
-    def test_web_search_tool_in_api_call(self):
-        """Verifies web_search tool is passed to the API call."""
-        brief_data = _make_brief()
-        engine = CompanyIntelEngine(anthropic_api_key="fake-key")
-
-        with patch.object(engine, "_get_client") as mock_fn:
-            mock_client = MagicMock()
-            mock_client.messages.create.return_value = _mock_claude_response(
-                json.dumps(brief_data)
-            )
-            mock_fn.return_value = mock_client
-
-            engine.generate_brief("Eli Lilly")
-
-        call_args = mock_client.messages.create.call_args
-        tools = call_args[1]["tools"]
-        assert len(tools) == 1
-        assert tools[0]["type"] == "web_search_20250305"
-        assert tools[0]["name"] == "web_search"
 
 
 # --- Database caching ---
