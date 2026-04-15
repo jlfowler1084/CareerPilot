@@ -281,11 +281,13 @@ import json
 from src.transcripts.transcript_store import (
     store_transcript,
     list_transcripts,
+    list_transcripts_for_application,
     get_transcript,
     update_analysis,
     link_application,
     find_matching_application,
 )
+from src.transcripts.transcript_parser import CANONICAL_KINDS
 from src.db import models
 
 
@@ -532,3 +534,139 @@ class TestCLICommands:
         result = runner.invoke(cli, ["interview", "analyze", "1", "--company", "Test"], input="n\n")
         mock_get.assert_called_once_with(1)
         assert mock_analyze.called
+
+
+# ============================================================================ #
+# Unit 2 — kind field on TranscriptRecord and store helpers (CAR-145)
+# ============================================================================ #
+
+class TestTranscriptRecordKind:
+    """kind field on TranscriptRecord dataclass."""
+
+    def test_default_kind_is_interview(self):
+        record = TranscriptRecord(
+            source="samsung", segments=[], full_text="", duration_seconds=0,
+            language="en", audio_path=None, raw_metadata={},
+        )
+        assert record.kind == "interview"
+
+    def test_kind_can_be_set_explicitly(self):
+        record = TranscriptRecord(
+            source="otter", segments=[], full_text="", duration_seconds=0,
+            language="en", audio_path=None, raw_metadata={}, kind="recruiter_prep",
+        )
+        assert record.kind == "recruiter_prep"
+
+    def test_all_canonical_kinds_importable(self):
+        assert "recruiter_intro" in CANONICAL_KINDS
+        assert "recruiter_prep" in CANONICAL_KINDS
+        assert "phone_screen" in CANONICAL_KINDS
+        assert "technical" in CANONICAL_KINDS
+        assert "panel" in CANONICAL_KINDS
+        assert "debrief" in CANONICAL_KINDS
+        assert "mock" in CANONICAL_KINDS
+        assert "interview" in CANONICAL_KINDS
+
+
+class TestStoreTranscriptKind:
+    """store_transcript kind validation and round-trip via get_transcript."""
+
+    def _make_record(self, kind: str = "interview") -> "TranscriptRecord":
+        return TranscriptRecord(
+            source="otter", segments=[], full_text="Test transcript",
+            duration_seconds=60.0, language="en", audio_path=None, raw_metadata={}, kind=kind,
+        )
+
+    def test_store_and_retrieve_kind_recruiter_prep(self, tmp_path):
+        db_path = tmp_path / "test.db"
+        row_id = store_transcript(self._make_record("recruiter_prep"), db_path=db_path)
+        retrieved = get_transcript(row_id, db_path=db_path)
+        assert retrieved is not None
+        assert retrieved.kind == "recruiter_prep"
+
+    def test_store_without_kind_defaults_to_interview(self, tmp_path):
+        db_path = tmp_path / "test.db"
+        record = TranscriptRecord(
+            source="samsung", segments=[], full_text="text",
+            duration_seconds=0, language="en", audio_path=None, raw_metadata={},
+        )
+        row_id = store_transcript(record, db_path=db_path)
+        retrieved = get_transcript(row_id, db_path=db_path)
+        assert retrieved.kind == "interview"
+
+    def test_store_invalid_kind_raises_value_error(self, tmp_path):
+        db_path = tmp_path / "test.db"
+        record = self._make_record("garbage_kind")
+        with pytest.raises(ValueError, match="Invalid transcript kind"):
+            store_transcript(record, db_path=db_path)
+
+    def test_list_transcripts_includes_kind(self, tmp_path):
+        db_path = tmp_path / "test.db"
+        store_transcript(self._make_record("technical"), db_path=db_path)
+        rows = list_transcripts(db_path=db_path)
+        assert len(rows) == 1
+        assert rows[0]["kind"] == "technical"
+
+
+class TestListTranscriptsForApplication:
+    """list_transcripts_for_application helper."""
+
+    def _store(self, kind: str, app_id: Optional[int], db_path: Path) -> int:
+        record = TranscriptRecord(
+            source="otter", segments=[], full_text="text",
+            duration_seconds=0, language="en", audio_path=None, raw_metadata={}, kind=kind,
+        )
+        return store_transcript(record, application_id=app_id, db_path=db_path)
+
+    def test_returns_matching_kinds_for_app(self, tmp_path):
+        db_path = tmp_path / "test.db"
+        # Set up two applications (via get_connection to create tables, then insert)
+        conn = models.get_connection(db_path)
+        conn.execute("INSERT INTO applications (id, title, company) VALUES (1, 'SRE', 'Acme')")
+        conn.execute("INSERT INTO applications (id, title, company) VALUES (2, 'DevOps', 'Beta')")
+        conn.commit()
+        conn.close()
+
+        self._store("recruiter_prep", 1, db_path)
+        self._store("recruiter_intro", 1, db_path)
+        self._store("technical", 1, db_path)
+        self._store("technical", 2, db_path)  # different app
+
+        rows = list_transcripts_for_application(
+            1, kinds=["recruiter_prep", "recruiter_intro"], db_path=db_path
+        )
+        assert len(rows) == 2
+        assert all(r["kind"] in ("recruiter_prep", "recruiter_intro") for r in rows)
+
+    def test_no_kind_filter_returns_all_for_app(self, tmp_path):
+        db_path = tmp_path / "test.db"
+        conn = models.get_connection(db_path)
+        conn.execute("INSERT INTO applications (id, title, company) VALUES (1, 'SRE', 'Acme')")
+        conn.commit()
+        conn.close()
+
+        self._store("recruiter_prep", 1, db_path)
+        self._store("technical", 1, db_path)
+
+        rows = list_transcripts_for_application(1, db_path=db_path)
+        assert len(rows) == 2
+
+    def test_empty_app_returns_empty_list(self, tmp_path):
+        db_path = tmp_path / "test.db"
+        rows = list_transcripts_for_application(999, db_path=db_path)
+        assert rows == []
+
+    def test_does_not_return_other_app_rows(self, tmp_path):
+        db_path = tmp_path / "test.db"
+        conn = models.get_connection(db_path)
+        conn.execute("INSERT INTO applications (id, title, company) VALUES (10, 'SRE', 'Acme')")
+        conn.execute("INSERT INTO applications (id, title, company) VALUES (20, 'Dev', 'Beta')")
+        conn.commit()
+        conn.close()
+
+        self._store("technical", 10, db_path)
+        self._store("technical", 20, db_path)
+
+        rows = list_transcripts_for_application(10, db_path=db_path)
+        assert len(rows) == 1
+        assert rows[0]["kind"] == "technical"
