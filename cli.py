@@ -14,6 +14,9 @@ if sys.platform == "win32":
 
 console = Console()
 
+# Canonical transcript kind values — imported at module level for click.Choice
+from src.transcripts.transcript_parser import CANONICAL_KINDS  # noqa: E402
+
 # Categories that support interactive response
 ACTIONABLE_CATEGORIES = {"recruiter_outreach", "interview_request", "offer"}
 
@@ -2045,7 +2048,9 @@ def _prompt_link_application():
 
 @interview.command("import-samsung")
 @click.argument("path")
-def interview_import_samsung(path):
+@click.option("--kind", type=click.Choice(CANONICAL_KINDS), default="interview",
+              help="Transcript kind (recruiter_prep, technical, etc.)")
+def interview_import_samsung(path, kind):
     """Import a Samsung call recording transcript or directory."""
     from src.transcripts.samsung_importer import import_samsung
     from src.transcripts.whisper_transcriber import transcribe
@@ -2071,6 +2076,7 @@ def interview_import_samsung(path):
             console.print("[red]No transcript or audio file found.[/red]")
             return
 
+    record.kind = kind
     # Show summary
     word_count = len(record.full_text.split())
     console.print(f"[green]Imported:[/green] {record.source} | {len(record.segments)} segments | {word_count} words | {record.duration_seconds:.0f}s")
@@ -2078,29 +2084,34 @@ def interview_import_samsung(path):
     # Application linking
     app_id = _prompt_link_application()
     row_id = store_transcript(record, application_id=app_id)
-    console.print(f"[green]Saved as transcript #{row_id}[/green]")
+    console.print(f"[green]Saved as transcript #{row_id} (kind: {kind})[/green]")
 
 
 @interview.command("import-otter")
 @click.argument("file")
-def interview_import_otter(file):
+@click.option("--kind", type=click.Choice(CANONICAL_KINDS), default="interview",
+              help="Transcript kind (recruiter_prep, technical, etc.)")
+def interview_import_otter(file, kind):
     """Import an Otter.ai transcript (.txt or .srt)."""
     from src.transcripts.otter_importer import import_otter
     from src.transcripts.transcript_store import store_transcript
 
     record = import_otter(file)
+    record.kind = kind
     word_count = len(record.full_text.split())
     console.print(f"[green]Imported:[/green] {record.source} | {len(record.segments)} segments | {word_count} words | {record.duration_seconds:.0f}s")
 
     app_id = _prompt_link_application()
     row_id = store_transcript(record, application_id=app_id)
-    console.print(f"[green]Saved as transcript #{row_id}[/green]")
+    console.print(f"[green]Saved as transcript #{row_id} (kind: {kind})[/green]")
 
 
 @interview.command("transcribe")
 @click.argument("audio_file")
 @click.option("--model", default="base", help="Whisper model size (tiny/base/small/medium/large-v3/turbo).")
-def interview_transcribe(audio_file, model):
+@click.option("--kind", type=click.Choice(CANONICAL_KINDS), default="interview",
+              help="Transcript kind (recruiter_prep, technical, etc.)")
+def interview_transcribe(audio_file, model, kind):
     """Transcribe an audio file with local Whisper."""
     from src.transcripts.whisper_transcriber import transcribe
     from src.transcripts.transcript_store import store_transcript
@@ -2112,20 +2123,23 @@ def interview_transcribe(audio_file, model):
         console.print(f"[red]{e}[/red]")
         return
 
+    record.kind = kind
     word_count = len(record.full_text.split())
     console.print(f"[green]Done:[/green] {len(record.segments)} segments | {word_count} words | {record.duration_seconds:.0f}s | Language: {record.language}")
 
     app_id = _prompt_link_application()
     row_id = store_transcript(record, application_id=app_id)
-    console.print(f"[green]Saved as transcript #{row_id}[/green]")
+    console.print(f"[green]Saved as transcript #{row_id} (kind: {kind})[/green]")
 
 
 @interview.command("watch")
 @click.option("--model", default="base", help="Whisper model for audio files.")
-def interview_watch(model):
+@click.option("--kind", type=click.Choice(CANONICAL_KINDS), default="interview",
+              help="Transcript kind applied to every auto-imported file in this session.")
+def interview_watch(model, kind):
     """Watch data/transcripts/ for new files and auto-import."""
     from src.transcripts.watch_folder import watch
-    watch(model_size=model)
+    watch(model_size=model, kind=kind)
 
 
 @interview.command("list")
