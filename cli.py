@@ -5363,6 +5363,209 @@ def intel_prep(application_id):
         conn.close()
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# llm — LLM call log management
+# ─────────────────────────────────────────────────────────────────────────────
+
+@cli.group()
+def llm():
+    """View and manage LLM call logs and budget."""
+
+
+@llm.command("summary")
+@click.option("--days", default=7, show_default=True, help="Look-back window in days.")
+@click.option("--task", "filter_task", default=None, help="Filter by task ID.")
+def llm_summary(days, filter_task):
+    """Show a summary of recent LLM calls grouped by provider and task."""
+    from src.db import models
+
+    conn = models.get_connection()
+    try:
+        where_clauses = ["created_at >= datetime('now', ?)", "latency_ms IS NOT NULL"]
+        params = [f"-{days} days"]
+
+        if filter_task:
+            where_clauses.append("task = ?")
+            params.append(filter_task)
+
+        where_sql = " AND ".join(where_clauses)
+
+        # Per-provider totals
+        provider_rows = conn.execute(
+            f"""
+            SELECT provider_used,
+                   COUNT(*) AS calls,
+                   SUM(tokens_in) AS total_in,
+                   SUM(tokens_out) AS total_out,
+                   ROUND(AVG(latency_ms) / 1000.0, 1) AS avg_latency_s,
+                   SUM(CASE WHEN schema_invalid = 1 THEN 1 ELSE 0 END) AS schema_fails,
+                   SUM(CASE WHEN fallback_reason IS NOT NULL
+                               AND fallback_reason NOT IN (
+                                   'kill_switch','env_override',
+                                   'pii_fallback_blocked','fallback_budget_exhausted'
+                               ) THEN 1 ELSE 0 END) AS infra_fallbacks
+            FROM llm_calls
+            WHERE {where_sql}
+            GROUP BY provider_used
+            ORDER BY calls DESC
+            """,
+            params,
+        ).fetchall()
+
+        # Per-task breakdown
+        task_rows = conn.execute(
+            f"""
+            SELECT task, provider_used,
+                   COUNT(*) AS calls,
+                   SUM(tokens_in) AS total_in,
+                   SUM(tokens_out) AS total_out,
+                   ROUND(AVG(latency_ms) / 1000.0, 1) AS avg_latency_s
+            FROM llm_calls
+            WHERE {where_sql}
+            GROUP BY task, provider_used
+            ORDER BY calls DESC
+            """,
+            params,
+        ).fetchall()
+
+        # Budget status
+        from config import settings
+        budget_row = conn.execute(
+            "SELECT fallback_count_since_reset, last_reset_at FROM llm_budget_resets ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+
+        title = f"LLM Summary — last {days}d"
+        if filter_task:
+            title += f" / task={filter_task}"
+        console.print(Panel(f"[bold]{title}[/bold]", expand=False))
+
+        # Provider table
+        ptable = Table(show_header=True, header_style="bold cyan", box=None, padding=(0, 1))
+        ptable.add_column("Provider", style="bold")
+        ptable.add_column("Calls", justify="right")
+        ptable.add_column("Tokens In", justify="right")
+        ptable.add_column("Tokens Out", justify="right")
+        ptable.add_column("Avg Latency", justify="right")
+        ptable.add_column("Schema Fails", justify="right")
+        ptable.add_column("Infra Fallbacks", justify="right")
+        for r in provider_rows:
+            ptable.add_row(
+                r["provider_used"],
+                str(r["calls"]),
+                str(r["total_in"] or 0),
+                str(r["total_out"] or 0),
+                f"{r['avg_latency_s']}s",
+                str(r["schema_fails"] or 0),
+                str(r["infra_fallbacks"] or 0),
+            )
+        console.print(ptable)
+
+        if not filter_task:
+            # Per-task table
+            ttable = Table(show_header=True, header_style="bold cyan", box=None, padding=(0, 1))
+            ttable.add_column("Task", style="dim")
+            ttable.add_column("Provider")
+            ttable.add_column("Calls", justify="right")
+            ttable.add_column("Tokens In", justify="right")
+            ttable.add_column("Tokens Out", justify="right")
+            ttable.add_column("Avg Latency", justify="right")
+            for r in task_rows:
+                ttable.add_row(
+                    r["task"],
+                    r["provider_used"],
+                    str(r["calls"]),
+                    str(r["total_in"] or 0),
+                    str(r["total_out"] or 0),
+                    f"{r['avg_latency_s']}s",
+                )
+            console.print("\n[bold]Per-task breakdown[/bold]")
+            console.print(ttable)
+
+        if budget_row:
+            used = budget_row["fallback_count_since_reset"]
+            limit = settings.LLM_FALLBACK_BUDGET_PER_DAY
+            console.print(
+                f"\n[dim]Fallback budget: {used}/{limit} used since {budget_row['last_reset_at']}[/dim]"
+            )
+    finally:
+        conn.close()
+
+
+@llm.command("prune")
+@click.option("--days", default=30, show_default=True, help="Delete rows older than N days.")
+@click.option("--yes", "confirmed", is_flag=True, help="Skip confirmation prompt.")
+def llm_prune(days, confirmed):
+    """Delete LLM call log rows older than N days."""
+    from src.db import models
+
+    conn = models.get_connection()
+    try:
+        count_row = conn.execute(
+            "SELECT COUNT(*) AS n FROM llm_calls WHERE created_at < datetime('now', ?)",
+            (f"-{days} days",),
+        ).fetchone()
+        count = count_row["n"]
+
+        if count == 0:
+            console.print(f"[dim]No rows older than {days} days to prune.[/dim]")
+            return
+
+        if not confirmed:
+            click.confirm(f"Delete {count} rows older than {days} days?", abort=True)
+
+        conn.execute(
+            "DELETE FROM llm_calls WHERE created_at < datetime('now', ?)",
+            (f"-{days} days",),
+        )
+        conn.commit()
+        console.print(f"[green]Pruned {count} rows older than {days} days.[/green]")
+    finally:
+        conn.close()
+
+
+@llm.command("reset-budget")
+@click.option("--yes", "confirmed", is_flag=True, help="Skip confirmation prompt.")
+def llm_reset_budget(confirmed):
+    """Reset the rolling LLM fallback budget counter to zero."""
+    from src.db import models
+
+    conn = models.get_connection()
+    try:
+        row = conn.execute(
+            "SELECT fallback_count_since_reset, last_reset_at FROM llm_budget_resets ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+        if row:
+            console.print(
+                f"[dim]Current budget: {row['fallback_count_since_reset']} fallbacks since {row['last_reset_at']}[/dim]"
+            )
+
+        if not confirmed:
+            click.confirm("Reset fallback budget counter to zero?", abort=True)
+
+        conn.execute(
+            "UPDATE llm_budget_resets SET fallback_count_since_reset = 0, last_reset_at = datetime('now') "
+            "WHERE id = (SELECT id FROM llm_budget_resets ORDER BY id DESC LIMIT 1)"
+        )
+        conn.commit()
+        console.print("[green]Fallback budget reset to 0.[/green]")
+    finally:
+        conn.close()
+
+
+@llm.command("embed-smoke")
+@click.argument("text", default="CareerPilot embedding smoke test")
+def llm_embed_smoke(text):
+    """Send TEXT to the local embed endpoint and print the vector dimension."""
+    from src.llm.router import router
+
+    try:
+        vector = router.embed(task="embed_default", text=text)
+        console.print(f"[green]OK[/green] — dim={len(vector)}, first5={[round(v, 4) for v in vector[:5]]}")
+    except Exception as exc:
+        console.print(f"[red]FAIL[/red] — {exc}")
+        raise SystemExit(1)
+
+
 if __name__ == "__main__":
     try:
         cli()
