@@ -12,6 +12,7 @@ export function useCoaching(applicationId: string) {
   const [sessions, setSessions] = useState<CoachingSession[]>([])
   const [loading, setLoading] = useState(true)
   const [analyzing, setAnalyzing] = useState(false)
+  const [streamingText, setStreamingText] = useState<string>("")
   const [practicing, setPracticing] = useState(false)
   const [evaluating, setEvaluating] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -45,10 +46,11 @@ export function useCoaching(applicationId: string) {
   const analyzeDebrief = useCallback(
     async (notes: string, jobDescription?: string) => {
       setAnalyzing(true)
+      setStreamingText("")
       setError(null)
       try {
         const controller = new AbortController()
-        const clientTimeout = setTimeout(() => controller.abort(), 95_000)
+        const clientTimeout = setTimeout(() => controller.abort(), 305_000)
 
         let resp: Response
         try {
@@ -70,14 +72,62 @@ export function useCoaching(applicationId: string) {
           }
           throw err
         }
-        clearTimeout(clientTimeout)
 
         if (!resp.ok) {
+          clearTimeout(clientTimeout)
           const data = await resp.json()
           throw new Error(data.error || "Analysis failed")
         }
-        const session: CoachingSession = await resp.json()
-        setSessions((prev) => [session, ...prev])
+
+        // Consume SSE stream — server sends event: delta, event: done, event: error
+        const reader = resp.body!.getReader()
+        const decoder = new TextDecoder()
+        let buffer = ""
+        let session: CoachingSession | null = null
+
+        try {
+          while (true) {
+            const { done, value } = await reader.read()
+            if (done) break
+
+            buffer += decoder.decode(value, { stream: true })
+            const lines = buffer.split("\n")
+            buffer = lines.pop() ?? ""
+
+            let currentEvent = ""
+            for (const line of lines) {
+              if (line.startsWith("event: ")) {
+                currentEvent = line.slice(7).trim()
+              } else if (line.startsWith("data: ")) {
+                const raw = line.slice(6).trim()
+                let parsed: Record<string, unknown>
+                try {
+                  parsed = JSON.parse(raw)
+                } catch {
+                  continue
+                }
+
+                if (currentEvent === "delta" && typeof parsed.text === "string") {
+                  setStreamingText((prev) => prev + parsed.text)
+                } else if (currentEvent === "done") {
+                  session = parsed as unknown as CoachingSession
+                } else if (currentEvent === "error") {
+                  throw new Error((parsed.error as string) || "Stream error")
+                }
+                currentEvent = ""
+              }
+            }
+          }
+        } finally {
+          clearTimeout(clientTimeout)
+          reader.releaseLock()
+        }
+
+        if (!session) {
+          throw new Error("No session data received from stream")
+        }
+
+        setSessions((prev) => [session!, ...prev])
         return session
       } catch (e) {
         const msg = e instanceof Error ? e.message : "Analysis failed"
@@ -85,6 +135,7 @@ export function useCoaching(applicationId: string) {
         return null
       } finally {
         setAnalyzing(false)
+        setStreamingText("")
       }
     },
     [applicationId]
@@ -190,6 +241,7 @@ export function useCoaching(applicationId: string) {
     stats,
     loading,
     analyzing,
+    streamingText,
     practicing,
     evaluating,
     error,
