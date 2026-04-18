@@ -132,6 +132,9 @@ export function useCoaching(applicationId: string) {
       } catch (e) {
         const msg = e instanceof Error ? e.message : "Analysis failed"
         setError(msg)
+        // Server may have completed and persisted even if the SSE connection dropped
+        // before the client received event: done — refresh from DB to surface it
+        fetchSessions()
         return null
       } finally {
         setAnalyzing(false)
