@@ -23,7 +23,10 @@ export function Header({ activeCount, totalCount }: HeaderProps) {
     <header className="bg-white border-b border-zinc-200 px-6 py-4 flex items-center justify-between">
       <div>
         <h1 className="text-lg font-bold text-zinc-900">{title}</h1>
-        <p className="text-xs text-zinc-400 font-mono mt-0.5">
+        <p
+          className="text-xs text-zinc-400 font-mono mt-0.5"
+          suppressHydrationWarning
+        >
           {format(new Date(), "EEEE, MMMM d, yyyy")}
         </p>
       </div>
