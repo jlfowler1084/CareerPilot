@@ -1,6 +1,6 @@
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { redirect } from "next/navigation"
-import OverviewClient from "./overview-client"
+import OverviewContent from "./overview-content"
 import type { Application, ApplicationEvent } from "@/types"
 
 export default async function OverviewPage() {
@@ -33,7 +33,7 @@ export default async function OverviewPage() {
   ])
 
   return (
-    <OverviewClient
+    <OverviewContent
       initialApplications={applications as Application[] | null}
       initialEvents={events as ApplicationEvent[] | null}
       initialNewMatchCount={newMatchCount ?? 0}
