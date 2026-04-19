@@ -16,7 +16,13 @@ export function RelativeTime({ date, className }: RelativeTimeProps) {
   return (
     <Tooltip>
       <TooltipTrigger
-        render={<time dateTime={d.toISOString()} className={className} />}
+        render={
+          <time
+            dateTime={d.toISOString()}
+            className={className}
+            suppressHydrationWarning
+          />
+        }
       >
         {relative}
       </TooltipTrigger>

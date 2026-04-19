@@ -535,13 +535,15 @@ export default function OverviewContent({
                     </p>
                     <p className="text-[10px] text-zinc-500">
                       {event.company} &middot;{" "}
-                      {new Date(event.date).toLocaleDateString(undefined, {
-                        weekday: "short",
-                        month: "short",
-                        day: "numeric",
-                        hour: "numeric",
-                        minute: "2-digit",
-                      })}
+                      <span suppressHydrationWarning>
+                        {new Date(event.date).toLocaleDateString("en-US", {
+                          weekday: "short",
+                          month: "short",
+                          day: "numeric",
+                          hour: "numeric",
+                          minute: "2-digit",
+                        })}
+                      </span>
                     </p>
                   </div>
                 </div>
