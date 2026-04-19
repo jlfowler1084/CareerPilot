@@ -66,7 +66,10 @@ class LLMRouter:
         """
         if settings.LLM_KILL_SWITCH:
             return "claude"
-        env_key = "CAREERPILOT_LLM_TASK_" + task.upper().replace("-", "_")
+        task_upper = task.upper().replace("-", "_")
+        shared_key = "LLM_ROUTING_TASK_" + task_upper
+        project_key = "CAREERPILOT_LLM_TASK_" + task_upper
+        env_key = shared_key if os.getenv(shared_key) else project_key
         override = os.getenv(env_key, "")
         if override == "local":
             return "local"
@@ -86,7 +89,10 @@ class LLMRouter:
         Returns:
             Claude model ID string.
         """
-        env_key = "CAREERPILOT_LLM_TASK_" + task.upper().replace("-", "_")
+        task_upper = task.upper().replace("-", "_")
+        shared_key = "LLM_ROUTING_TASK_" + task_upper
+        project_key = "CAREERPILOT_LLM_TASK_" + task_upper
+        env_key = shared_key if os.getenv(shared_key) else project_key
         override = os.getenv(env_key, "")
         if override and override not in ("local", "claude"):
             return override  # explicit Claude model ID in env var
@@ -121,7 +127,10 @@ class LLMRouter:
         system_prompt = cfg["system_prompt"]
         effective_schema = schema if schema is not None else cfg.get("schema")
 
-        env_key = "CAREERPILOT_LLM_TASK_" + task.upper().replace("-", "_")
+        task_upper = task.upper().replace("-", "_")
+        shared_key = "LLM_ROUTING_TASK_" + task_upper
+        project_key = "CAREERPILOT_LLM_TASK_" + task_upper
+        env_key = shared_key if os.getenv(shared_key) else project_key
         env_override = os.getenv(env_key, "")
 
         def _return(response: ProviderResponse) -> Union[Dict, List, str]:
