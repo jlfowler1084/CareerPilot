@@ -16,23 +16,22 @@ import yaml
 # ---------------------------------------------------------------------------
 
 CLAUDEINFRA_ROOT = Path(os.getenv("CLAUDEINFRA_ROOT", "F:/Projects/ClaudeInfra"))
-SCENARIO_DIR = (
-    CLAUDEINFRA_ROOT
-    / ".worktrees/INFRA-187-llm-routing-contract/configs/llm-routing/conformance/scenarios"
-)
+SCENARIO_DIR = CLAUDEINFRA_ROOT / "configs/llm-routing/conformance/scenarios"
+SCHEMA_PATH = CLAUDEINFRA_ROOT / "configs/llm-routing/config.schema.json"
 
 
-def load_runtime_scenarios():
+def load_scenarios_by_type(type_str: str):
     scenarios = []
     for path in sorted(glob.glob(str(SCENARIO_DIR / "*.yaml"))):
         with open(path) as f:
             scenario = yaml.safe_load(f)
-        if scenario.get("test_type") == "runtime":
+        if scenario.get("test_type") == type_str:
             scenarios.append(scenario)
     return scenarios
 
 
-SCENARIOS = load_runtime_scenarios()
+SCENARIOS = load_scenarios_by_type("runtime")
+SCHEMA_VALIDATION_SCENARIOS = load_scenarios_by_type("schema_validation")
 
 
 # ---------------------------------------------------------------------------
@@ -337,3 +336,30 @@ def test_conformance_scenario(scenario, monkeypatch):
                 f"Expected budget NOT consumed but count changed: "
                 f"{local_fail_count} vs {infra_fail_count}"
             )
+
+
+# ---------------------------------------------------------------------------
+# Schema validation conformance tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("scenario", SCHEMA_VALIDATION_SCENARIOS, ids=lambda s: s["id"])
+def test_schema_validation_scenario(scenario):
+    import json
+
+    import jsonschema
+
+    config = scenario["inputs"]["config_json"]
+    with open(SCHEMA_PATH) as f:
+        schema = json.load(f)
+
+    try:
+        jsonschema.validate(instance=config, schema=schema)
+        validation_fails = False
+    except jsonschema.ValidationError:
+        validation_fails = True
+
+    assert validation_fails == scenario["expected"]["validation_fails"], (
+        f"validation_fails: expected {scenario['expected']['validation_fails']}, "
+        f"got {validation_fails}"
+    )
