@@ -258,7 +258,7 @@ export default function OverviewContent({
       const { count } = await supabase
         .from("search_cache")
         .select("*", { count: "exact", head: true })
-        .gte("cached_at", since)
+        .gte("searched_at", since)
       setNewMatchCount(count || 0)
     }
     fetchNewMatches()

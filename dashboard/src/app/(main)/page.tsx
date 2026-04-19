@@ -29,7 +29,7 @@ export default async function OverviewPage() {
     supabase
       .from("search_cache")
       .select("*", { count: "exact", head: true })
-      .gte("cached_at", new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()),
+      .gte("searched_at", new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()),
   ])
 
   return (
