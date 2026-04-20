@@ -159,9 +159,10 @@ class LocalProvider(Provider):
             "model": model,
             "messages": messages,
             "max_tokens": max_tokens,
-            # Always disable thinking — required for Qwen3 models in non-thinking mode
-            "extra_body": {"chat_template_kwargs": {"enable_thinking": False}},
         }
+        # Qwen3 requires thinking disabled; other families don't support this parameter
+        if "qwen3" in self._chat_model.lower():
+            kwargs["extra_body"] = {"chat_template_kwargs": {"enable_thinking": False}}
         if temperature is not None:
             kwargs["temperature"] = temperature
         if schema is not None:
