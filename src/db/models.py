@@ -222,6 +222,7 @@ def _migrate_applications(conn):
         ("external_status", "TEXT"),
         ("external_status_updated", "TEXT"),
         ("withdraw_date", "TEXT"),
+        ("message_id", "TEXT DEFAULT ''"),
     ]
     for col_name, col_def in migrations:
         if not _column_exists(conn, "applications", col_name):

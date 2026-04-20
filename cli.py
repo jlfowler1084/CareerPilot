@@ -1566,6 +1566,88 @@ def tracker_stale():
     console.print(table)
 
 
+_IMPORT_STATUS_CHOICES = sorted({
+    "found", "interested", "applied", "phone_screen",
+    "interview", "offer", "rejected", "withdrawn", "ghosted",
+})
+
+
+@tracker.command("import-from-email")
+@click.argument("message_id")
+@click.option(
+    "--status", "initial_status",
+    type=click.Choice(_IMPORT_STATUS_CHOICES),
+    default="found",
+    show_default=True,
+    help="Initial application status.",
+)
+@click.option("--dry-run", is_flag=True, help="Extract and preview without saving.")
+def tracker_import_from_email(message_id, initial_status, dry_run):
+    """Create an application from a Gmail message with a PDF/DOCX attachment."""
+    from config import settings
+
+    from src.gmail.attachments import extract_job_description_from_email
+    from src.gmail.auth import get_gmail_service
+    from src.jobs.tracker import ApplicationTracker
+
+    t = ApplicationTracker()
+    try:
+        existing = t.find_application_by_message_id(message_id)
+        if existing:
+            console.print(
+                f"[yellow]Application already imported from this email:[/yellow] "
+                f"#{existing['id']} {existing.get('title') or '(untitled)'} @ "
+                f"{existing.get('company') or '(unknown)'}"
+            )
+            return
+
+        try:
+            service = get_gmail_service(
+                credentials_file=settings.GOOGLE_CREDENTIALS_FILE,
+                token_path=settings.GMAIL_TOKEN_PATH,
+                scopes=settings.GMAIL_SCOPES,
+            )
+        except FileNotFoundError as exc:
+            console.print(f"[red]{exc}[/red]")
+            raise click.Abort()
+
+        result = extract_job_description_from_email(service, message_id)
+        if not result:
+            console.print(
+                f"[red]No supported attachment (PDF or DOCX) found "
+                f"on message {message_id}.[/red]"
+            )
+            raise click.Abort()
+
+        console.print(f"\n[bold]Extracted from {result['filename']}[/bold]")
+        console.print(f"  Title:   {result['title'] or '[dim](not detected)[/dim]'}")
+        console.print(f"  Company: {result['company'] or '[dim](not detected)[/dim]'}")
+        console.print(f"  Length:  {len(result['description'])} chars")
+
+        if dry_run:
+            console.print("\n[yellow]--dry-run set; not saving.[/yellow]")
+            return
+
+        app_id = t.save_job(
+            {
+                "title": result["title"] or "(untitled)",
+                "company": result["company"] or "(unknown)",
+                "description": result["description"],
+                "source": "email_import",
+                "message_id": message_id,
+            },
+            status=initial_status,
+        )
+        console.print(
+            f"\n[green]Created application #{app_id}: "
+            f"{result['title'] or '(untitled)'} @ "
+            f"{result['company'] or '(unknown)'} "
+            f"[status={initial_status}][/green]"
+        )
+    finally:
+        t.close()
+
+
 @cli.group(invoke_without_command=True)
 @click.pass_context
 def portals(ctx):

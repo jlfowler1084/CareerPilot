@@ -9,6 +9,7 @@ rich
 click
 pyperclip
 python-docx
+pdfminer.six
 pytest
 jsonschema>=4.0.0
 openai>=1.40.0,<2.0.0
