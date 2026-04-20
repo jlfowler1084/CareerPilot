@@ -5,7 +5,7 @@ import { parseJsonResponse } from "@/lib/json-utils"
 import { getUserName } from "@/lib/user-profile"
 import type { Json } from "@/types/database.types"
 
-export const maxDuration = 90
+export const maxDuration = 300
 
 function buildCoachingSystemPrompt(name: string) {
   const safeName = (name || '').replace(/[`$\\]/g, '')
@@ -87,12 +87,13 @@ export async function POST(req: NextRequest) {
 
     // Haiku: structured extraction from interview transcript (classification-level task)
     // 8192 max_tokens: full transcripts (~15K input tokens) produce ~7K output tokens for detailed per-question analysis
+    // stream: true — prevents 90s wall on long transcripts (CAR-148)
     const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), 90_000)
+    const timeout = setTimeout(() => controller.abort(), 300_000)
 
-    let resp: Response
+    let anthropicResp: Response
     try {
-      resp = await fetch("https://api.anthropic.com/v1/messages", {
+      anthropicResp = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -102,6 +103,7 @@ export async function POST(req: NextRequest) {
         body: JSON.stringify({
           model: process.env.MODEL_HAIKU || "claude-haiku-4-5-20251001",
           max_tokens: 8192,
+          stream: true,
           system: buildCoachingSystemPrompt(getUserName(user)),
           messages: [{ role: "user", content: contextParts.join("\n") }],
         }),
@@ -111,121 +113,202 @@ export async function POST(req: NextRequest) {
       clearTimeout(timeout)
       if (err instanceof Error && err.name === "AbortError") {
         return NextResponse.json(
-          { error: "Analysis timed out after 90s. Try a shorter transcript or click Retry." },
+          { error: "Analysis timed out after 5 minutes. Try a shorter transcript or click Retry." },
           { status: 504 }
         )
       }
       throw err
     }
-    clearTimeout(timeout)
 
-    if (!resp.ok) {
-      const errBody = await resp.text()
-      console.error("Claude API error:", resp.status, errBody)
+    if (!anthropicResp.ok) {
+      clearTimeout(timeout)
+      const errBody = await anthropicResp.text()
+      console.error("Claude API error:", anthropicResp.status, errBody)
       return NextResponse.json({ error: "AI analysis failed" }, { status: 502 })
     }
 
-    const data = await resp.json()
+    // Stream SSE back to the client, persist only after a successful full stream
+    const encoder = new TextEncoder()
 
-    // Check for truncation before attempting to parse
-    if (data.stop_reason === "max_tokens") {
-      console.error("Claude response truncated: used", data.usage?.output_tokens, "output tokens")
-      return NextResponse.json(
-        { error: "AI response was truncated — the transcript may be too long for analysis. Try a shorter excerpt." },
-        { status: 502 }
-      )
+    function sseChunk(event: string, data: string): Uint8Array {
+      return encoder.encode(`event: ${event}\ndata: ${data}\n\n`)
     }
 
-    const textBlock = data.content?.find((c: { type: string }) => c.type === "text")
-    const finalText = textBlock?.text || ""
+    const stream = new ReadableStream({
+      async start(streamController) {
+        let accumulatedText = ""
+        let stopReason: string | null = null
 
-    if (!finalText) {
-      return NextResponse.json({ error: "No response generated" }, { status: 502 })
-    }
+        try {
+          const reader = anthropicResp.body!.getReader()
+          const decoder = new TextDecoder()
+          let buffer = ""
 
-    // Parse JSON from response (sanitize LLM artifacts first)
-    let analysis: Record<string, unknown>
-    try {
-      analysis = parseJsonResponse(finalText)
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : "Failed to parse AI response"
-      return NextResponse.json({ error: msg }, { status: 502 })
-    }
+          while (true) {
+            const { done, value } = await reader.read()
+            if (done) break
 
-    // Step 5: Merge AI analysis with pattern analysis
-    const overallScore = typeof analysis.overall_score === "number" ? analysis.overall_score : 5
-    const strongPoints = Array.isArray(analysis.strong_points) ? analysis.strong_points : []
-    const improvements = Array.isArray(analysis.improvements) ? analysis.improvements : []
+            buffer += decoder.decode(value, { stream: true })
+            const lines = buffer.split("\n")
+            buffer = lines.pop() ?? ""
 
-    // Step 6: Insert into interview_coaching table
-    const aiAnalysisJson = {
-      summary: analysis.summary || "",
-      question_analyses: analysis.question_analyses || [],
-      top_3_focus_areas: analysis.top_3_focus_areas || [],
-    } as unknown as Json
+            for (const line of lines) {
+              if (!line.startsWith("data: ")) continue
+              const raw = line.slice(6).trim()
+              if (raw === "[DONE]") continue
 
-    const { data: session, error: insertError } = await supabase
-      .from("interview_coaching")
-      .insert({
-        application_id: applicationId || null,
-        user_id: user.id,
-        session_type: sessionType,
-        raw_input: rawInput,
-        ai_analysis: aiAnalysisJson,
-        overall_score: overallScore,
-        strong_points: strongPoints as unknown as Json,
-        improvements: improvements as unknown as Json,
-        patterns_detected: patterns as unknown as Json,
-      })
-      .select()
-      .single()
+              let parsed: Record<string, unknown>
+              try {
+                parsed = JSON.parse(raw)
+              } catch {
+                continue
+              }
 
-    if (insertError) {
-      console.error("Failed to store coaching session:", insertError.message)
-      return NextResponse.json({ error: "Failed to store coaching session" }, { status: 500 })
-    }
+              const evtType = parsed.type as string
 
-    // Step 7: Also persist to debriefs table for history/export (CAR-127)
-    // Only for debrief session types with a linked application
-    if (sessionType === "debrief" && applicationId) {
-      const modelUsed = process.env.MODEL_HAIKU || "claude-haiku-4-5-20241022"
+              if (evtType === "content_block_delta") {
+                const delta = parsed.delta as Record<string, unknown>
+                if (delta?.type === "text_delta" && typeof delta.text === "string") {
+                  accumulatedText += delta.text
+                  streamController.enqueue(sseChunk("delta", JSON.stringify({ text: delta.text })))
+                }
+              } else if (evtType === "message_delta") {
+                const msgDelta = parsed.delta as Record<string, unknown>
+                if (msgDelta?.stop_reason) {
+                  stopReason = msgDelta.stop_reason as string
+                }
+              }
+            }
+          }
+        } catch (err: unknown) {
+          clearTimeout(timeout)
+          const msg = err instanceof Error && err.name === "AbortError"
+            ? "Analysis timed out after 5 minutes. Try a shorter transcript or click Retry."
+            : "Stream error during analysis"
+          streamController.enqueue(sseChunk("error", JSON.stringify({ error: msg })))
+          streamController.close()
+          return
+        }
 
-      // Look up application stage for context
-      const { data: app } = await supabase
-        .from("applications")
-        .select("status")
-        .eq("id", applicationId)
-        .maybeSingle()
+        clearTimeout(timeout)
 
-      const { data: debrief, error: debriefError } = await supabase
-        .from("debriefs")
-        .insert({
-          application_id: applicationId,
-          user_id: user.id,
-          stage: app?.status || "interview",
-          ai_analysis: {
-            ...analysis,
+        if (stopReason === "max_tokens") {
+          console.error("Claude response truncated at max_tokens")
+          streamController.enqueue(sseChunk("error", JSON.stringify({
+            error: "AI response was truncated — the transcript may be too long for analysis. Try a shorter excerpt.",
+          })))
+          streamController.close()
+          return
+        }
+
+        if (!accumulatedText) {
+          streamController.enqueue(sseChunk("error", JSON.stringify({ error: "No response generated" })))
+          streamController.close()
+          return
+        }
+
+        // Parse JSON from accumulated stream (sanitize LLM artifacts first)
+        let analysis: Record<string, unknown>
+        try {
+          analysis = parseJsonResponse(accumulatedText)
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : "Failed to parse AI response"
+          streamController.enqueue(sseChunk("error", JSON.stringify({ error: msg })))
+          streamController.close()
+          return
+        }
+
+        // Merge AI analysis with pattern analysis
+        const overallScore = typeof analysis.overall_score === "number" ? analysis.overall_score : 5
+        const strongPoints = Array.isArray(analysis.strong_points) ? analysis.strong_points : []
+        const improvements = Array.isArray(analysis.improvements) ? analysis.improvements : []
+
+        // Insert into interview_coaching table
+        const aiAnalysisJson = {
+          summary: analysis.summary || "",
+          question_analyses: analysis.question_analyses || [],
+          top_3_focus_areas: analysis.top_3_focus_areas || [],
+        } as unknown as Json
+
+        const { data: session, error: insertError } = await supabase
+          .from("interview_coaching")
+          .insert({
+            application_id: applicationId || null,
+            user_id: user.id,
+            session_type: sessionType,
+            raw_input: rawInput,
+            ai_analysis: aiAnalysisJson,
             overall_score: overallScore,
-            strong_points: strongPoints,
-            improvements,
-            patterns_detected: patterns,
-          } as unknown as Json,
-          model_used: modelUsed,
-          generation_cost_cents: 0,
-        })
-        .select()
-        .single()
+            strong_points: strongPoints as unknown as Json,
+            improvements: improvements as unknown as Json,
+            patterns_detected: patterns as unknown as Json,
+          })
+          .select()
+          .single()
 
-      if (debriefError) {
-        // Log but don't fail — the coaching session was already saved
-        console.error("Failed to store debrief record:", debriefError.message)
-      }
+        if (insertError) {
+          console.error("Failed to store coaching session:", insertError.message)
+          streamController.enqueue(sseChunk("error", JSON.stringify({ error: "Failed to store coaching session" })))
+          streamController.close()
+          return
+        }
 
-      // Return both the coaching session and the debrief record
-      return NextResponse.json({ ...session, debrief: debrief || null }, { status: 201 })
-    }
+        // Also persist to debriefs table for history/export (CAR-127)
+        // Only for debrief session types with a linked application
+        let debriefRecord: Record<string, unknown> | null = null
+        if (sessionType === "debrief" && applicationId) {
+          const modelUsed = process.env.MODEL_HAIKU || "claude-haiku-4-5-20241022"
 
-    return NextResponse.json(session, { status: 201 })
+          const { data: app } = await supabase
+            .from("applications")
+            .select("status")
+            .eq("id", applicationId)
+            .maybeSingle()
+
+          const { data: debrief, error: debriefError } = await supabase
+            .from("debriefs")
+            .insert({
+              application_id: applicationId,
+              user_id: user.id,
+              stage: app?.status || "interview",
+              ai_analysis: {
+                ...analysis,
+                overall_score: overallScore,
+                strong_points: strongPoints,
+                improvements,
+                patterns_detected: patterns,
+              } as unknown as Json,
+              model_used: modelUsed,
+              generation_cost_cents: 0,
+            })
+            .select()
+            .single()
+
+          if (debriefError) {
+            // Log but don't fail — coaching session was already saved
+            console.error("Failed to store debrief record:", debriefError.message)
+          } else {
+            debriefRecord = debrief as unknown as Record<string, unknown>
+          }
+        }
+
+        // Send final assembled payload — same shape the hook previously got from resp.json()
+        const donePayload = debriefRecord
+          ? { ...session, debrief: debriefRecord }
+          : session
+        streamController.enqueue(sseChunk("done", JSON.stringify(donePayload)))
+        streamController.close()
+      },
+    })
+
+    return new Response(stream, {
+      status: 200,
+      headers: {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        Connection: "keep-alive",
+      },
+    })
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error)
     console.error("Coaching analyze error:", message)

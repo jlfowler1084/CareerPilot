@@ -33,6 +33,7 @@ export function CoachingSection({ application }: CoachingSectionProps) {
   const {
     latestSession,
     analyzing,
+    streamingText,
     practicing,
     evaluating,
     error,
@@ -248,6 +249,14 @@ export function CoachingSection({ application }: CoachingSectionProps) {
                   Cancel
                 </button>
               </div>
+              {/* Live streaming preview — last ~30 lines while analysis is in flight */}
+              {analyzing && streamingText && (
+                <div className="bg-zinc-900 rounded-lg p-3 max-h-48 overflow-y-auto">
+                  <pre className="text-[10px] text-zinc-300 font-mono whitespace-pre-wrap leading-relaxed">
+                    {streamingText.split("\n").slice(-30).join("\n")}
+                  </pre>
+                </div>
+              )}
             </div>
           )}
 
