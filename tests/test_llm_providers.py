@@ -500,6 +500,78 @@ class TestLocalProviderSchemaTask:
 
 
 # ---------------------------------------------------------------------------
+# LocalProvider — Qwen3 extra_body gate
+# ---------------------------------------------------------------------------
+
+class TestLocalProviderQwen3Gate:
+    def _make_provider(self, chat_model: str) -> LocalProvider:
+        return LocalProvider(
+            chat_base_url="http://localhost:8000/v1",
+            embed_base_url="http://localhost:8001/v1",
+            chat_model=chat_model,
+            embed_model="embed-model",
+            api_key="",
+        )
+
+    def _mock_choice(self, content: str = "ok") -> MagicMock:
+        choice = MagicMock()
+        choice.message.content = content
+        choice.finish_reason = "stop"
+        return choice
+
+    def test_qwen3_current_includes_extra_body(self):
+        """qwen3.5-35b-a3b-fp8 → extra_body with enable_thinking=False is present."""
+        provider = self._make_provider("qwen3.5-35b-a3b-fp8")
+        mock_client = MagicMock()
+        mock_client.chat.completions.create.return_value = MagicMock(
+            choices=[self._mock_choice()]
+        )
+        with patch.object(provider, "_get_chat_client", return_value=mock_client):
+            provider.complete(
+                task="t", system_prompt="", prompt="p",
+                model="qwen3.5-35b-a3b-fp8", max_tokens=64,
+                temperature=None, schema=None,
+            )
+        kw = mock_client.chat.completions.create.call_args[1]
+        assert kw.get("extra_body", {}).get("chat_template_kwargs", {}).get("enable_thinking") is False
+
+    def test_non_qwen3_omits_extra_body(self):
+        """mistral-7b-instruct → extra_body is absent entirely."""
+        provider = self._make_provider("mistral-7b-instruct")
+        mock_client = MagicMock()
+        mock_client.chat.completions.create.return_value = MagicMock(
+            choices=[self._mock_choice()]
+        )
+        with patch.object(provider, "_get_chat_client", return_value=mock_client):
+            provider.complete(
+                task="t", system_prompt="", prompt="p",
+                model="mistral-7b-instruct", max_tokens=64,
+                temperature=None, schema=None,
+            )
+        kw = mock_client.chat.completions.create.call_args[1]
+        assert "extra_body" not in kw
+
+    def test_future_qwen3_variants_include_extra_body(self):
+        """qwen3.6-* and qwen3.7-* variants are matched by the family gate."""
+        for model_id in ("qwen3.6-35b-a3b-fp8", "qwen3.7-72b-instruct"):
+            provider = self._make_provider(model_id)
+            mock_client = MagicMock()
+            mock_client.chat.completions.create.return_value = MagicMock(
+                choices=[self._mock_choice()]
+            )
+            with patch.object(provider, "_get_chat_client", return_value=mock_client):
+                provider.complete(
+                    task="t", system_prompt="", prompt="p",
+                    model=model_id, max_tokens=64,
+                    temperature=None, schema=None,
+                )
+            kw = mock_client.chat.completions.create.call_args[1]
+            assert kw.get("extra_body", {}).get("chat_template_kwargs", {}).get("enable_thinking") is False, (
+                f"expected extra_body for {model_id}"
+            )
+
+
+# ---------------------------------------------------------------------------
 # LocalProvider — URL validation
 # ---------------------------------------------------------------------------
 
