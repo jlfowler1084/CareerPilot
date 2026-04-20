@@ -2853,7 +2853,7 @@ CONTACT_TYPES = [
 
 CONTACT_SOURCES = [
     "staffing_agency", "linkedin", "meetup", "referral",
-    "conference", "cold_outreach", "job_application", "other",
+    "conference", "cold_outreach", "job_application", "email_import", "other",
 ]
 
 CONTACT_METHODS = ["email", "phone", "linkedin", "in_person", "text"]
@@ -3261,6 +3261,48 @@ def contacts_by_type(contact_type):
         return
 
     console.print(_contacts_table(results, title=f"Contacts: {contact_type}"))
+
+
+@contacts.command("create-from-email")
+@click.argument("email")
+@click.option("--name", default=None, help="Contact name (prompted if omitted).")
+def contacts_create_from_email(email, name):
+    """Create a contact from an email address (quick capture)."""
+    from src.db import models
+
+    email = (email or "").strip()
+    if not email:
+        console.print("[red]Email is required.[/red]")
+        raise click.Abort()
+
+    conn = models.get_connection()
+    try:
+        existing = models.find_contact_by_email(conn, email)
+        if existing:
+            company_str = f" ({existing['company']})" if existing.get("company") else ""
+            console.print(
+                f"[yellow]Contact already exists:[/yellow] "
+                f"#{existing['id']} {existing['name']}{company_str} "
+                f"[{existing['contact_type']}]"
+            )
+            return
+
+        if not name:
+            name = click.prompt("  Name").strip()
+        if not name:
+            console.print("[red]Name is required to create a new contact.[/red]")
+            raise click.Abort()
+
+        cid = models.add_contact(
+            conn, name, contact_type="recruiter",
+            email=email, source="email_import",
+        )
+        console.print(
+            f"[green]Added contact #{cid}: {name} <{email}> "
+            f"[recruiter, source=email_import][/green]"
+        )
+    finally:
+        conn.close()
 
 
 # --- Backward-compat: 'recruiters' alias ---

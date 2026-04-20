@@ -8,7 +8,9 @@ import tempfile
 from datetime import datetime, timedelta
 
 import pytest
+from click.testing import CliRunner
 
+from cli import cli
 from src.db import models
 
 
@@ -705,3 +707,108 @@ class TestRelationshipStatusTransitions:
         models.update_contact(conn, cid, relationship_status="do_not_contact")
         c = models.get_contact(conn, cid)
         assert c["relationship_status"] == "do_not_contact"
+
+
+# --- CLI: contacts create-from-email ---
+
+
+@pytest.fixture
+def cli_db(tmp_path, monkeypatch):
+    """Point settings.DB_PATH at a temp DB so CLI commands write there."""
+    db_path = tmp_path / "cli_test.db"
+    monkeypatch.setattr(models.settings, "DB_PATH", db_path)
+    # Pre-create schema so assertions can open the DB directly
+    c = models.get_connection(db_path)
+    c.close()
+    return db_path
+
+
+class TestCreateFromEmailCLI:
+    def test_creates_new_contact_with_name_flag(self, cli_db):
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            ["contacts", "create-from-email", "sarah@tek.com", "--name", "Sarah Kim"],
+        )
+        assert result.exit_code == 0, result.output
+
+        conn = models.get_connection(cli_db)
+        contact = models.find_contact_by_email(conn, "sarah@tek.com")
+        conn.close()
+
+        assert contact is not None
+        assert contact["name"] == "Sarah Kim"
+        assert contact["email"] == "sarah@tek.com"
+        assert contact["contact_type"] == "recruiter"
+        assert contact["source"] == "email_import"
+
+    def test_prompts_for_name_when_omitted(self, cli_db):
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            ["contacts", "create-from-email", "mike@lilly.com"],
+            input="Mike Chen\n",
+        )
+        assert result.exit_code == 0, result.output
+
+        conn = models.get_connection(cli_db)
+        contact = models.find_contact_by_email(conn, "mike@lilly.com")
+        conn.close()
+
+        assert contact is not None
+        assert contact["name"] == "Mike Chen"
+        assert contact["source"] == "email_import"
+
+    def test_duplicate_detection_returns_existing_no_create(self, cli_db):
+        # Seed an existing contact
+        conn = models.get_connection(cli_db)
+        existing_id = models.add_contact(
+            conn, "Original Name", "hiring_manager",
+            email="dupe@example.com", company="Acme",
+        )
+        conn.close()
+
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            ["contacts", "create-from-email", "dupe@example.com", "--name", "Should Not Override"],
+        )
+        assert result.exit_code == 0, result.output
+        assert "already exists" in result.output
+        assert f"#{existing_id}" in result.output
+        assert "Original Name" in result.output
+
+        # Verify no duplicate and original untouched
+        conn = models.get_connection(cli_db)
+        all_contacts = models.list_contacts(conn)
+        dupes = [c for c in all_contacts if c["email"] == "dupe@example.com"]
+        conn.close()
+        assert len(dupes) == 1
+        assert dupes[0]["name"] == "Original Name"
+        assert dupes[0]["contact_type"] == "hiring_manager"
+
+    def test_duplicate_detection_is_case_insensitive(self, cli_db):
+        conn = models.get_connection(cli_db)
+        models.add_contact(
+            conn, "Sarah Kim", "recruiter", email="sarah@tek.com",
+        )
+        conn.close()
+
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            ["contacts", "create-from-email", "SARAH@TEK.COM", "--name", "Different"],
+        )
+        assert result.exit_code == 0, result.output
+        assert "already exists" in result.output
+
+        conn = models.get_connection(cli_db)
+        all_contacts = models.list_contacts(conn)
+        conn.close()
+        assert len(all_contacts) == 1
+
+    def test_command_appears_in_contacts_help(self):
+        runner = CliRunner()
+        result = runner.invoke(cli, ["contacts", "--help"])
+        assert result.exit_code == 0
+        assert "create-from-email" in result.output
