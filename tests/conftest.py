@@ -75,6 +75,29 @@ class _FakeTable:
         self._negate_next = False
         return self
 
+    def ilike(self, field: str, pattern: str) -> "_FakeTable":
+        self._filters.append((field, "ilike", pattern))
+        self._negate_next = False
+        return self
+
+    def contains(self, field: str, value: Any) -> "_FakeTable":
+        self._filters.append((field, "contains", value))
+        return self
+
+    def is_(self, field: str, value: Any) -> "_FakeTable":
+        op = "is_not" if self._negate_next else "is_"
+        self._filters.append((field, op, value))
+        self._negate_next = False
+        return self
+
+    def lte(self, field: str, value: Any) -> "_FakeTable":
+        self._filters.append((field, "lte", value))
+        return self
+
+    def delete(self) -> "_FakeTable":
+        self._operation = "delete"
+        return self
+
     def order(self, field: str, desc: bool = False) -> "_FakeTable":
         self._order = (field, desc)
         return self
@@ -84,6 +107,7 @@ class _FakeTable:
         return self
 
     def _matches(self, row: Dict) -> bool:
+        import re as _re
         for field, op, value in self._filters:
             actual = row.get(field)
             if op == "eq" and actual != value:
@@ -94,9 +118,31 @@ class _FakeTable:
                 return False
             if op == "not_in" and actual in value:
                 return False
+            if op == "ilike":
+                pattern = "".join(
+                    ".*" if c == "%" else _re.escape(c) for c in value
+                )
+                if not _re.search(pattern, str(actual or ""), _re.IGNORECASE):
+                    return False
+            if op == "contains":
+                actual_list = actual if isinstance(actual, list) else []
+                if not all(item in actual_list for item in (value or [])):
+                    return False
+            if op == "is_" and value == "null" and actual is not None:
+                return False
+            if op == "is_not" and value == "null" and actual is None:
+                return False
+            if op == "lte" and (actual is None or actual > value):
+                return False
         return True
 
     def execute(self) -> SimpleNamespace:
+        if self._operation == "delete":
+            matched = [r for r in self._rows if self._matches(r)]
+            for r in matched:
+                self._rows.remove(r)
+            return SimpleNamespace(data=matched)
+
         if self._operation == "insert":
             payload = dict(self._payload)
             now_iso = datetime.now().isoformat()
@@ -169,6 +215,9 @@ def fake_supabase(monkeypatch):
         "src.db.supabase_client.get_supabase_client", lambda: client
     )
     monkeypatch.setattr("config.settings.CAREERPILOT_USER_ID", TEST_USER_ID)
+    # ContactManager reads os.environ directly (not the settings attribute), so
+    # also patch the env var to ensure ContactManager() works during these tests.
+    monkeypatch.setenv("CAREERPILOT_USER_ID", TEST_USER_ID)
     # The tracker imports get_supabase_client lazily inside __init__, so it
     # looks up the attribute on the module at call time — monkeypatch.setattr
     # above covers that path. monkeypatch auto-reverts at teardown; the next
