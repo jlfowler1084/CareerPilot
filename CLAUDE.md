@@ -29,9 +29,29 @@ CareerPilot is a Python CLI application for personal career management:
 - Use `click` for CLI interfaces — `cli.py` is the main entry point
 - Use `Rich` for terminal UI (tables, panels, progress bars, markdown rendering)
 - Use `python-dotenv` to load `.env` — all config via `config/settings.py`
-- SQLite for local data at `data/careerpilot.db`
+- Data layer: see `## Data Layer` below — split across SQLite + Supabase, consolidation in progress (CAR-163)
 - Google OAuth tokens in `data/`, auto-refreshed on expiry
 - Timezone: `America/Indiana/Indianapolis` (EST, no DST)
+
+## Data Layer
+
+**Status: consolidation in progress.** See `docs/brainstorms/CAR-163-application-entry-paths-consolidation-audit.md` for the full audit. End-state decision is **Option (c) — unify on Supabase via Python client** (CAR-164 through CAR-170).
+
+**Current state (pre-migration, as of 2026-04-21):**
+- CLI writes local SQLite at `data/careerpilot.db` (via `src/jobs/tracker.py` `ApplicationTracker`, `src/db/models.py` contact helpers, etc.)
+- Dashboard writes Supabase (via `dashboard/src/hooks/use-applications.ts`, `dashboard/src/app/api/*/route.ts`)
+- **No sync between the two.** A row created via `cli tracker add` does NOT appear on the dashboard, and vice versa.
+
+**End state (post-CAR-165 / M2):**
+- CLI and dashboard both write Supabase. `ApplicationTracker` becomes a thin wrapper around the Supabase Python client.
+- Local SQLite `applications` table is retired. Contacts follow in CAR-168 (M5). Other tables decided in CAR-169 (M6).
+
+**Canonical "add an application" entry paths (once migration lands):**
+- Dashboard "Add Application Manually" form or "Paste URL to auto-extract" — browser UX
+- CLI `tracker add` (wizard), `tracker import-from-email`, or `search` save-on-prompt — terminal/scripting UX
+- Both write the same Supabase `applications` table, scoped by `user_id`.
+
+**Before introducing a new write path for applications or contacts**, read the audit doc and check whether the new path is needed or whether an existing seam (`ApplicationTracker.save_job` or `use-applications.addApplication`) covers it.
 
 ## Directory Structure
 ```
@@ -76,7 +96,7 @@ Source of truth: ClaudeInfra `configs/mcp-server-registry.json` (INFRA-70).
 
 ## Privacy & Safety
 - **Draft-only mode:** Gmail responder saves drafts only — nothing sends without explicit approval
-- **All data stays local:** SQLite + markdown files. Nothing leaves except API calls
+- **Data location:** Split today (SQLite local + Supabase cloud). Post-CAR-163 consolidation, application and contact rows live in Supabase under your authenticated `user_id`; local SQLite only retains tables where "stay local" was an explicit choice (see `## Data Layer`).
 - **OAuth tokens:** Stored locally in `data/`, never committed
 - **API keys:** In `.env`, never committed
 
