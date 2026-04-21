@@ -1585,7 +1585,45 @@ def tracker_stale():
 @click.option("--notes", default="", help="Free-form notes.")
 def tracker_add(title, company, location, url, description, status, notes):
     """Add a job application manually via wizard or flags."""
-    raise click.ClickException("Not yet implemented (CAR-157 in progress)")
+    import sys
+
+    from src.jobs.tracker import ApplicationTracker
+
+    # Non-interactive path: both required flags present
+    if title and company:
+        fields = {
+            "title": title.strip(),
+            "company": company.strip(),
+            "location": location,
+            "url": url,
+            "description": description,
+            "status": status,
+            "notes": notes,
+        }
+    else:
+        # Stubs for Task 5 (no-TTY gate) and Task 6 (wizard). Fail loudly for now.
+        raise click.ClickException("Wizard path not yet implemented")
+
+    t = ApplicationTracker()
+    try:
+        app_id = t.save_job(
+            {
+                "title": fields["title"],
+                "company": fields["company"],
+                "location": fields["location"],
+                "url": fields["url"],
+                "description": fields["description"] or None,
+                "source": "manual",
+                "notes": fields["notes"],
+            },
+            status=fields["status"],
+        )
+        console.print(
+            f"[green]Created application #{app_id}: {fields['title']} @ "
+            f"{fields['company']} [status={fields['status']}][/green]"
+        )
+    finally:
+        t.close()
 
 
 _IMPORT_STATUS_CHOICES = sorted({

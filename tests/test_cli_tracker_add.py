@@ -37,3 +37,94 @@ class TestCommandRegistration:
         for flag in ("--title", "--company", "--location", "--url",
                      "--description", "--status", "--notes"):
             assert flag in result.output
+
+
+class TestNonInteractivePath:
+    def test_creates_row_with_required_flags_only(self, cli_db):
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "tracker", "add",
+            "--title", "Platform Engineer",
+            "--company", "Acme",
+        ])
+        assert result.exit_code == 0, result.output
+        assert "Created application" in result.output
+
+        t = ApplicationTracker(db_path=cli_db)
+        try:
+            jobs = t.get_all_jobs()
+            assert len(jobs) == 1
+            assert jobs[0]["title"] == "Platform Engineer"
+            assert jobs[0]["company"] == "Acme"
+            assert jobs[0]["source"] == "manual"
+            assert jobs[0]["status"] == "interested"
+        finally:
+            t.close()
+
+    def test_all_flags_persist_to_db(self, cli_db):
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "tracker", "add",
+            "--title", "Senior SRE",
+            "--company", "Beta Inc",
+            "--location", "Indianapolis, IN",
+            "--url", "https://beta.com/jobs/42",
+            "--description", "Full job description text.",
+            "--status", "applied",
+            "--notes", "Applied via recruiter email",
+        ])
+        assert result.exit_code == 0, result.output
+
+        t = ApplicationTracker(db_path=cli_db)
+        try:
+            jobs = t.get_all_jobs()
+            assert len(jobs) == 1
+            j = jobs[0]
+            assert j["title"] == "Senior SRE"
+            assert j["company"] == "Beta Inc"
+            assert j["location"] == "Indianapolis, IN"
+            assert j["url"] == "https://beta.com/jobs/42"
+            assert j["description"] == "Full job description text."
+            assert j["status"] == "applied"
+            assert j["notes"] == "Applied via recruiter email"
+            assert j["source"] == "manual"
+        finally:
+            t.close()
+
+    def test_source_is_manual(self, cli_db):
+        """Regardless of other flags, source is always 'manual' for this command."""
+        runner = CliRunner()
+        runner.invoke(cli, ["tracker", "add", "--title", "X", "--company", "Y"])
+
+        t = ApplicationTracker(db_path=cli_db)
+        try:
+            assert t.get_all_jobs()[0]["source"] == "manual"
+        finally:
+            t.close()
+
+    def test_default_status_is_interested(self, cli_db):
+        runner = CliRunner()
+        runner.invoke(cli, ["tracker", "add", "--title", "X", "--company", "Y"])
+
+        t = ApplicationTracker(db_path=cli_db)
+        try:
+            assert t.get_all_jobs()[0]["status"] == "interested"
+        finally:
+            t.close()
+
+    def test_invalid_status_rejected(self, cli_db):
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "tracker", "add",
+            "--title", "X", "--company", "Y",
+            "--status", "not_a_real_status",
+        ])
+        assert result.exit_code != 0
+        # Click's Choice error lists valid options
+        assert "not_a_real_status" in result.output or "Invalid value" in result.output
+
+        t = ApplicationTracker(db_path=cli_db)
+        try:
+            assert len(t.get_all_jobs()) == 0
+        finally:
+            t.close()
