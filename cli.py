@@ -1566,6 +1566,65 @@ def tracker_stale():
     console.print(table)
 
 
+def _run_tracker_add_wizard():
+    """Interactive wizard for `tracker add`. Returns a dict of fields, or None if cancelled."""
+    from rich.prompt import Confirm, Prompt
+
+    from src.jobs.tracker import VALID_STATUSES
+
+    console.print("\n[bold]Add a new application to the tracker.[/bold]")
+    console.print("[dim]Press Ctrl-C at any time to cancel without saving.[/dim]\n")
+
+    # Required fields — re-prompt on empty
+    title = ""
+    while not title.strip():
+        title = Prompt.ask("  Title")
+    company = ""
+    while not company.strip():
+        company = Prompt.ask("  Company")
+
+    location = Prompt.ask("  Location [dim](optional)[/dim]", default="")
+    url = Prompt.ask("  URL [dim](optional)[/dim]", default="")
+
+    description = ""
+    if Confirm.ask("  Open editor for job description?", default=False):
+        description = click.edit() or ""
+
+    status = Prompt.ask(
+        "  Status",
+        choices=sorted(VALID_STATUSES),
+        default="interested",
+    )
+    notes = Prompt.ask("  Notes [dim](optional)[/dim]", default="")
+
+    # Summary panel
+    console.print("\n[bold]Summary:[/bold]")
+    console.print(f"  Title:       {title}")
+    console.print(f"  Company:     {company}")
+    if location:
+        console.print(f"  Location:    {location}")
+    if url:
+        console.print(f"  URL:         {url}")
+    console.print(f"  Status:      {status}")
+    if notes:
+        console.print(f"  Notes:       {notes}")
+    if description:
+        console.print(f"  Description: {len(description)} chars")
+
+    if not Confirm.ask("\nCreate this application?", default=True):
+        return None
+
+    return {
+        "title": title.strip(),
+        "company": company.strip(),
+        "location": location.strip(),
+        "url": url.strip(),
+        "description": description,
+        "status": status,
+        "notes": notes.strip(),
+    }
+
+
 @tracker.command("add")
 @click.option("--title", default=None, help="Job title.")
 @click.option("--company", default=None, help="Company name.")
@@ -1601,14 +1660,21 @@ def tracker_add(title, company, location, url, description, status, notes):
             "notes": notes,
         }
     else:
-        if not sys.stdin.isatty():
+        try:
+            wizard_fields = _run_tracker_add_wizard()
+        except KeyboardInterrupt:
+            console.print("\n[yellow]Cancelled — no application saved.[/yellow]")
+            raise click.Abort()
+        except EOFError:
             console.print(
                 "[red]Error: --title and --company are required "
                 "when not running interactively.[/red]"
             )
             sys.exit(2)
-        # Wizard path stub for Task 6.
-        raise click.ClickException("Wizard path not yet implemented")
+        if wizard_fields is None:
+            console.print("[yellow]Cancelled — no application saved.[/yellow]")
+            return
+        fields = wizard_fields
 
     t = ApplicationTracker()
     try:

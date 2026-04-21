@@ -147,3 +147,81 @@ class TestNoTTY:
             assert len(t.get_all_jobs()) == 0
         finally:
             t.close()
+
+
+class TestInteractivePath:
+    def test_wizard_prompts_when_title_missing(self, cli_db, monkeypatch):
+        """No required flags => wizard runs (verified by the fact that empty stdin fails)."""
+        monkeypatch.setattr("sys.stdin.isatty", lambda: True)
+        runner = CliRunner()
+        # Empty input — wizard will try to read, fail with EOF on the first Prompt.ask
+        result = runner.invoke(cli, ["tracker", "add"], input="")
+        # Non-zero exit — the wizard attempted to prompt. Test is about
+        # routing to the wizard, not successful completion.
+        assert result.exit_code != 0
+
+    def test_wizard_creates_row_on_confirm(self, cli_db, monkeypatch):
+        monkeypatch.setattr("sys.stdin.isatty", lambda: True)
+        # Answers in order: title, company, location, url,
+        # open editor? (N), status, notes, final confirm (Y)
+        answers = "\n".join([
+            "Platform Engineer",           # title
+            "Acme Corp",                   # company
+            "Indianapolis, IN",            # location
+            "https://acme.com/job/1",      # url
+            "n",                           # open editor for description?
+            "interested",                  # status
+            "Heard about it from Mike",    # notes
+            "y",                           # final confirm
+        ]) + "\n"
+        runner = CliRunner()
+        result = runner.invoke(cli, ["tracker", "add"], input=answers)
+        assert result.exit_code == 0, result.output
+        assert "Created application" in result.output
+
+        t = ApplicationTracker(db_path=cli_db)
+        try:
+            jobs = t.get_all_jobs()
+            assert len(jobs) == 1
+            j = jobs[0]
+            assert j["title"] == "Platform Engineer"
+            assert j["company"] == "Acme Corp"
+            assert j["location"] == "Indianapolis, IN"
+            assert j["url"] == "https://acme.com/job/1"
+            assert j["status"] == "interested"
+            assert j["notes"] == "Heard about it from Mike"
+            assert j["source"] == "manual"
+        finally:
+            t.close()
+
+    @patch("click.edit")
+    def test_wizard_skips_editor_when_declined(
+        self, mock_edit, cli_db, monkeypatch,
+    ):
+        monkeypatch.setattr("sys.stdin.isatty", lambda: True)
+        answers = "\n".join([
+            "X", "Y", "", "", "n", "interested", "", "y",
+        ]) + "\n"
+        runner = CliRunner()
+        result = runner.invoke(cli, ["tracker", "add"], input=answers)
+        assert result.exit_code == 0, result.output
+        mock_edit.assert_not_called()
+
+    @patch("click.edit", return_value="Pasted job description here.")
+    def test_wizard_opens_editor_when_accepted(
+        self, mock_edit, cli_db, monkeypatch,
+    ):
+        monkeypatch.setattr("sys.stdin.isatty", lambda: True)
+        answers = "\n".join([
+            "X", "Y", "", "", "y", "interested", "", "y",
+        ]) + "\n"
+        runner = CliRunner()
+        result = runner.invoke(cli, ["tracker", "add"], input=answers)
+        assert result.exit_code == 0, result.output
+        mock_edit.assert_called_once()
+
+        t = ApplicationTracker(db_path=cli_db)
+        try:
+            assert t.get_all_jobs()[0]["description"] == "Pasted job description here."
+        finally:
+            t.close()
