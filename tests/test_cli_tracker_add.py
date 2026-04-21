@@ -128,3 +128,22 @@ class TestNonInteractivePath:
             assert len(t.get_all_jobs()) == 0
         finally:
             t.close()
+
+
+class TestNoTTY:
+    def test_exits_code_2_when_required_missing_and_not_a_tty(
+        self, cli_db, monkeypatch,
+    ):
+        """Missing required flags + no TTY => exit code 2 with clear message."""
+        monkeypatch.setattr("sys.stdin.isatty", lambda: False)
+        runner = CliRunner()
+        result = runner.invoke(cli, ["tracker", "add"])
+        assert result.exit_code == 2
+        assert "--title" in result.output and "--company" in result.output
+        assert "interactively" in result.output.lower()
+
+        t = ApplicationTracker(db_path=cli_db)
+        try:
+            assert len(t.get_all_jobs()) == 0
+        finally:
+            t.close()

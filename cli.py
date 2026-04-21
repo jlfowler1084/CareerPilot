@@ -1601,7 +1601,13 @@ def tracker_add(title, company, location, url, description, status, notes):
             "notes": notes,
         }
     else:
-        # Stubs for Task 5 (no-TTY gate) and Task 6 (wizard). Fail loudly for now.
+        if not sys.stdin.isatty():
+            console.print(
+                "[red]Error: --title and --company are required "
+                "when not running interactively.[/red]"
+            )
+            sys.exit(2)
+        # Wizard path stub for Task 6.
         raise click.ClickException("Wizard path not yet implemented")
 
     t = ApplicationTracker()
