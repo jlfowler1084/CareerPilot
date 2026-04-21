@@ -53,7 +53,12 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+# Prefer CWD when it is the project root (contains config/settings.py), so the
+# script can be invoked from the main repo even when __file__ lives in a
+# git worktree that doesn't have its own .env copy.
+_CWD = Path.cwd()
+_FILE_ROOT = Path(__file__).resolve().parent.parent
+_PROJECT_ROOT = _CWD if (_CWD / "config" / "settings.py").exists() else _FILE_ROOT
 if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 
