@@ -13,14 +13,9 @@ from src.jobs.tracker import ApplicationTracker
 
 
 @pytest.fixture
-def cli_db(tmp_path, monkeypatch):
-    """Point settings.DB_PATH at a temp DB so CLI commands write there."""
-    db_path = tmp_path / "cli_test.db"
-    monkeypatch.setattr(models.settings, "DB_PATH", db_path)
-    # Pre-create schema so direct assertions can open the DB
-    c = models.get_connection(db_path)
-    c.close()
-    return db_path
+def cli_db(fake_supabase):
+    """Fake Supabase client for CLI commands to write through."""
+    return fake_supabase
 
 
 def _fake_extract_result(**overrides):
@@ -63,7 +58,7 @@ class TestImportFromEmailHappyPath:
         assert "Created application" in result.output
 
         # Verify DB
-        tracker = ApplicationTracker(db_path=cli_db)
+        tracker = ApplicationTracker()
         try:
             row = tracker.find_application_by_message_id("msg_abc123")
             assert row is not None
@@ -71,7 +66,7 @@ class TestImportFromEmailHappyPath:
             assert row["company"] == "Acme Corp"
             assert row["source"] == "email_import"
             assert row["status"] == "found"
-            assert "Full job description" in row["description"]
+            assert "Full job description" in row["job_description"]
         finally:
             tracker.close()
 
@@ -88,7 +83,7 @@ class TestImportFromEmailHappyPath:
         )
         assert result.exit_code == 0, result.output
 
-        tracker = ApplicationTracker(db_path=cli_db)
+        tracker = ApplicationTracker()
         try:
             row = tracker.find_application_by_message_id("msg_1")
             assert row["status"] == "interested"
@@ -108,7 +103,7 @@ class TestImportFromEmailHappyPath:
         result = runner.invoke(cli, ["tracker", "import-from-email", "msg_2"])
         assert result.exit_code == 0, result.output
 
-        tracker = ApplicationTracker(db_path=cli_db)
+        tracker = ApplicationTracker()
         try:
             row = tracker.find_application_by_message_id("msg_2")
             assert row["title"] == "(untitled)"
@@ -134,7 +129,7 @@ class TestDryRun:
         assert result.exit_code == 0, result.output
         assert "not saving" in result.output.lower()
 
-        tracker = ApplicationTracker(db_path=cli_db)
+        tracker = ApplicationTracker()
         try:
             assert tracker.find_application_by_message_id("msg_dry") is None
         finally:
@@ -164,7 +159,7 @@ class TestDedupe:
         assert "already imported" in r2.output
 
         # Exactly one row
-        tracker = ApplicationTracker(db_path=cli_db)
+        tracker = ApplicationTracker()
         try:
             stats = tracker.get_stats()
             assert stats["total"] == 1

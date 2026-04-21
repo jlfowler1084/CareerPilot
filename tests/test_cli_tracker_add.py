@@ -13,14 +13,9 @@ from src.jobs.tracker import ApplicationTracker
 
 
 @pytest.fixture
-def cli_db(tmp_path, monkeypatch):
-    """Point settings.DB_PATH at a temp DB so CLI commands write there."""
-    db_path = tmp_path / "cli_test.db"
-    monkeypatch.setattr(models.settings, "DB_PATH", db_path)
-    # Pre-create schema so direct assertions can open the DB
-    c = models.get_connection(db_path)
-    c.close()
-    return db_path
+def cli_db(fake_supabase):
+    """Fake Supabase client for CLI commands to write through."""
+    return fake_supabase
 
 
 class TestCommandRegistration:
@@ -50,7 +45,7 @@ class TestNonInteractivePath:
         assert result.exit_code == 0, result.output
         assert "Created application" in result.output
 
-        t = ApplicationTracker(db_path=cli_db)
+        t = ApplicationTracker()
         try:
             jobs = t.get_all_jobs()
             assert len(jobs) == 1
@@ -75,7 +70,7 @@ class TestNonInteractivePath:
         ])
         assert result.exit_code == 0, result.output
 
-        t = ApplicationTracker(db_path=cli_db)
+        t = ApplicationTracker()
         try:
             jobs = t.get_all_jobs()
             assert len(jobs) == 1
@@ -84,7 +79,7 @@ class TestNonInteractivePath:
             assert j["company"] == "Beta Inc"
             assert j["location"] == "Indianapolis, IN"
             assert j["url"] == "https://beta.com/jobs/42"
-            assert j["description"] == "Full job description text."
+            assert j["job_description"] == "Full job description text."
             assert j["status"] == "applied"
             assert j["notes"] == "Applied via recruiter email"
             assert j["source"] == "manual"
@@ -96,7 +91,7 @@ class TestNonInteractivePath:
         runner = CliRunner()
         runner.invoke(cli, ["tracker", "add", "--title", "X", "--company", "Y"])
 
-        t = ApplicationTracker(db_path=cli_db)
+        t = ApplicationTracker()
         try:
             assert t.get_all_jobs()[0]["source"] == "manual"
         finally:
@@ -106,7 +101,7 @@ class TestNonInteractivePath:
         runner = CliRunner()
         runner.invoke(cli, ["tracker", "add", "--title", "X", "--company", "Y"])
 
-        t = ApplicationTracker(db_path=cli_db)
+        t = ApplicationTracker()
         try:
             assert t.get_all_jobs()[0]["status"] == "interested"
         finally:
@@ -123,7 +118,7 @@ class TestNonInteractivePath:
         # Click's Choice error lists valid options
         assert "not_a_real_status" in result.output or "Invalid value" in result.output
 
-        t = ApplicationTracker(db_path=cli_db)
+        t = ApplicationTracker()
         try:
             assert len(t.get_all_jobs()) == 0
         finally:
@@ -142,7 +137,7 @@ class TestNoTTY:
         assert "--title" in result.output and "--company" in result.output
         assert "interactively" in result.output.lower()
 
-        t = ApplicationTracker(db_path=cli_db)
+        t = ApplicationTracker()
         try:
             assert len(t.get_all_jobs()) == 0
         finally:
@@ -179,7 +174,7 @@ class TestInteractivePath:
         assert result.exit_code == 0, result.output
         assert "Created application" in result.output
 
-        t = ApplicationTracker(db_path=cli_db)
+        t = ApplicationTracker()
         try:
             jobs = t.get_all_jobs()
             assert len(jobs) == 1
@@ -220,9 +215,9 @@ class TestInteractivePath:
         assert result.exit_code == 0, result.output
         mock_edit.assert_called_once()
 
-        t = ApplicationTracker(db_path=cli_db)
+        t = ApplicationTracker()
         try:
-            assert t.get_all_jobs()[0]["description"] == "Pasted job description here."
+            assert t.get_all_jobs()[0]["job_description"] == "Pasted job description here."
         finally:
             t.close()
 
@@ -239,7 +234,7 @@ class TestInteractivePath:
         assert result.exit_code == 0, result.output
         assert "Cancelled" in result.output
 
-        t = ApplicationTracker(db_path=cli_db)
+        t = ApplicationTracker()
         try:
             assert len(t.get_all_jobs()) == 0
         finally:
@@ -257,7 +252,7 @@ class TestInteractivePath:
         assert result.exit_code != 0
         assert "Cancelled" in result.output
 
-        t = ApplicationTracker(db_path=cli_db)
+        t = ApplicationTracker()
         try:
             assert len(t.get_all_jobs()) == 0
         finally:
@@ -267,7 +262,7 @@ class TestInteractivePath:
 class TestDuplicateDetection:
     def _seed_existing(self, cli_db, url):
         """Seed one row with the given URL."""
-        t = ApplicationTracker(db_path=cli_db)
+        t = ApplicationTracker()
         try:
             t.save_job({
                 "title": "Existing Job",
@@ -293,7 +288,7 @@ class TestDuplicateDetection:
         assert "duplicate" in result.output.lower()
         assert "Created application" in result.output
 
-        t = ApplicationTracker(db_path=cli_db)
+        t = ApplicationTracker()
         try:
             jobs = t.get_all_jobs()
             assert len(jobs) == 2  # seeded + new
@@ -315,7 +310,7 @@ class TestDuplicateDetection:
         assert "duplicate" in result.output.lower()
         assert "Aborted" in result.output or "no application saved" in result.output.lower()
 
-        t = ApplicationTracker(db_path=cli_db)
+        t = ApplicationTracker()
         try:
             jobs = t.get_all_jobs()
             assert len(jobs) == 1  # only the seeded row
@@ -336,7 +331,7 @@ class TestDuplicateDetection:
         assert result.exit_code == 0, result.output
         assert "duplicate" not in result.output.lower()
 
-        t = ApplicationTracker(db_path=cli_db)
+        t = ApplicationTracker()
         try:
             jobs = t.get_all_jobs()
             assert len(jobs) == 2

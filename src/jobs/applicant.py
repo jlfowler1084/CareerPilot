@@ -27,8 +27,10 @@ def _try_copy_to_clipboard(text: str) -> bool:
 class JobApplicant:
     """Handles job application workflows: browser launch, clipboard, tracking."""
 
-    def __init__(self, db_path=None, profile_db_path=None):
-        self._tracker = ApplicationTracker(db_path)
+    def __init__(self, profile_db_path=None):
+        # CAR-165: ApplicationTracker is Supabase-backed; no db_path.
+        # Profiles still live in SQLite (deferred to CAR-169 / M6).
+        self._tracker = ApplicationTracker()
         self._profile_mgr = ProfileManager(profile_db_path)
 
     def close(self):

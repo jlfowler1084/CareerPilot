@@ -181,10 +181,9 @@ class TestStalePortals:
 
 
 @pytest.fixture
-def tracker(tmp_path):
-    """Create an ApplicationTracker with a temp database."""
-    db_path = tmp_path / "test.db"
-    t = ApplicationTracker(db_path=db_path)
+def tracker(fake_supabase):
+    """Create an ApplicationTracker backed by the fake Supabase client."""
+    t = ApplicationTracker()
     yield t
     t.close()
 
@@ -205,15 +204,21 @@ def _sample_job(**overrides):
 
 class TestApplicationPortalLink:
     def test_link_application_to_portal(self, tracker):
-        """portal_id FK set correctly."""
-        pid = models.add_portal(
-            tracker._conn, "Acme", "Workday", "https://acme.wd.com"
-        )
+        """portal_id links application to an ATS portal reference.
+
+        Post-CAR-165 (M2), applications live in Supabase but portals are still
+        a SQLite table. Cross-store linking via `models.add_portal(tracker._conn)`
+        isn't possible anymore. We verify instead that the tracker can store
+        and round-trip a portal_id string on the application row. Formal
+        portals migration happens in CAR-169 (M6).
+        """
         job_id = tracker.save_job(_sample_job())
-        tracker.update_external_status(job_id, "Under Review", portal_id=pid)
+        tracker.update_external_status(
+            job_id, "Under Review", portal_id="portal-ref-123"
+        )
 
         job = tracker.get_job(job_id)
-        assert job["portal_id"] == pid
+        assert job["portal_id"] == "portal-ref-123"
 
     def test_update_external_status(self, tracker):
         """Sets status and timestamp."""
@@ -260,18 +265,18 @@ class TestWithdraw:
 
 
 class TestStaleApplications:
-    def test_stale_applications_detected(self, tracker):
+    def test_stale_applications_detected(self, tracker, fake_supabase):
         """Application with no external update in 14+ days flagged."""
         job_id = tracker.save_job(_sample_job())
         tracker.update_status(job_id, "applied")
 
-        # Manually set external_status_updated to 15 days ago
+        # Manually set external_status_updated to 15 days ago on the stored
+        # row. Reaching into the fake's internal state is a test-only
+        # convenience; production code only writes via update_external_status.
         old = (datetime.now() - timedelta(days=15)).isoformat()
-        tracker._conn.execute(
-            "UPDATE applications SET external_status_updated = ? WHERE id = ?",
-            (old, job_id),
-        )
-        tracker._conn.commit()
+        for row in fake_supabase._tables["applications"]:
+            if row["id"] == job_id:
+                row["external_status_updated"] = old
 
         stale = tracker.get_stale_applications()
         assert len(stale) == 1

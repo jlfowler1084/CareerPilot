@@ -50,6 +50,10 @@ DB_PATH = Path(os.getenv("DB_PATH", str(PROJECT_ROOT / "data" / "careerpilot.db"
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
 SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
 
+# CAR-165: user_id that owns CLI-created rows (service-role key bypasses RLS,
+# so inserts must specify user_id explicitly). Paste from dashboard → Auth → Users.
+CAREERPILOT_USER_ID = os.getenv("CAREERPILOT_USER_ID", "")
+
 # --- Timezone ---
 TIMEZONE = os.getenv("TIMEZONE", "America/Indiana/Indianapolis")
 

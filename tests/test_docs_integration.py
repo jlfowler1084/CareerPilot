@@ -20,11 +20,10 @@ SAMPLE_COVER_LETTER = (
 
 
 @pytest.fixture
-def applicant(tmp_path):
-    """Create a JobApplicant with temp databases."""
-    db_path = tmp_path / "test_tracker.db"
+def applicant(tmp_path, fake_supabase):
+    """Create a JobApplicant with a fake Supabase tracker + temp profile DB."""
     profile_db = tmp_path / "test_profile.db"
-    a = JobApplicant(db_path=db_path, profile_db_path=profile_db)
+    a = JobApplicant(profile_db_path=profile_db)
     a._profile_mgr.update_personal(
         full_name="Joseph Fowler",
         email="jlfowler1084@gmail.com",
