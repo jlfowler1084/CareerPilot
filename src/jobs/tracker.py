@@ -80,6 +80,20 @@ class ApplicationTracker:
         ).fetchone()
         return dict(row) if row else None
 
+    def find_by_url(self, url: str) -> Optional[Dict]:
+        """Find an application by URL. Returns the first match or None.
+
+        Used for duplicate detection in manual-entry flows. Empty or
+        whitespace-only URLs return None without querying.
+        """
+        if not url or not str(url).strip():
+            return None
+        row = self._conn.execute(
+            "SELECT * FROM applications WHERE url = ? LIMIT 1",
+            (str(url).strip(),),
+        ).fetchone()
+        return dict(row) if row else None
+
     def update_status(self, job_id: int, new_status: str, notes: str = None) -> bool:
         """Update a job's status.
 
