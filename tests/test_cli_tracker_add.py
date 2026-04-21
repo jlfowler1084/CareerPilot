@@ -225,3 +225,40 @@ class TestInteractivePath:
             assert t.get_all_jobs()[0]["description"] == "Pasted job description here."
         finally:
             t.close()
+
+    def test_wizard_cancel_at_final_confirm_writes_nothing(
+        self, cli_db, monkeypatch,
+    ):
+        monkeypatch.setattr("sys.stdin.isatty", lambda: True)
+        answers = "\n".join([
+            "X", "Y", "", "", "n", "interested", "",
+            "n",  # decline final confirm
+        ]) + "\n"
+        runner = CliRunner()
+        result = runner.invoke(cli, ["tracker", "add"], input=answers)
+        assert result.exit_code == 0, result.output
+        assert "Cancelled" in result.output
+
+        t = ApplicationTracker(db_path=cli_db)
+        try:
+            assert len(t.get_all_jobs()) == 0
+        finally:
+            t.close()
+
+    @patch("rich.prompt.Prompt.ask", side_effect=KeyboardInterrupt)
+    def test_wizard_ctrl_c_writes_nothing(
+        self, _mock_prompt, cli_db, monkeypatch,
+    ):
+        """Ctrl-C during any prompt => no row written and clean abort."""
+        monkeypatch.setattr("sys.stdin.isatty", lambda: True)
+        runner = CliRunner()
+        result = runner.invoke(cli, ["tracker", "add"])
+        # click.Abort() exits non-zero
+        assert result.exit_code != 0
+        assert "Cancelled" in result.output
+
+        t = ApplicationTracker(db_path=cli_db)
+        try:
+            assert len(t.get_all_jobs()) == 0
+        finally:
+            t.close()
