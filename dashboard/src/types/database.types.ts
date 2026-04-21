@@ -88,6 +88,8 @@ export type Database = {
           date_applied: string | null
           date_found: string | null
           date_response: string | null
+          external_status: string | null
+          external_status_updated: string | null
           follow_up_date: string | null
           id: string
           interview_date: string | null
@@ -95,7 +97,9 @@ export type Database = {
           job_description: string | null
           job_type: string | null
           location: string | null
+          message_id: string | null
           notes: string | null
+          portal_id: string | null
           posted_date: string | null
           profile_id: string | null
           salary_range: string | null
@@ -106,6 +110,7 @@ export type Database = {
           updated_at: string | null
           url: string | null
           user_id: string | null
+          withdraw_date: string | null
         }
         Insert: {
           calendar_event_id?: string | null
@@ -118,6 +123,8 @@ export type Database = {
           date_applied?: string | null
           date_found?: string | null
           date_response?: string | null
+          external_status?: string | null
+          external_status_updated?: string | null
           follow_up_date?: string | null
           id?: string
           interview_date?: string | null
@@ -125,7 +132,9 @@ export type Database = {
           job_description?: string | null
           job_type?: string | null
           location?: string | null
+          message_id?: string | null
           notes?: string | null
+          portal_id?: string | null
           posted_date?: string | null
           profile_id?: string | null
           salary_range?: string | null
@@ -136,6 +145,7 @@ export type Database = {
           updated_at?: string | null
           url?: string | null
           user_id?: string | null
+          withdraw_date?: string | null
         }
         Update: {
           calendar_event_id?: string | null
@@ -148,6 +158,8 @@ export type Database = {
           date_applied?: string | null
           date_found?: string | null
           date_response?: string | null
+          external_status?: string | null
+          external_status_updated?: string | null
           follow_up_date?: string | null
           id?: string
           interview_date?: string | null
@@ -155,7 +167,9 @@ export type Database = {
           job_description?: string | null
           job_type?: string | null
           location?: string | null
+          message_id?: string | null
           notes?: string | null
+          portal_id?: string | null
           posted_date?: string | null
           profile_id?: string | null
           salary_range?: string | null
@@ -166,6 +180,7 @@ export type Database = {
           updated_at?: string | null
           url?: string | null
           user_id?: string | null
+          withdraw_date?: string | null
         }
         Relationships: []
       }
@@ -473,42 +488,63 @@ export type Database = {
       contacts: {
         Row: {
           company: string | null
+          contact_method: string | null
+          contact_type: string
           created_at: string | null
           email: string | null
           id: string
           last_contact_date: string | null
+          linkedin_url: string | null
           name: string
+          next_followup: string | null
           notes: string | null
           phone: string | null
+          relationship_status: string
           source: string
+          specialization: string | null
+          tags: string[] | null
           title: string | null
           updated_at: string | null
           user_id: string
         }
         Insert: {
           company?: string | null
+          contact_method?: string | null
+          contact_type?: string
           created_at?: string | null
           email?: string | null
           id?: string
           last_contact_date?: string | null
+          linkedin_url?: string | null
           name: string
+          next_followup?: string | null
           notes?: string | null
           phone?: string | null
+          relationship_status?: string
           source?: string
+          specialization?: string | null
+          tags?: string[] | null
           title?: string | null
           updated_at?: string | null
           user_id: string
         }
         Update: {
           company?: string | null
+          contact_method?: string | null
+          contact_type?: string
           created_at?: string | null
           email?: string | null
           id?: string
           last_contact_date?: string | null
+          linkedin_url?: string | null
           name?: string
+          next_followup?: string | null
           notes?: string | null
           phone?: string | null
+          relationship_status?: string
           source?: string
+          specialization?: string | null
+          tags?: string[] | null
           title?: string | null
           updated_at?: string | null
           user_id?: string
