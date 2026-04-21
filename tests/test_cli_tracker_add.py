@@ -262,3 +262,96 @@ class TestInteractivePath:
             assert len(t.get_all_jobs()) == 0
         finally:
             t.close()
+
+
+class TestDuplicateDetection:
+    def _seed_existing(self, cli_db, url):
+        """Seed one row with the given URL."""
+        t = ApplicationTracker(db_path=cli_db)
+        try:
+            t.save_job({
+                "title": "Existing Job",
+                "company": "Existing Co",
+                "url": url,
+                "source": "search",
+            })
+        finally:
+            t.close()
+
+    def test_warns_and_proceeds_when_user_confirms(self, cli_db, monkeypatch):
+        self._seed_existing(cli_db, "https://dup.example.com/job/1")
+        monkeypatch.setattr("sys.stdin.isatty", lambda: True)
+
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "tracker", "add",
+            "--title", "New Listing",
+            "--company", "New Co",
+            "--url", "https://dup.example.com/job/1",
+        ], input="y\n")  # confirm "Create anyway?"
+        assert result.exit_code == 0, result.output
+        assert "duplicate" in result.output.lower()
+        assert "Created application" in result.output
+
+        t = ApplicationTracker(db_path=cli_db)
+        try:
+            jobs = t.get_all_jobs()
+            assert len(jobs) == 2  # seeded + new
+        finally:
+            t.close()
+
+    def test_aborts_when_user_declines_dupe(self, cli_db, monkeypatch):
+        self._seed_existing(cli_db, "https://dup.example.com/job/2")
+        monkeypatch.setattr("sys.stdin.isatty", lambda: True)
+
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "tracker", "add",
+            "--title", "New Listing",
+            "--company", "New Co",
+            "--url", "https://dup.example.com/job/2",
+        ], input="n\n")  # decline "Create anyway?"
+        assert result.exit_code == 0, result.output
+        assert "duplicate" in result.output.lower()
+        assert "Aborted" in result.output or "no application saved" in result.output.lower()
+
+        t = ApplicationTracker(db_path=cli_db)
+        try:
+            jobs = t.get_all_jobs()
+            assert len(jobs) == 1  # only the seeded row
+            assert jobs[0]["title"] == "Existing Job"
+        finally:
+            t.close()
+
+    def test_empty_url_skips_dupe_check(self, cli_db, monkeypatch):
+        """No URL provided => no dupe check runs, row is written normally."""
+        self._seed_existing(cli_db, "")  # another row with empty URL
+        runner = CliRunner()
+        # Non-interactive path, no --url flag
+        result = runner.invoke(cli, [
+            "tracker", "add",
+            "--title", "Fresh Listing",
+            "--company", "Fresh Co",
+        ])
+        assert result.exit_code == 0, result.output
+        assert "duplicate" not in result.output.lower()
+
+        t = ApplicationTracker(db_path=cli_db)
+        try:
+            jobs = t.get_all_jobs()
+            assert len(jobs) == 2
+        finally:
+            t.close()
+
+    def test_no_dupe_when_urls_differ(self, cli_db, monkeypatch):
+        self._seed_existing(cli_db, "https://a.example.com/1")
+        runner = CliRunner()
+        result = runner.invoke(cli, [
+            "tracker", "add",
+            "--title", "Other",
+            "--company", "Other Co",
+            "--url", "https://b.example.com/2",
+        ])
+        assert result.exit_code == 0, result.output
+        assert "duplicate" not in result.output.lower()
+        assert "Created application" in result.output

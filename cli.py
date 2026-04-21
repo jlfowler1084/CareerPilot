@@ -1678,6 +1678,20 @@ def tracker_add(title, company, location, url, description, status, notes):
 
     t = ApplicationTracker()
     try:
+        if fields["url"]:
+            dup = t.find_by_url(fields["url"])
+            if dup:
+                from rich.prompt import Confirm
+
+                console.print(
+                    f"[yellow]Possible duplicate: #{dup['id']} "
+                    f"{dup.get('title') or '(untitled)'} @ "
+                    f"{dup.get('company') or '(unknown)'}[/yellow]"
+                )
+                if not Confirm.ask("Create anyway?", default=False):
+                    console.print("[yellow]Aborted — no application saved.[/yellow]")
+                    return
+
         app_id = t.save_job(
             {
                 "title": fields["title"],
