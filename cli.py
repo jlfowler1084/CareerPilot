@@ -1566,6 +1566,28 @@ def tracker_stale():
     console.print(table)
 
 
+@tracker.command("add")
+@click.option("--title", default=None, help="Job title.")
+@click.option("--company", default=None, help="Company name.")
+@click.option("--location", default="", help="Job location.")
+@click.option("--url", default="", help="Job posting URL.")
+@click.option("--description", default="", help="Job description text.")
+@click.option(
+    "--status",
+    type=click.Choice(sorted([
+        "found", "interested", "applied", "phone_screen",
+        "interview", "offer", "rejected", "withdrawn", "ghosted",
+    ])),
+    default="interested",
+    show_default=True,
+    help="Initial application status.",
+)
+@click.option("--notes", default="", help="Free-form notes.")
+def tracker_add(title, company, location, url, description, status, notes):
+    """Add a job application manually via wizard or flags."""
+    raise click.ClickException("Not yet implemented (CAR-157 in progress)")
+
+
 _IMPORT_STATUS_CHOICES = sorted({
     "found", "interested", "applied", "phone_screen",
     "interview", "offer", "rejected", "withdrawn", "ghosted",
