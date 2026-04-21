@@ -49,7 +49,7 @@ class ApplicationTracker:
             "INSERT INTO applications "
             "(title, company, location, url, source, salary_range, status, date_found, "
             "notes, profile_id, description, message_id) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, '', ?, ?, ?)",
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 job_data.get("title", ""),
                 job_data.get("company", ""),
@@ -59,6 +59,7 @@ class ApplicationTracker:
                 job_data.get("salary", job_data.get("salary_range", "")),
                 status,
                 now,
+                job_data.get("notes", ""),
                 job_data.get("profile_id", ""),
                 job_data.get("description"),
                 job_data.get("message_id", ""),
@@ -77,6 +78,20 @@ class ApplicationTracker:
             return None
         row = self._conn.execute(
             "SELECT * FROM applications WHERE message_id = ?", (message_id,)
+        ).fetchone()
+        return dict(row) if row else None
+
+    def find_by_url(self, url: str) -> Optional[Dict]:
+        """Find an application by URL. Returns the first match or None.
+
+        Used for duplicate detection in manual-entry flows. Empty or
+        whitespace-only URLs return None without querying.
+        """
+        if not url or not str(url).strip():
+            return None
+        row = self._conn.execute(
+            "SELECT * FROM applications WHERE url = ? LIMIT 1",
+            (str(url).strip(),),
         ).fetchone()
         return dict(row) if row else None
 

@@ -1566,6 +1566,152 @@ def tracker_stale():
     console.print(table)
 
 
+def _run_tracker_add_wizard():
+    """Interactive wizard for `tracker add`. Returns a dict of fields, or None if cancelled."""
+    from rich.prompt import Confirm, Prompt
+
+    from src.jobs.tracker import VALID_STATUSES
+
+    console.print("\n[bold]Add a new application to the tracker.[/bold]")
+    console.print("[dim]Press Ctrl-C at any time to cancel without saving.[/dim]\n")
+
+    # Required fields — re-prompt on empty
+    title = ""
+    while not title.strip():
+        title = Prompt.ask("  Title")
+    company = ""
+    while not company.strip():
+        company = Prompt.ask("  Company")
+
+    location = Prompt.ask("  Location [dim](optional)[/dim]", default="")
+    url = Prompt.ask("  URL [dim](optional)[/dim]", default="")
+
+    description = ""
+    if Confirm.ask("  Open editor for job description?", default=False):
+        description = click.edit() or ""
+
+    status = Prompt.ask(
+        "  Status",
+        choices=sorted(VALID_STATUSES),
+        default="interested",
+    )
+    notes = Prompt.ask("  Notes [dim](optional)[/dim]", default="")
+
+    # Summary panel
+    console.print("\n[bold]Summary:[/bold]")
+    console.print(f"  Title:       {title}")
+    console.print(f"  Company:     {company}")
+    if location:
+        console.print(f"  Location:    {location}")
+    if url:
+        console.print(f"  URL:         {url}")
+    console.print(f"  Status:      {status}")
+    if notes:
+        console.print(f"  Notes:       {notes}")
+    if description:
+        console.print(f"  Description: {len(description)} chars")
+
+    if not Confirm.ask("\nCreate this application?", default=True):
+        return None
+
+    return {
+        "title": title.strip(),
+        "company": company.strip(),
+        "location": location.strip(),
+        "url": url.strip(),
+        "description": description,
+        "status": status,
+        "notes": notes.strip(),
+    }
+
+
+@tracker.command("add")
+@click.option("--title", default=None, help="Job title.")
+@click.option("--company", default=None, help="Company name.")
+@click.option("--location", default="", help="Job location.")
+@click.option("--url", default="", help="Job posting URL.")
+@click.option("--description", default="", help="Job description text.")
+@click.option(
+    "--status",
+    type=click.Choice(sorted([
+        "found", "interested", "applied", "phone_screen",
+        "interview", "offer", "rejected", "withdrawn", "ghosted",
+    ])),
+    default="interested",
+    show_default=True,
+    help="Initial application status.",
+)
+@click.option("--notes", default="", help="Free-form notes.")
+def tracker_add(title, company, location, url, description, status, notes):
+    """Add a job application manually via wizard or flags."""
+    import sys
+
+    from src.jobs.tracker import ApplicationTracker
+
+    # Non-interactive path: both required flags present
+    if title and company:
+        fields = {
+            "title": title.strip(),
+            "company": company.strip(),
+            "location": location,
+            "url": url,
+            "description": description,
+            "status": status,
+            "notes": notes,
+        }
+    else:
+        try:
+            wizard_fields = _run_tracker_add_wizard()
+        except KeyboardInterrupt:
+            console.print("\n[yellow]Cancelled — no application saved.[/yellow]")
+            raise click.Abort()
+        except EOFError:
+            console.print(
+                "[red]Error: --title and --company are required "
+                "when not running interactively.[/red]"
+            )
+            sys.exit(2)
+        if wizard_fields is None:
+            console.print("[yellow]Cancelled — no application saved.[/yellow]")
+            return
+        fields = wizard_fields
+
+    t = ApplicationTracker()
+    try:
+        if fields["url"]:
+            dup = t.find_by_url(fields["url"])
+            if dup:
+                from rich.prompt import Confirm
+
+                console.print(
+                    f"[yellow]Possible duplicate: #{dup['id']} "
+                    f"{dup.get('title') or '(untitled)'} @ "
+                    f"{dup.get('company') or '(unknown)'}[/yellow]"
+                )
+                if not Confirm.ask("Create anyway?", default=False):
+                    console.print("[yellow]Aborted — no application saved.[/yellow]")
+                    return
+
+        app_id = t.save_job(
+            {
+                "title": fields["title"],
+                "company": fields["company"],
+                "location": fields["location"],
+                "url": fields["url"],
+                "description": fields["description"] or None,
+                "source": "manual",
+                "notes": fields["notes"],
+            },
+            status=fields["status"],
+        )
+        console.print(
+            f"[green]Created application #{app_id}: {fields['title']} @ "
+            f"{fields['company']} [status={fields['status']}][/green]"
+        )
+    finally:
+        t.close()
+
+
 _IMPORT_STATUS_CHOICES = sorted({
     "found", "interested", "applied", "phone_screen",
     "interview", "offer", "rejected", "withdrawn", "ghosted",

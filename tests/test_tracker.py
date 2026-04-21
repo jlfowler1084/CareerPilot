@@ -268,3 +268,45 @@ class TestFindApplicationByMessageId:
         """Empty or None message_id short-circuits to None."""
         assert tracker.find_application_by_message_id("") is None
         assert tracker.find_application_by_message_id(None) is None
+
+
+class TestFindByUrl:
+    def test_returns_row_when_url_matches(self, tracker):
+        """find_by_url returns the matching row as a dict."""
+        app_id = tracker.save_job(_sample_job(url="https://acme.com/job/123"))
+        result = tracker.find_by_url("https://acme.com/job/123")
+        assert result is not None
+        assert result["id"] == app_id
+        assert result["url"] == "https://acme.com/job/123"
+
+    def test_returns_none_when_empty_url(self, tracker):
+        """Empty or whitespace-only URLs short-circuit to None."""
+        tracker.save_job(_sample_job(url=""))
+        assert tracker.find_by_url("") is None
+        assert tracker.find_by_url("   ") is None
+        assert tracker.find_by_url(None) is None
+
+    def test_returns_none_when_no_match(self, tracker):
+        """Non-matching URL returns None, doesn't match on other columns."""
+        tracker.save_job(_sample_job(url="https://example.com/a"))
+        assert tracker.find_by_url("https://example.com/b") is None
+
+    def test_trims_whitespace_on_lookup(self, tracker):
+        """Leading/trailing whitespace on the lookup value is trimmed before matching."""
+        tracker.save_job(_sample_job(url="https://acme.com/job/1"))
+        result = tracker.find_by_url("  https://acme.com/job/1  ")
+        assert result is not None
+
+
+class TestSaveJobNotes:
+    def test_notes_from_job_data_persisted(self, tracker):
+        """save_job honors notes from job_data and persists to DB."""
+        app_id = tracker.save_job(_sample_job(notes="Referred by Jane"))
+        row = tracker.get_job(app_id)
+        assert row["notes"] == "Referred by Jane"
+
+    def test_notes_default_empty_when_not_provided(self, tracker):
+        """save_job defaults notes to empty string if absent from job_data (backward compat)."""
+        app_id = tracker.save_job(_sample_job())
+        row = tracker.get_job(app_id)
+        assert row["notes"] == ""
