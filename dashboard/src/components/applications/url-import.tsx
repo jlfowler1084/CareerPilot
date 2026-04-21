@@ -4,12 +4,20 @@ import { useState } from "react"
 import { Link2, Loader2, X } from "lucide-react"
 import { toast } from "sonner"
 import { TailorModal } from "@/components/applications/tailor-modal"
+import {
+  findApplicationByUrl,
+  formatDuplicateConfirmMessage,
+} from "@/lib/url-dedup"
 import type { ExtractedJob, Application } from "@/types"
 
 interface UrlImportProps {
   onSave: (extracted: ExtractedJob, url: string) => Promise<{ data: Application | null; error: unknown }>
   onUpdate: (id: string, updates: Partial<Application>) => Promise<unknown>
-  existingUrls?: string[]
+  /**
+   * CAR-167: current user's applications for duplicate-URL detection
+   * before extraction runs. Parity with CLI `tracker add` / `find_by_url`.
+   */
+  existingApplications?: Application[]
 }
 
 const RESUME_SKILLS = [
@@ -36,7 +44,7 @@ const SOURCE_OPTIONS = [
   "Company Site",
 ]
 
-export function UrlImport({ onSave, onUpdate, existingUrls = [] }: UrlImportProps) {
+export function UrlImport({ onSave, onUpdate, existingApplications = [] }: UrlImportProps) {
   const [url, setUrl] = useState("")
   const [loading, setLoading] = useState(false)
   const [extracted, setExtracted] = useState<ExtractedJob | null>(null)
@@ -91,9 +99,14 @@ export function UrlImport({ onSave, onUpdate, existingUrls = [] }: UrlImportProp
     const trimmed = rawUrl.trim()
     if (!trimmed) return
 
-    // Duplicate check
-    if (existingUrls.some((u) => u === trimmed)) {
-      toast.warning("You're already tracking a job at this URL")
+    // CAR-167: block on duplicate URL unless the user confirms. Previous
+    // behavior was a soft toast warn that let extraction run anyway,
+    // which diverged from the CLI's confirm-before-insert. Now both
+    // surfaces prompt the user the same way.
+    const existing = findApplicationByUrl(trimmed, existingApplications)
+    if (existing) {
+      const proceed = window.confirm(formatDuplicateConfirmMessage(existing))
+      if (!proceed) return
     }
 
     setLoading(true)
