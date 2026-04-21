@@ -39,7 +39,10 @@ class ContactManager:
         user_id: Optional[str] = None,
     ) -> None:
         if user_id is None:
-            user_id = os.environ.get("CAREERPILOT_USER_ID")
+            # Mirror ApplicationTracker: read from settings (which loads .env),
+            # then fall back to raw os.environ for test-injection paths.
+            from config import settings as _settings
+            user_id = _settings.CAREERPILOT_USER_ID or os.environ.get("CAREERPILOT_USER_ID")
         if not user_id:
             raise ContactManagerNotConfiguredError(
                 "ContactManager requires a user_id (arg or CAREERPILOT_USER_ID env var). "
