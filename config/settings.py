@@ -41,6 +41,15 @@ MODEL_SONNET = os.getenv("MODEL_SONNET", "claude-sonnet-4-6")
 # --- Database ---
 DB_PATH = Path(os.getenv("DB_PATH", str(PROJECT_ROOT / "data" / "careerpilot.db")))
 
+# --- Supabase (CAR-164) ---
+# CLI writes to the same Supabase project as the dashboard. Auth strategy (c.1):
+# service-role key stored in .env, bypassing RLS. Acceptable for a single-user
+# local tool; never expose this key to a browser. See src/db/supabase_client.py
+# for the full rationale and docs/brainstorms/CAR-163-application-entry-paths-
+# consolidation-audit.md §3 for the alternatives considered.
+SUPABASE_URL = os.getenv("SUPABASE_URL", "")
+SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
+
 # --- Timezone ---
 TIMEZONE = os.getenv("TIMEZONE", "America/Indiana/Indianapolis")
 
