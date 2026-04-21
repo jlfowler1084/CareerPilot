@@ -35,6 +35,11 @@ from src.agencies.outreach_templates import OUTREACH_TEMPLATES, render_template
 from src.db import models
 
 
+def _get_contact_manager():
+    from src.db.contacts import ContactManager
+    return ContactManager()
+
+
 def cmd_list_agencies():
     """List all configured staffing agencies."""
     print("\n Configured IT Staffing Agencies\n")
@@ -93,31 +98,30 @@ def cmd_recruiter_add():
     specialties = input("  Specialties (optional): ").strip() or None
     notes = input("  Notes (optional): ").strip() or None
 
-    conn = models.get_connection()
-    rid = models.add_contact(
-        conn, name, "recruiter",
+    mgr = _get_contact_manager()
+    rid = mgr.add_contact(
+        name, "recruiter",
         company=agency, email=email, phone=phone, title=title,
         specialization=specialties, notes=notes, source="staffing_agency",
     )
-    conn.close()
-    print(f"\n  Added recruiter #{rid}: {name} at {agency}\n")
+    print(f"\n  Added recruiter {rid}: {name} at {agency}\n")
 
 
 def cmd_recruiter_list():
     """List all recruiter contacts."""
-    conn = models.get_connection()
-    recruiters = models.list_contacts(conn, contact_type="recruiter")
+    mgr = _get_contact_manager()
+    recruiters = mgr.list_contacts(contact_type="recruiter")
 
     if not recruiters:
         print("\n  No recruiters tracked yet. Use 'contacts add' to add one.\n")
-        conn.close()
         return
 
+    conn = models.get_connection()
     print(f"\n Recruiter Contacts ({len(recruiters)})\n")
     for r in recruiters:
-        roles = models.get_submitted_roles(conn, contact_id=r["id"])
+        roles = models.get_submitted_roles(conn, contact_uuid=str(r["id"]))
         active = [x for x in roles if x["status"] in ("submitted", "interviewing")]
-        print(f"  #{r['id']} {r['name']} -- {r.get('company', 'N/A')}")
+        print(f"  {r['id']} {r['name']} -- {r.get('company', 'N/A')}")
         if r.get("email"):
             print(f"     {r['email']}")
         if r.get("phone"):
@@ -125,20 +129,19 @@ def cmd_recruiter_list():
         if r.get("title"):
             print(f"     {r['title']}")
         print(f"     Roles: {len(roles)} total, {len(active)} active")
-        if r.get("last_contact"):
-            print(f"     Last contact: {r['last_contact'][:10]}")
+        lcd = r.get("last_contact_date")
+        if lcd:
+            print(f"     Last contact: {str(lcd)[:10]}")
         print()
-
     conn.close()
 
 
-def cmd_recruiter_show(contact_id: int):
+def cmd_recruiter_show(contact_id: str):
     """Show full contact details with interaction history."""
-    conn = models.get_connection()
-    r = models.get_contact(conn, contact_id)
+    mgr = _get_contact_manager()
+    r = mgr.get_contact(contact_id)
     if not r:
-        print(f"\n  Contact #{contact_id} not found.\n")
-        conn.close()
+        print(f"\n  Contact {contact_id} not found.\n")
         return
 
     print(f"\n {r['name']} -- {r.get('company', 'N/A')}")
@@ -151,6 +154,7 @@ def cmd_recruiter_show(contact_id: int):
     if r.get("notes"):
         print(f"   {r['notes']}")
 
+    conn = models.get_connection()
     interactions = models.get_contact_interactions(conn, contact_id)
     if interactions:
         print(f"\n   Recent Interactions ({len(interactions)}):")
@@ -160,25 +164,25 @@ def cmd_recruiter_show(contact_id: int):
             if i.get("summary"):
                 print(f"       {i['summary'][:80]}")
 
-    roles = models.get_submitted_roles(conn, contact_id=contact_id)
+    roles = models.get_submitted_roles(conn, contact_uuid=contact_id)
     if roles:
         print(f"\n   Submitted Roles ({len(roles)}):")
         for role in roles:
             print(f"     {role['role_title']} at {role['company']} [{role['status']}]")
             if role.get("pay_rate"):
                 print(f"        Pay: {role['pay_rate']}")
-
-    print()
     conn.close()
+    print()
 
 
-def cmd_interaction_log(contact_id: int):
+def cmd_interaction_log(contact_id: str):
     """Interactive interaction logging."""
-    conn = models.get_connection()
-    r = models.get_contact(conn, contact_id)
+    from datetime import datetime
+
+    mgr = _get_contact_manager()
+    r = mgr.get_contact(contact_id)
     if not r:
-        print(f"\n  Contact #{contact_id} not found.\n")
-        conn.close()
+        print(f"\n  Contact {contact_id} not found.\n")
         return
 
     print(f"\n Log Interaction with {r['name']} ({r.get('company', 'N/A')})\n")
@@ -189,24 +193,27 @@ def cmd_interaction_log(contact_id: int):
     roles = input("  Roles discussed (optional): ").strip() or None
     follow_up = input("  Follow-up date (YYYY-MM-DD, optional): ").strip() or None
 
+    conn = models.get_connection()
     iid = models.add_contact_interaction(
         conn, contact_id, itype, direction,
         subject=subject, summary=summary, roles_discussed=roles,
         follow_up_date=follow_up,
     )
-    if follow_up:
-        models.update_contact(conn, contact_id, next_followup=follow_up)
     conn.close()
+
+    updates: dict = {"last_contact_date": datetime.now().isoformat(), "contact_method": itype}
+    if follow_up:
+        updates["next_followup"] = follow_up
+    mgr.update_contact(contact_id, **updates)
     print(f"\n  Logged interaction #{iid}\n")
 
 
-def cmd_role_add(contact_id: int):
+def cmd_role_add(contact_id: str):
     """Add a submitted role."""
-    conn = models.get_connection()
-    r = models.get_contact(conn, contact_id)
+    mgr = _get_contact_manager()
+    r = mgr.get_contact(contact_id)
     if not r:
-        print(f"\n  Contact #{contact_id} not found.\n")
-        conn.close()
+        print(f"\n  Contact {contact_id} not found.\n")
         return
 
     print(f"\n Add Submitted Role via {r['name']} ({r.get('company', 'N/A')})\n")
@@ -217,6 +224,7 @@ def cmd_role_add(contact_id: int):
     rtype = input("  Type (contract/cth/direct): ").strip() or "contract"
     notes = input("  Notes (optional): ").strip() or None
 
+    conn = models.get_connection()
     rid = models.add_submitted_role(
         conn, contact_id, company, title,
         pay_rate=pay, location=location, role_type=rtype, notes=notes,
@@ -238,7 +246,7 @@ def cmd_role_list():
     print(f"\n Submitted Roles ({len(roles)})\n")
     for role in roles:
         print(f"  #{role['id']} {role['role_title']} at {role['company']}")
-        print(f"     Via: {role['contact_name']} ({role.get('company', 'N/A')})")
+        print(f"     Contact UUID: {role.get('contact_uuid', 'N/A')}")
         print(f"     Status: {role['status']} | Type: {role.get('role_type', 'N/A')}")
         if role.get("pay_rate"):
             print(f"     Pay: {role['pay_rate']}")
@@ -292,17 +300,29 @@ def cmd_outreach(template_key: str | None = None, agency_key: str | None = None)
 
 def cmd_summary():
     """Show dashboard summary."""
+    mgr = _get_contact_manager()
+    all_contacts = mgr.list_contacts()
+    active_contacts = sum(
+        1 for c in all_contacts
+        if c.get("relationship_status") in ("new", "active", "warm")
+    )
+    companies = len({c.get("company") for c in all_contacts if c.get("company")})
+
     conn = models.get_connection()
-    stats = models.get_contacts_summary(conn)
+    total_roles = conn.execute("SELECT COUNT(*) FROM submitted_roles").fetchone()[0]
+    active_roles = conn.execute(
+        "SELECT COUNT(*) FROM submitted_roles WHERE status IN ('submitted', 'interviewing')"
+    ).fetchone()[0]
+    total_interactions = conn.execute("SELECT COUNT(*) FROM contact_interactions").fetchone()[0]
     conn.close()
 
     print("\n+==========================================+")
     print("|   Contact Relationship Dashboard         |")
     print("+==========================================+\n")
-    print(f"  Active Contacts:      {stats['active_contacts']}")
-    print(f"  Companies:            {stats['companies']}")
-    print(f"  Roles Submitted:      {stats['total_roles_submitted']} ({stats['active_roles']} active)")
-    print(f"  Total Interactions:   {stats['total_interactions']}")
+    print(f"  Active Contacts:      {active_contacts}")
+    print(f"  Companies:            {companies}")
+    print(f"  Roles Submitted:      {total_roles} ({active_roles} active)")
+    print(f"  Total Interactions:   {total_interactions}")
     print()
 
 
@@ -336,18 +356,18 @@ def agencies_cli(args: list[str]):
         elif subcmd == "list":
             cmd_recruiter_list()
         elif subcmd == "show" and len(args) >= 3:
-            cmd_recruiter_show(int(args[2]))
+            cmd_recruiter_show(args[2])
         else:
             print(f"  Unknown: agencies recruiter {subcmd}")
     elif cmd == "interaction" and len(args) >= 3 and args[1] == "log":
-        cmd_interaction_log(int(args[2]))
+        cmd_interaction_log(args[2])
     elif cmd == "role":
         if len(args) < 2:
             print("  Usage: agencies role [add <contact_id>|list|update <id> <status>]")
             return
         subcmd = args[1]
         if subcmd == "add" and len(args) >= 3:
-            cmd_role_add(int(args[2]))
+            cmd_role_add(args[2])
         elif subcmd == "list":
             cmd_role_list()
         elif subcmd == "update" and len(args) >= 4:
