@@ -71,20 +71,22 @@ CREATE TABLE IF NOT EXISTS contacts (
 
 CREATE TABLE IF NOT EXISTS contact_interactions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    contact_id INTEGER NOT NULL,
+    contact_uuid TEXT NOT NULL,
     interaction_type TEXT NOT NULL,
     direction TEXT DEFAULT 'outbound',
     subject TEXT,
     summary TEXT,
     roles_discussed TEXT,
     follow_up_date TEXT,
-    created_at TEXT DEFAULT (datetime('now')),
-    FOREIGN KEY (contact_id) REFERENCES contacts(id)
+    created_at TEXT DEFAULT (datetime('now'))
 );
+
+CREATE INDEX IF NOT EXISTS idx_contact_interactions_uuid
+    ON contact_interactions(contact_uuid);
 
 CREATE TABLE IF NOT EXISTS submitted_roles (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    contact_id INTEGER NOT NULL,
+    contact_uuid TEXT NOT NULL,
     company TEXT NOT NULL,
     role_title TEXT NOT NULL,
     status TEXT DEFAULT 'submitted',
@@ -94,9 +96,11 @@ CREATE TABLE IF NOT EXISTS submitted_roles (
     location TEXT,
     role_type TEXT DEFAULT 'contract',
     created_at TEXT DEFAULT (datetime('now')),
-    updated_at TEXT DEFAULT (datetime('now')),
-    FOREIGN KEY (contact_id) REFERENCES contacts(id)
+    updated_at TEXT DEFAULT (datetime('now'))
 );
+
+CREATE INDEX IF NOT EXISTS idx_submitted_roles_uuid
+    ON submitted_roles(contact_uuid);
 
 CREATE TABLE IF NOT EXISTS kv_store (
     key TEXT PRIMARY KEY,
@@ -259,6 +263,64 @@ def _migrate_transcripts_kind(conn):
     conn.commit()
 
 
+def _migrate_contact_uuid_schema(conn):
+    """Rebuild contact_interactions + submitted_roles with contact_uuid TEXT.
+
+    CAR-171: these tables previously used contact_id INTEGER FK to the local
+    SQLite contacts table. After the Supabase port, the canonical FK is a
+    Supabase UUID string (contact_uuid TEXT). Tables are rebuilt if the old
+    column name is still present. Safe on empty tables; the live DB had 0 rows
+    at migration time (verified 2026-04-21 before shipping CAR-171).
+    """
+    for table, old_col in (
+        ("contact_interactions", "contact_id"),
+        ("submitted_roles", "contact_id"),
+    ):
+        cols = [row[1] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()]
+        if old_col not in cols:
+            continue  # already migrated or freshly created with new schema
+        logger.info("Migrating %s: replacing %s with contact_uuid", table, old_col)
+        conn.executescript(f"""
+            ALTER TABLE {table} RENAME TO {table}_old_car171;
+        """)
+        conn.commit()
+    # Re-apply SCHEMA_SQL will create the tables with the new schema; they were
+    # renamed above so IF NOT EXISTS is satisfied. The old tables are left as
+    # *_old_car171 for manual inspection; CAR-172 finalize drops them.
+    conn.executescript(f"""
+        CREATE TABLE IF NOT EXISTS contact_interactions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            contact_uuid TEXT NOT NULL,
+            interaction_type TEXT NOT NULL,
+            direction TEXT DEFAULT 'outbound',
+            subject TEXT,
+            summary TEXT,
+            roles_discussed TEXT,
+            follow_up_date TEXT,
+            created_at TEXT DEFAULT (datetime('now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_contact_interactions_uuid
+            ON contact_interactions(contact_uuid);
+        CREATE TABLE IF NOT EXISTS submitted_roles (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            contact_uuid TEXT NOT NULL,
+            company TEXT NOT NULL,
+            role_title TEXT NOT NULL,
+            status TEXT DEFAULT 'submitted',
+            submitted_date TEXT DEFAULT (date('now')),
+            notes TEXT,
+            pay_rate TEXT,
+            location TEXT,
+            role_type TEXT DEFAULT 'contract',
+            created_at TEXT DEFAULT (datetime('now')),
+            updated_at TEXT DEFAULT (datetime('now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_submitted_roles_uuid
+            ON submitted_roles(contact_uuid);
+    """)
+    conn.commit()
+
+
 def _backfill_interview_analyses(conn):
     """Copy all interview_analyses rows into transcripts, then drop the legacy table.
 
@@ -312,6 +374,9 @@ def get_connection(db_path: Path = None) -> sqlite3.Connection:
     conn = sqlite3.connect(str(db_path))
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
+    # Must run before SCHEMA_SQL: SCHEMA_SQL creates an index on contact_uuid;
+    # if the old table still has contact_id that index creation fails.
+    _migrate_contact_uuid_schema(conn)
     conn.executescript(SCHEMA_SQL)
 
     # --- Migrations ---
@@ -595,11 +660,11 @@ def _migrate_tracker_db(conn):
             new_contact_id = id_map.get(i["recruiter_id"])
             if new_contact_id:
                 conn.execute(
-                    "INSERT INTO contact_interactions (contact_id, interaction_type, "
+                    "INSERT INTO contact_interactions (contact_uuid, interaction_type, "
                     "direction, subject, summary, roles_discussed, follow_up_date, "
                     "created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                     (
-                        new_contact_id, i["interaction_type"], i.get("direction", "outbound"),
+                        str(new_contact_id), i["interaction_type"], i.get("direction", "outbound"),
                         i.get("subject"), i.get("summary"), i.get("roles_discussed"),
                         i.get("follow_up_date"), i.get("created_at"),
                     ),
@@ -617,121 +682,17 @@ def _migrate_tracker_db(conn):
             new_contact_id = id_map.get(role["recruiter_id"])
             if new_contact_id:
                 conn.execute(
-                    "INSERT INTO submitted_roles (contact_id, company, role_title, "
+                    "INSERT INTO submitted_roles (contact_uuid, company, role_title, "
                     "status, submitted_date, notes, pay_rate, location, role_type, "
                     "created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (
-                        new_contact_id, role["company"], role["role_title"],
+                        str(new_contact_id), role["company"], role["role_title"],
                         role.get("status", "submitted"), role.get("submitted_date"),
                         role.get("notes"), role.get("pay_rate"), role.get("location"),
                         role.get("role_type", "contract"), role.get("created_at"),
                         role.get("updated_at"),
                     ),
                 )
-
-
-# --- Contacts CRUD ---
-
-
-def add_contact(conn, name, contact_type="recruiter", **kwargs):
-    """Insert a new contact. Returns the row id."""
-    allowed = {
-        "company", "title", "email", "phone", "linkedin_url",
-        "specialization", "source", "last_contact", "contact_method",
-        "next_followup", "relationship_status", "tags", "notes",
-    }
-    fields = {k: v for k, v in kwargs.items() if k in allowed and v is not None}
-    columns = ["name", "contact_type"] + list(fields.keys())
-    placeholders = ", ".join("?" for _ in columns)
-    col_names = ", ".join(columns)
-    values = [name, contact_type] + list(fields.values())
-
-    cursor = conn.execute(
-        f"INSERT INTO contacts ({col_names}) VALUES ({placeholders})", values,
-    )
-    conn.commit()
-    logger.debug("Added contact: %s (type=%s)", name, contact_type)
-    return cursor.lastrowid
-
-
-def get_contact(conn, contact_id):
-    """Get a single contact by id. Returns dict or None."""
-    row = conn.execute(
-        "SELECT * FROM contacts WHERE id = ?", (contact_id,)
-    ).fetchone()
-    return dict(row) if row else None
-
-
-def list_contacts(conn, contact_type=None, status=None, tag=None):
-    """Get contacts with optional filters, sorted by company then name."""
-    query = "SELECT * FROM contacts"
-    conditions = []
-    params = []
-
-    if contact_type:
-        conditions.append("contact_type = ?")
-        params.append(contact_type)
-    if status:
-        conditions.append("relationship_status = ?")
-        params.append(status)
-    if tag:
-        conditions.append("(',' || tags || ',') LIKE ?")
-        params.append(f"%,{tag},%")
-
-    if conditions:
-        query += " WHERE " + " AND ".join(conditions)
-    query += " ORDER BY company, name"
-
-    rows = conn.execute(query, params).fetchall()
-    return [dict(r) for r in rows]
-
-
-def update_contact(conn, contact_id, **kwargs):
-    """Update contact fields. Returns True if found, False otherwise."""
-    allowed = {
-        "name", "company", "title", "contact_type", "email", "phone",
-        "linkedin_url", "specialization", "source", "last_contact",
-        "contact_method", "next_followup", "relationship_status",
-        "tags", "notes",
-    }
-    fields = {k: v for k, v in kwargs.items() if k in allowed}
-    if not fields:
-        return False
-
-    row = conn.execute(
-        "SELECT id FROM contacts WHERE id = ?", (contact_id,)
-    ).fetchone()
-    if not row:
-        logger.warning("Contact id=%d not found", contact_id)
-        return False
-
-    set_clause = ", ".join(f"{k} = ?" for k in fields)
-    values = list(fields.values()) + [contact_id]
-    conn.execute(f"UPDATE contacts SET {set_clause} WHERE id = ?", values)
-    conn.commit()
-    logger.info("Updated contact id=%d: %s", contact_id, list(fields.keys()))
-    return True
-
-
-def delete_contact(conn, contact_id, force=False):
-    """Delete a contact. Soft delete (do_not_contact) unless force=True."""
-    row = conn.execute(
-        "SELECT id FROM contacts WHERE id = ?", (contact_id,)
-    ).fetchone()
-    if not row:
-        return False
-
-    if force:
-        conn.execute("DELETE FROM contact_interactions WHERE contact_id = ?", (contact_id,))
-        conn.execute("DELETE FROM submitted_roles WHERE contact_id = ?", (contact_id,))
-        conn.execute("DELETE FROM contacts WHERE id = ?", (contact_id,))
-    else:
-        conn.execute(
-            "UPDATE contacts SET relationship_status = 'do_not_contact' WHERE id = ?",
-            (contact_id,),
-        )
-    conn.commit()
-    return True
 
 
 def deactivate_portal(conn, portal_id):
@@ -759,136 +720,30 @@ def get_stale_portals(conn, days=7):
     return [dict(r) for r in rows]
 
 
-def search_contacts(conn, query):
-    """Search contacts by name, company, email, or notes (LIKE matching)."""
-    pattern = f"%{query}%"
-    rows = conn.execute(
-        "SELECT * FROM contacts WHERE "
-        "name LIKE ? OR company LIKE ? OR email LIKE ? OR notes LIKE ? "
-        "ORDER BY name",
-        (pattern, pattern, pattern, pattern),
-    ).fetchall()
-    return [dict(r) for r in rows]
-
-
-def log_contact_interaction(conn, contact_id, method, note=""):
-    """Log a contact interaction.
-
-    Updates last_contact to now, sets contact_method, and appends a
-    timestamped entry to notes.
-    """
-    row = conn.execute(
-        "SELECT id, notes FROM contacts WHERE id = ?", (contact_id,)
-    ).fetchone()
-    if not row:
-        logger.warning("Contact id=%d not found", contact_id)
-        return False
-
-    now = datetime.now().isoformat(timespec="seconds")
-    existing_notes = row["notes"] or ""
-    entry = f"[{now}] ({method}) {note}".strip() if note else f"[{now}] ({method})"
-    new_notes = f"{existing_notes}\n{entry}".strip()
-
-    conn.execute(
-        "UPDATE contacts SET last_contact = ?, contact_method = ?, notes = ? "
-        "WHERE id = ?",
-        (now, method, new_notes, contact_id),
-    )
-    conn.commit()
-    logger.info("Logged contact for contact id=%d via %s", contact_id, method)
-    return True
-
-
-def get_stale_contacts(conn, days=14):
-    """Get contacts with active/warm status not contacted in `days`+ days."""
-    rows = conn.execute(
-        "SELECT * FROM contacts "
-        "WHERE relationship_status IN ('active', 'warm') "
-        "AND last_contact IS NOT NULL "
-        "AND julianday('now') - julianday(last_contact) >= ? "
-        "ORDER BY last_contact ASC",
-        (days,),
-    ).fetchall()
-    return [dict(r) for r in rows]
-
-
-def get_followup_due(conn):
-    """Get contacts with follow-ups due today or overdue."""
-    rows = conn.execute(
-        "SELECT * FROM contacts "
-        "WHERE next_followup IS NOT NULL "
-        "AND date(next_followup) <= date('now') "
-        "ORDER BY next_followup ASC",
-    ).fetchall()
-    return [dict(r) for r in rows]
-
-
-def add_tag(conn, contact_id, tag):
-    """Add a tag to a contact's comma-separated tag list."""
-    row = conn.execute(
-        "SELECT id, tags FROM contacts WHERE id = ?", (contact_id,)
-    ).fetchone()
-    if not row:
-        return False
-
-    existing = row["tags"] or ""
-    tag_list = [t.strip() for t in existing.split(",") if t.strip()]
-    if tag not in tag_list:
-        tag_list.append(tag)
-    new_tags = ",".join(tag_list)
-
-    conn.execute("UPDATE contacts SET tags = ? WHERE id = ?", (new_tags, contact_id))
-    conn.commit()
-    return True
-
-
-def remove_tag(conn, contact_id, tag):
-    """Remove a tag from a contact's comma-separated tag list."""
-    row = conn.execute(
-        "SELECT id, tags FROM contacts WHERE id = ?", (contact_id,)
-    ).fetchone()
-    if not row:
-        return False
-
-    existing = row["tags"] or ""
-    tag_list = [t.strip() for t in existing.split(",") if t.strip()]
-    if tag in tag_list:
-        tag_list.remove(tag)
-    new_tags = ",".join(tag_list)
-
-    conn.execute("UPDATE contacts SET tags = ? WHERE id = ?", (new_tags, contact_id))
-    conn.commit()
-    return True
-
-
 # --- Contact Interactions (from agencies tracker) ---
 
 
-def add_contact_interaction(conn, contact_id, interaction_type, direction="outbound",
+def add_contact_interaction(conn, contact_uuid, interaction_type, direction="outbound",
                             subject=None, summary=None, roles_discussed=None,
                             follow_up_date=None):
     """Log a detailed interaction in the contact_interactions table. Returns row id."""
     cursor = conn.execute(
-        "INSERT INTO contact_interactions (contact_id, interaction_type, direction, "
+        "INSERT INTO contact_interactions (contact_uuid, interaction_type, direction, "
         "subject, summary, roles_discussed, follow_up_date) "
         "VALUES (?, ?, ?, ?, ?, ?, ?)",
-        (contact_id, interaction_type, direction, subject, summary,
+        (str(contact_uuid), interaction_type, direction, subject, summary,
          roles_discussed, follow_up_date),
-    )
-    conn.execute(
-        "UPDATE contacts SET last_contact = datetime('now') WHERE id = ?",
-        (contact_id,),
     )
     conn.commit()
     return cursor.lastrowid
 
 
-def get_contact_interactions(conn, contact_id, limit=20):
+def get_contact_interactions(conn, contact_uuid, limit=20):
     """Get interaction history for a contact."""
     rows = conn.execute(
-        "SELECT * FROM contact_interactions WHERE contact_id = ? "
+        "SELECT * FROM contact_interactions WHERE contact_uuid = ? "
         "ORDER BY created_at DESC LIMIT ?",
-        (contact_id, limit),
+        (str(contact_uuid), limit),
     ).fetchall()
     return [dict(r) for r in rows]
 
@@ -896,29 +751,26 @@ def get_contact_interactions(conn, contact_id, limit=20):
 # --- Submitted Roles ---
 
 
-def add_submitted_role(conn, contact_id, company, role_title, status="submitted",
+def add_submitted_role(conn, contact_uuid, company, role_title, status="submitted",
                        pay_rate=None, location=None, role_type="contract", notes=None):
     """Track a role a recruiter submitted you for. Returns row id."""
     cursor = conn.execute(
-        "INSERT INTO submitted_roles (contact_id, company, role_title, status, "
+        "INSERT INTO submitted_roles (contact_uuid, company, role_title, status, "
         "pay_rate, location, role_type, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-        (contact_id, company, role_title, status, pay_rate, location, role_type, notes),
+        (str(contact_uuid), company, role_title, status, pay_rate, location, role_type, notes),
     )
     conn.commit()
     return cursor.lastrowid
 
 
-def get_submitted_roles(conn, contact_id=None, status=None):
+def get_submitted_roles(conn, contact_uuid=None, status=None):
     """Get submitted roles, optionally filtered by contact or status."""
-    query = (
-        "SELECT sr.*, c.name AS contact_name, c.company "
-        "FROM submitted_roles sr JOIN contacts c ON sr.contact_id = c.id"
-    )
+    query = "SELECT sr.* FROM submitted_roles sr"
     conditions = []
     params = []
-    if contact_id:
-        conditions.append("sr.contact_id = ?")
-        params.append(contact_id)
+    if contact_uuid:
+        conditions.append("sr.contact_uuid = ?")
+        params.append(str(contact_uuid))
     if status:
         conditions.append("sr.status = ?")
         params.append(status)
@@ -936,38 +788,6 @@ def update_role_status(conn, role_id, status, notes=None):
         (status, notes, role_id),
     )
     conn.commit()
-
-
-def get_contacts_summary(conn):
-    """Get summary stats for the contacts system."""
-    active_contacts = conn.execute(
-        "SELECT COUNT(*) FROM contacts WHERE relationship_status IN ('new', 'active', 'warm')"
-    ).fetchone()[0]
-    total_roles = conn.execute("SELECT COUNT(*) FROM submitted_roles").fetchone()[0]
-    active_roles = conn.execute(
-        "SELECT COUNT(*) FROM submitted_roles WHERE status IN ('submitted', 'interviewing')"
-    ).fetchone()[0]
-    total_interactions = conn.execute(
-        "SELECT COUNT(*) FROM contact_interactions"
-    ).fetchone()[0]
-    companies = conn.execute(
-        "SELECT COUNT(DISTINCT company) FROM contacts WHERE company IS NOT NULL"
-    ).fetchone()[0]
-    return {
-        "active_contacts": active_contacts,
-        "total_roles_submitted": total_roles,
-        "active_roles": active_roles,
-        "total_interactions": total_interactions,
-        "companies": companies,
-    }
-
-
-def find_contact_by_email(conn, email):
-    """Find a contact by email address. Returns dict or None."""
-    row = conn.execute(
-        "SELECT * FROM contacts WHERE lower(email) = ?", (email.lower(),)
-    ).fetchone()
-    return dict(row) if row else None
 
 
 # --- Company Intel CRUD ---

@@ -85,61 +85,42 @@ def test_all_agencies_have_indy_presence():
         assert agency.get("indy_presence") is True, f"{key} missing indy_presence"
 
 
-# ── Contacts Integration Tests (via unified contacts system) ─────────
+# ── Contacts Integration Tests (interaction/role helpers via SQLite) ──
 
-def test_add_and_get_contact(conn):
-    cid = models.add_contact(
-        conn, "David Perez", "recruiter",
-        company="TEKsystems",
-        email="dperez@teksystems.com",
-        phone="317-810-7562",
-        title="Sr. IT Recruiter (Risk & Security)",
+
+def _seed_contact(conn, name="Test Contact", company="TestCo"):
+    cursor = conn.execute(
+        "INSERT INTO contacts (name, contact_type, company) VALUES (?, 'recruiter', ?)",
+        (name, company),
     )
-    assert cid > 0
-    r = models.get_contact(conn, cid)
-    assert r["name"] == "David Perez"
-    assert r["company"] == "TEKsystems"
-    assert r["email"] == "dperez@teksystems.com"
+    conn.commit()
+    return cursor.lastrowid
 
-def test_find_contact_by_email(conn):
-    models.add_contact(conn, "Test Person", "recruiter", company="TestCo", email="test@example.com")
-    r = models.find_contact_by_email(conn, "test@example.com")
-    assert r is not None
-    assert r["name"] == "Test Person"
-
-def test_list_contacts_by_type(conn):
-    models.add_contact(conn, "Alice", "recruiter", company="AgencyA")
-    models.add_contact(conn, "Bob", "hiring_manager", company="AgencyB")
-    models.add_contact(conn, "Carol", "recruiter", company="AgencyA")
-
-    recruiters = models.list_contacts(conn, contact_type="recruiter")
-    assert len(recruiters) == 2
-    all_contacts = models.list_contacts(conn)
-    assert len(all_contacts) == 3
 
 def test_log_interaction(conn):
-    cid = models.add_contact(conn, "Test", "recruiter", company="TestCo")
+    cid = _seed_contact(conn, "Test", "TestCo")
     iid = models.add_contact_interaction(
-        conn, cid, "email", "inbound",
+        conn, str(cid), "email", "inbound",
         subject="MISO Systems Admin",
         summary="Presented to MISO Energy for sys admin role",
         roles_discussed="MISO - Systems Admin",
     )
     assert iid > 0
-    interactions = models.get_contact_interactions(conn, cid)
+    interactions = models.get_contact_interactions(conn, str(cid))
     assert len(interactions) == 1
     assert interactions[0]["subject"] == "MISO Systems Admin"
 
+
 def test_submitted_roles(conn):
-    cid = models.add_contact(conn, "Test Recruiter", "recruiter", company="TestCo")
+    cid = _seed_contact(conn, "Test Recruiter", "TestCo")
     role_id = models.add_submitted_role(
-        conn, cid, "MISO Energy", "Systems Administrator",
+        conn, str(cid), "MISO Energy", "Systems Administrator",
         pay_rate="$45/hr", location="Indianapolis, IN",
         role_type="contract",
     )
     assert role_id > 0
 
-    roles = models.get_submitted_roles(conn, contact_id=cid)
+    roles = models.get_submitted_roles(conn, contact_uuid=str(cid))
     assert len(roles) == 1
     assert roles[0]["company"] == "MISO Energy"
     assert roles[0]["status"] == "submitted"
@@ -148,25 +129,6 @@ def test_submitted_roles(conn):
     roles = models.get_submitted_roles(conn, status="interviewing")
     assert len(roles) == 1
     assert roles[0]["status"] == "interviewing"
-
-def test_summary(conn):
-    cid = models.add_contact(conn, "Test", "recruiter", company="AgencyA")
-    models.add_submitted_role(conn, cid, "CompA", "Role1")
-    models.add_submitted_role(conn, cid, "CompB", "Role2")
-    models.add_contact_interaction(conn, cid, "call", "outbound")
-
-    summary = models.get_contacts_summary(conn)
-    assert summary["active_contacts"] >= 1
-    assert summary["total_roles_submitted"] == 2
-    assert summary["active_roles"] == 2
-    assert summary["total_interactions"] == 1
-
-def test_update_contact(conn):
-    cid = models.add_contact(conn, "Test", "recruiter", company="Old Agency")
-    models.update_contact(conn, cid, company="New Agency", notes="Updated")
-    r = models.get_contact(conn, cid)
-    assert r["company"] == "New Agency"
-    assert r["notes"] == "Updated"
 
 
 # ── Outreach Template Tests ──────────────────────────────────────────

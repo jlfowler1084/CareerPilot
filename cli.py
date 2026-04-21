@@ -3087,12 +3087,22 @@ CONTACT_SOURCES = [
 CONTACT_METHODS = ["email", "phone", "linkedin", "in_person", "text"]
 
 
+def _get_contact_manager():
+    """Return a configured ContactManager (Supabase-backed)."""
+    from src.db.contacts import ContactManager, ContactManagerNotConfiguredError
+    try:
+        return ContactManager()
+    except ContactManagerNotConfiguredError as exc:
+        console.print(f"[red]ContactManager not configured:[/red] {exc}")
+        raise click.Abort() from exc
+
+
 def _contacts_table(all_contacts, title="Contacts"):
     """Build a Rich table for contacts list."""
     from datetime import datetime
 
     table = Table(title=title)
-    table.add_column("ID", style="dim", width=4)
+    table.add_column("ID", style="dim", width=20)
     table.add_column("Name", style="bold")
     table.add_column("Company")
     table.add_column("Type")
@@ -3105,23 +3115,24 @@ def _contacts_table(all_contacts, title="Contacts"):
     for r in all_contacts:
         status = r.get("relationship_status", "new")
         style = "dim"
+        lcd = r.get("last_contact_date") or r.get("last_contact")
         if status in ("active", "warm"):
-            if r.get("last_contact"):
-                days = (now - datetime.fromisoformat(r["last_contact"])).days
-                if days >= 14:
-                    style = "red"
-                elif days >= 7:
-                    style = "yellow"
-                else:
+            if lcd:
+                try:
+                    dt = datetime.fromisoformat(str(lcd).replace("Z", "+00:00"))
+                    dt = dt.replace(tzinfo=None) if dt.tzinfo else dt
+                    days = (now - dt).days
+                    style = "red" if days >= 14 else ("yellow" if days >= 7 else "green")
+                except (ValueError, TypeError):
                     style = "green"
             else:
                 style = "green"
         elif status == "do_not_contact":
             style = "dim red"
 
-        last_contact = r.get("last_contact", "")
-        if last_contact:
-            last_contact = last_contact[:10]
+        last_contact_disp = str(lcd)[:10] if lcd else ""
+        tags_raw = r.get("tags") or ""
+        tags_disp = ", ".join(tags_raw) if isinstance(tags_raw, list) else tags_raw
 
         table.add_row(
             str(r["id"]),
@@ -3129,9 +3140,9 @@ def _contacts_table(all_contacts, title="Contacts"):
             r.get("company", "") or "",
             r.get("contact_type", "") or "",
             r.get("specialization", "") or "",
-            last_contact,
+            last_contact_disp,
             f"[{style}]{status}[/{style}]",
-            r.get("tags", "") or "",
+            tags_disp,
         )
 
     return table
@@ -3144,11 +3155,8 @@ def contacts(ctx):
     if ctx.invoked_subcommand is not None:
         return
 
-    from src.db import models
-
-    conn = models.get_connection()
-    all_contacts = models.list_contacts(conn)
-    conn.close()
+    mgr = _get_contact_manager()
+    all_contacts = mgr.list_contacts()
 
     if not all_contacts:
         console.print("[dim]No contacts tracked yet. Use 'contacts add' to add one.[/dim]")
@@ -3160,8 +3168,6 @@ def contacts(ctx):
 @contacts.command("add")
 def contacts_add():
     """Add a new contact (interactive wizard)."""
-    from src.db import models
-
     console.print("[bold]Add Contact[/bold]")
     console.print()
 
@@ -3187,33 +3193,32 @@ def contacts_add():
 
     default_spec = "Infrastructure" if contact_type == "recruiter" else ""
     spec = click.prompt("  Specialization", default=default_spec, show_default=bool(default_spec)) or None
-    tags = click.prompt("  Tags (comma-separated)", default="", show_default=False) or None
+    tags_raw = click.prompt("  Tags (comma-separated)", default="", show_default=False) or None
+    tags = [t.strip() for t in tags_raw.split(",") if t.strip()] if tags_raw else None
     notes = click.prompt("  Notes", default="", show_default=False) or None
 
-    conn = models.get_connection()
-    cid = models.add_contact(
-        conn, name, contact_type,
+    mgr = _get_contact_manager()
+    cid = mgr.add_contact(
+        name, contact_type,
         company=company, title=title, email=email, phone=phone,
         linkedin_url=linkedin, source=source, specialization=spec,
         tags=tags, notes=notes,
     )
-    conn.close()
 
     company_str = f" ({company})" if company else ""
-    console.print(f"\n  [green]Added contact #{cid}: {name}{company_str} [{contact_type}][/green]")
+    console.print(f"\n  [green]Added contact {cid}: {name}{company_str} [{contact_type}][/green]")
 
 
 @contacts.command("show")
-@click.argument("contact_id", type=int)
+@click.argument("contact_id", type=str)
 def contacts_show(contact_id):
     """Show detailed contact info with interaction history."""
     from src.db import models
 
-    conn = models.get_connection()
-    c = models.get_contact(conn, contact_id)
+    mgr = _get_contact_manager()
+    c = mgr.get_contact(contact_id)
     if not c:
-        console.print(f"[red]Contact #{contact_id} not found.[/red]")
-        conn.close()
+        console.print(f"[red]Contact {contact_id} not found.[/red]")
         return
 
     # Build detail panel
@@ -3222,8 +3227,8 @@ def contacts_show(contact_id):
         lines.append(f"Company: {c['company']}")
     if c.get("title"):
         lines.append(f"Title: {c['title']}")
-    lines.append(f"Type: {c['contact_type']}")
-    lines.append(f"Status: {c['relationship_status']}")
+    lines.append(f"Type: {c.get('contact_type', 'recruiter')}")
+    lines.append(f"Status: {c.get('relationship_status', 'new')}")
     if c.get("email"):
         lines.append(f"Email: {c['email']}")
     if c.get("phone"):
@@ -3234,19 +3239,24 @@ def contacts_show(contact_id):
         lines.append(f"Specialization: {c['specialization']}")
     if c.get("source"):
         lines.append(f"Source: {c['source']}")
-    if c.get("tags"):
-        lines.append(f"Tags: {c['tags']}")
-    if c.get("last_contact"):
-        lines.append(f"Last Contact: {c['last_contact'][:10]} via {c.get('contact_method', 'N/A')}")
+    tags_raw = c.get("tags")
+    if tags_raw:
+        tags_disp = ", ".join(tags_raw) if isinstance(tags_raw, list) else tags_raw
+        lines.append(f"Tags: {tags_disp}")
+    lcd = c.get("last_contact_date")
+    if lcd:
+        lines.append(f"Last Contact: {str(lcd)[:10]} via {c.get('contact_method', 'N/A')}")
     if c.get("next_followup"):
         lines.append(f"Next Follow-up: {c['next_followup']}")
     if c.get("notes"):
         lines.append(f"\nNotes:\n{c['notes']}")
 
-    console.print(Panel("\n".join(lines), title=f"Contact #{contact_id}"))
+    console.print(Panel("\n".join(lines), title=f"Contact {contact_id}"))
 
-    # Interaction history
+    # Interaction history (local SQLite log)
+    conn = models.get_connection()
     interactions = models.get_contact_interactions(conn, contact_id)
+    conn.close()
     if interactions:
         console.print(f"\n[bold]Recent Interactions ({len(interactions)}):[/bold]")
         for i in interactions[:10]:
@@ -3258,8 +3268,10 @@ def contacts_show(contact_id):
             if i.get("summary"):
                 console.print(f"    {i['summary'][:80]}")
 
-    # Submitted roles
-    roles = models.get_submitted_roles(conn, contact_id=contact_id)
+    # Submitted roles (local SQLite log)
+    conn = models.get_connection()
+    roles = models.get_submitted_roles(conn, contact_uuid=contact_id)
+    conn.close()
     if roles:
         console.print(f"\n[bold]Submitted Roles ({len(roles)}):[/bold]")
         for role in roles:
@@ -3269,31 +3281,33 @@ def contacts_show(contact_id):
             if role.get("pay_rate"):
                 console.print(f"    Pay: {role['pay_rate']}")
 
-    conn.close()
-
 
 @contacts.command("edit")
-@click.argument("contact_id", type=int)
+@click.argument("contact_id", type=str)
 def contacts_edit(contact_id):
     """Update contact fields interactively."""
-    from src.db import models
-
-    conn = models.get_connection()
-    c = models.get_contact(conn, contact_id)
+    mgr = _get_contact_manager()
+    c = mgr.get_contact(contact_id)
     if not c:
-        console.print(f"[red]Contact #{contact_id} not found.[/red]")
-        conn.close()
+        console.print(f"[red]Contact {contact_id} not found.[/red]")
         return
 
     console.print(f"[bold]Edit {c['name']}[/bold] (press Enter to keep current value)")
 
     updates = {}
     for field in ["name", "company", "title", "email", "phone", "linkedin_url",
-                   "specialization", "tags", "notes"]:
+                   "specialization", "notes"]:
         current = c.get(field, "") or ""
         val = click.prompt(f"  {field}", default=current, show_default=True)
         if val != current:
             updates[field] = val if val else None
+
+    # Tags (display as comma-separated, store as list)
+    tags_current = c.get("tags") or []
+    tags_str = ", ".join(tags_current) if isinstance(tags_current, list) else (tags_current or "")
+    tags_val = click.prompt("  tags", default=tags_str, show_default=True)
+    if tags_val != tags_str:
+        updates["tags"] = [t.strip() for t in tags_val.split(",") if t.strip()] if tags_val else []
 
     # Status
     current_status = c.get("relationship_status", "new")
@@ -3308,25 +3322,24 @@ def contacts_edit(contact_id):
             updates["relationship_status"] = statuses[idx]
 
     if updates:
-        models.update_contact(conn, contact_id, **updates)
+        mgr.update_contact(contact_id, **updates)
         console.print(f"  [green]Updated {', '.join(updates.keys())}.[/green]")
     else:
         console.print("  [dim]No changes made.[/dim]")
 
-    conn.close()
-
 
 @contacts.command("log")
-@click.argument("contact_id", type=int)
+@click.argument("contact_id", type=str)
 def contacts_log(contact_id):
     """Log an interaction with a contact."""
+    from datetime import datetime
+
     from src.db import models
 
-    conn = models.get_connection()
-    c = models.get_contact(conn, contact_id)
+    mgr = _get_contact_manager()
+    c = mgr.get_contact(contact_id)
     if not c:
-        console.print(f"[red]Contact #{contact_id} not found.[/red]")
-        conn.close()
+        console.print(f"[red]Contact {contact_id} not found.[/red]")
         return
 
     company_str = f" ({c['company']})" if c.get("company") else ""
@@ -3335,17 +3348,25 @@ def contacts_log(contact_id):
         "  Contact method",
         type=click.Choice(CONTACT_METHODS),
     )
-    note = click.prompt("  Note (optional)", default="", show_default=False)
+    subject = click.prompt("  Subject / note (optional)", default="", show_default=False) or None
     followup = click.prompt(
         "  Next follow-up date (YYYY-MM-DD, optional)",
         default="", show_default=False,
     ) or None
 
-    models.log_contact_interaction(conn, contact_id, method, note)
-    if followup:
-        models.update_contact(conn, contact_id, next_followup=followup)
+    now_iso = datetime.now().isoformat()
 
+    # Write interaction log to local SQLite
+    conn = models.get_connection()
+    models.add_contact_interaction(conn, contact_id, method, subject=subject)
     conn.close()
+
+    # Update Supabase contact record
+    updates: dict = {"last_contact_date": now_iso, "contact_method": method}
+    if followup:
+        updates["next_followup"] = followup
+    mgr.update_contact(contact_id, **updates)
+
     console.print(f"  [green]Contact logged for {c['name']}.[/green]")
 
 
@@ -3353,11 +3374,8 @@ def contacts_log(contact_id):
 @click.argument("query")
 def contacts_search(query):
     """Search contacts by name, company, email, or notes."""
-    from src.db import models
-
-    conn = models.get_connection()
-    results = models.search_contacts(conn, query)
-    conn.close()
+    mgr = _get_contact_manager()
+    results = mgr.search_contacts(query)
 
     if not results:
         console.print(f"[dim]No contacts matching '{query}'.[/dim]")
@@ -3371,18 +3389,15 @@ def contacts_stale():
     """Show contacts not contacted in 14+ days (active/warm only)."""
     from datetime import datetime
 
-    from src.db import models
-
-    conn = models.get_connection()
-    stale = models.get_stale_contacts(conn)
-    conn.close()
+    mgr = _get_contact_manager()
+    stale = mgr.get_stale_contacts()
 
     if not stale:
         console.print("[green]No stale contacts. All follow-ups are current.[/green]")
         return
 
     table = Table(title="Stale Contacts (14+ days)")
-    table.add_column("ID", style="dim", width=4)
+    table.add_column("ID", style="dim", width=20)
     table.add_column("Name", style="bold red")
     table.add_column("Company")
     table.add_column("Type")
@@ -3392,14 +3407,20 @@ def contacts_stale():
 
     now = datetime.now()
     for r in stale:
-        days = (now - datetime.fromisoformat(r["last_contact"])).days
+        lcd = r.get("last_contact_date") or ""
+        try:
+            dt = datetime.fromisoformat(str(lcd).replace("Z", "+00:00"))
+            dt = dt.replace(tzinfo=None) if dt.tzinfo else dt
+            days_str = str((now - dt).days)
+        except (ValueError, TypeError):
+            days_str = "?"
         table.add_row(
             str(r["id"]),
             r["name"],
             r.get("company", "") or "",
             r.get("contact_type", "") or "",
-            r["last_contact"][:10],
-            str(days),
+            str(lcd)[:10],
+            days_str,
             r.get("relationship_status", ""),
         )
 
@@ -3409,18 +3430,15 @@ def contacts_stale():
 @contacts.command("followups")
 def contacts_followups():
     """Show contacts with follow-ups due today or overdue."""
-    from src.db import models
-
-    conn = models.get_connection()
-    due = models.get_followup_due(conn)
-    conn.close()
+    mgr = _get_contact_manager()
+    due = mgr.get_followup_due()
 
     if not due:
         console.print("[green]No follow-ups due.[/green]")
         return
 
     table = Table(title="Follow-ups Due")
-    table.add_column("ID", style="dim", width=4)
+    table.add_column("ID", style="dim", width=20)
     table.add_column("Name", style="bold")
     table.add_column("Company")
     table.add_column("Due Date", style="yellow")
@@ -3439,50 +3457,35 @@ def contacts_followups():
 
 
 @contacts.command("tag")
-@click.argument("contact_id", type=int)
+@click.argument("contact_id", type=str)
 @click.argument("tag")
 def contacts_tag(contact_id, tag):
     """Add a tag to a contact."""
-    from src.db import models
-
-    conn = models.get_connection()
-    if not models.get_contact(conn, contact_id):
-        console.print(f"[red]Contact #{contact_id} not found.[/red]")
-        conn.close()
+    mgr = _get_contact_manager()
+    if not mgr.add_tag(contact_id, tag):
+        console.print(f"[red]Contact {contact_id} not found.[/red]")
         return
-
-    models.add_tag(conn, contact_id, tag)
-    conn.close()
-    console.print(f"  [green]Tag '{tag}' added to contact #{contact_id}.[/green]")
+    console.print(f"  [green]Tag '{tag}' added to contact {contact_id}.[/green]")
 
 
 @contacts.command("untag")
-@click.argument("contact_id", type=int)
+@click.argument("contact_id", type=str)
 @click.argument("tag")
 def contacts_untag(contact_id, tag):
     """Remove a tag from a contact."""
-    from src.db import models
-
-    conn = models.get_connection()
-    if not models.get_contact(conn, contact_id):
-        console.print(f"[red]Contact #{contact_id} not found.[/red]")
-        conn.close()
+    mgr = _get_contact_manager()
+    if not mgr.remove_tag(contact_id, tag):
+        console.print(f"[red]Contact {contact_id} not found.[/red]")
         return
-
-    models.remove_tag(conn, contact_id, tag)
-    conn.close()
-    console.print(f"  [green]Tag '{tag}' removed from contact #{contact_id}.[/green]")
+    console.print(f"  [green]Tag '{tag}' removed from contact {contact_id}.[/green]")
 
 
 @contacts.command("by-type")
 @click.argument("contact_type")
 def contacts_by_type(contact_type):
     """Filter contacts by type (recruiter, hiring_manager, etc.)."""
-    from src.db import models
-
-    conn = models.get_connection()
-    results = models.list_contacts(conn, contact_type=contact_type)
-    conn.close()
+    mgr = _get_contact_manager()
+    results = mgr.list_contacts(contact_type=contact_type)
 
     if not results:
         console.print(f"[dim]No contacts of type '{contact_type}'.[/dim]")
@@ -3496,41 +3499,33 @@ def contacts_by_type(contact_type):
 @click.option("--name", default=None, help="Contact name (prompted if omitted).")
 def contacts_create_from_email(email, name):
     """Create a contact from an email address (quick capture)."""
-    from src.db import models
-
     email = (email or "").strip()
     if not email:
         console.print("[red]Email is required.[/red]")
         raise click.Abort()
 
-    conn = models.get_connection()
-    try:
-        existing = models.find_contact_by_email(conn, email)
-        if existing:
-            company_str = f" ({existing['company']})" if existing.get("company") else ""
-            console.print(
-                f"[yellow]Contact already exists:[/yellow] "
-                f"#{existing['id']} {existing['name']}{company_str} "
-                f"[{existing['contact_type']}]"
-            )
-            return
-
-        if not name:
-            name = click.prompt("  Name").strip()
-        if not name:
-            console.print("[red]Name is required to create a new contact.[/red]")
-            raise click.Abort()
-
-        cid = models.add_contact(
-            conn, name, contact_type="recruiter",
-            email=email, source="email_import",
-        )
+    mgr = _get_contact_manager()
+    existing = mgr.find_by_email(email)
+    if existing:
+        company_str = f" ({existing['company']})" if existing.get("company") else ""
         console.print(
-            f"[green]Added contact #{cid}: {name} <{email}> "
-            f"[recruiter, source=email_import][/green]"
+            f"[yellow]Contact already exists:[/yellow] "
+            f"#{existing['id']} {existing['name']}{company_str} "
+            f"[{existing.get('contact_type', 'recruiter')}]"
         )
-    finally:
-        conn.close()
+        return
+
+    if not name:
+        name = click.prompt("  Name").strip()
+    if not name:
+        console.print("[red]Name is required to create a new contact.[/red]")
+        raise click.Abort()
+
+    cid = mgr.add_contact(name, contact_type="recruiter", email=email, source="email_import")
+    console.print(
+        f"[green]Added contact {cid}: {name} <{email}> "
+        f"[recruiter, source=email_import][/green]"
+    )
 
 
 # --- Backward-compat: 'recruiters' alias ---
@@ -3543,11 +3538,8 @@ def recruiters(ctx):
     if ctx.invoked_subcommand is not None:
         return
 
-    from src.db import models
-
-    conn = models.get_connection()
-    result = models.list_contacts(conn, contact_type="recruiter")
-    conn.close()
+    mgr = _get_contact_manager()
+    result = mgr.list_contacts(contact_type="recruiter")
 
     if not result:
         console.print("[dim]No recruiters tracked yet. Use 'contacts add' to add one.[/dim]")
