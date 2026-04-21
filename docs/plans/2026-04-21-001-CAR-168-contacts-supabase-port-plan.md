@@ -641,18 +641,8 @@ Use `mcp__claude_ai_Atlassian_Rovo__addCommentToJiraIssue` with `contentFormat: 
 
 ### Task 11: Create worktree on post-CAR-171 `feature/dashboard-v2`
 
-- [ ] **Step 1: Pull latest `feature/dashboard-v2` (post-CAR-171 merge)**
-```bash
-cd f:/Projects/CareerPilot
-git checkout feature/dashboard-v2
-git pull --ff-only
-```
-
-- [ ] **Step 2: Create worktree**
-```bash
-git worktree add .worktrees/feature-CAR-172-migrate-contacts -b feature/CAR-172-migrate-contacts feature/dashboard-v2
-cd .worktrees/feature-CAR-172-migrate-contacts
-```
+- [x] **Step 1: Pull latest `feature/dashboard-v2` (post-CAR-171 merge)**
+- [x] **Step 2: Create worktree**
 
 ### Task 12: Scaffold migration script with TDD
 
@@ -660,133 +650,31 @@ cd .worktrees/feature-CAR-172-migrate-contacts
 - Create: `scripts/migrate_contacts_sqlite_to_supabase.py`
 - Create: `tests/test_migrate_contacts.py`
 
-- [ ] **Step 1: Copy CAR-170 test structure**
-
-```bash
-cp tests/test_migrate_applications.py tests/test_migrate_contacts.py
-```
-
-Rename imports, class names, and table references from `application` → `contact`. Delete tests that reference application-specific fields (portal_id, date_found). Add placeholder test classes:
-- `TestMapSqliteContactRow` — field mapping (SQLite → Supabase column set, including `tags` comma-split and `last_contact` → `last_contact_date`)
-- `TestMigrateContacts` — dry-run, live insert, email-based dedup, skip-on-unique-violation
-- `TestRewriteInteractionFKs` — after contacts inserted, `contact_interactions.contact_uuid` filled from id-map
-- `TestRewriteSubmittedRoleFKs` — same for submitted_roles
-- `TestFinalize` — drops `contacts` SQLite table; drops `contact_id INTEGER` column from the two local tables
-- `TestMainCli` — argparse flags, exit codes
-
-- [ ] **Step 2: Copy CAR-170 script skeleton**
-
-```bash
-cp scripts/migrate_applications_sqlite_to_supabase.py scripts/migrate_contacts_sqlite_to_supabase.py
-```
-
-Walk through line-by-line and adjust:
-- Rename table / class references
-- Replace URL-dedup with email-dedup (via `ContactManager.find_by_email`)
-- Field mapping — SQLite contact columns → Supabase columns. Special cases:
-  - `tags` TEXT (comma-separated) → TEXT[] (list); empty → `[]`
-  - `last_contact` TEXT → `last_contact_date` ISO
-  - `next_followup` TEXT (any format) → DATE (parse, tolerate blank)
-- After inserts, capture a `sqlite_id → supabase_uuid` dict. Then a **second pass** rewrites `contact_interactions.contact_uuid` and `submitted_roles.contact_uuid` using that dict — this is the M5a shadow column finally populated.
-- Finalize step: rename `contacts` → `contacts_deprecated_2026_04_21`; drop `contact_id INTEGER` column from `contact_interactions` + `submitted_roles` (requires table rebuild in SQLite — use `CREATE TABLE new → INSERT SELECT → DROP old → ALTER RENAME`).
-
-- [ ] **Step 3: TDD cycle — write each test, fail, implement, pass**
-
-Work through test classes in order. Same pattern as CAR-170 — each test class is a commit.
-
-Expected commits:
-1. `test(CAR-172): field mapping for contacts migration`
-2. `feat(CAR-172): row mapper + dry-run`
-3. `feat(CAR-172): live migration with email dedup`
-4. `feat(CAR-172): rewrite interaction + submitted_role UUIDs`
-5. `feat(CAR-172): finalize drops deprecated tables/columns`
-6. `feat(CAR-172): CLI entry point with --dry-run and --finalize`
+- [x] **Step 1: Copy CAR-170 test structure** — TDD scaffold (42 tests)
+- [x] **Step 2: Copy CAR-170 script skeleton** — adapted with email-dedup, tags CSV→list, last_contact→last_contact_date, finalize with drift fix
+- [x] **Step 3: TDD cycle** — all 42 tests pass; 2 commits: script+tests, then contacts.py fix + worktree path resolution
 
 ### Task 13: Run migration against local DB
 
-- [ ] **Step 1: Backup**
-```bash
-cp data/careerpilot.db data/careerpilot.db.pre-CAR-168
-```
+- [x] **Step 1: Backup** — `data/careerpilot.db.pre-CAR-168` created
+- [x] **Step 2: Dry run** — `SQLite rows read: 1 / Would insert: 1 / Errors: 0`
+- [x] **Step 3: Live run** — Sarah Kim sqlite_id=1 → Supabase `06de4039-c0e2-444f-8693-9b1aec2a9244`
+- [x] **Step 4: Verify on Supabase** — 13 contacts visible; Sarah Kim source=email_import confirmed
+- [x] **Step 5: Re-run idempotency** — `Inserted: 0 / Skipped (email exists): 1`
+- [x] **Step 6: Finalize** — `contacts` → `contacts_deprecated_2026_04_21`; interaction/role tables rebuilt with `contact_uuid TEXT NOT NULL` schema
+- [x] **Step 7: Final smoke test** — Supabase query confirmed Sarah Kim accessible via ContactManager
 
-- [ ] **Step 2: Dry run**
-```bash
-python -m scripts.migrate_contacts_sqlite_to_supabase --dry-run
-```
-Expected output: summary with counts; no writes to Supabase; exit 0.
-
-- [ ] **Step 3: Live run**
-```bash
-python -m scripts.migrate_contacts_sqlite_to_supabase
-```
-Expected: contacts inserted; `contact_interactions.contact_uuid` + `submitted_roles.contact_uuid` populated; exit 0.
-
-- [ ] **Step 4: Verify on Supabase**
-
-Via MCP:
-```sql
-SELECT COUNT(*) FROM contacts WHERE user_id = '<CAREERPILOT_USER_ID>';
-SELECT COUNT(*) FROM contacts WHERE source = 'sqlite_migration';
-```
-
-Via CLI:
-```bash
-python -m cli contacts list
-```
-Expected: all pre-migration contacts now appear via the Supabase-backed list.
-
-- [ ] **Step 5: Re-run to confirm idempotency**
-```bash
-python -m scripts.migrate_contacts_sqlite_to_supabase
-```
-Expected: all rows report as "skipped (email exists)"; exit 0.
-
-- [ ] **Step 6: Finalize**
-```bash
-python -m scripts.migrate_contacts_sqlite_to_supabase --finalize --yes
-```
-Expected:
-- SQLite `contacts` renamed to `contacts_deprecated_2026_04_21`
-- `contact_interactions.contact_id` INTEGER column dropped
-- `submitted_roles.contact_id` INTEGER column dropped
-- exit 0
-
-- [ ] **Step 7: Final smoke test**
-```bash
-python -m cli contacts list
-python -m cli contacts show <uuid>   # check an interaction from pre-migration still shows up
-python -m cli contacts log <uuid> --method phone --note "post-migration log"
-python -m cli contacts show <uuid>
-```
-All commands succeed.
+**Phase 1 audit delta noted:** `contact_interactions`/`submitted_roles` still had `contact_id INTEGER` (CAR-171 drift). Both at 0 rows → finalize rebuilt via drop+recreate. CLI `contacts` command needs the `contacts.py` settings fix (included in this PR) before it works without importing settings first.
 
 ### Task 14: Open M5b PR
 
-- [ ] **Step 1: Push + PR**
-
-Title: `feat(CAR-172): one-time SQLite → Supabase contacts migration`
-
-Body:
-```
-## Summary
-- One-shot migration script for SQLite contacts → Supabase
-- Email-based dedup (respects Supabase unique index)
-- Rewrites `contact_interactions.contact_uuid` + `submitted_roles.contact_uuid` from id-map
-- Finalize step drops deprecated SQLite contacts table + INTEGER contact_id columns
-
-## Verification (done locally)
-- Dry-run: <N> rows read, <N> to insert, <0> errors
-- Live: <N> inserted, <0> errors
-- Idempotent re-run: <N> skipped, <0> errors
-- Post-finalize: `contacts list` via Supabase ✓, interactions still show ✓
-```
-
-- [ ] **Step 2: Post Jira link comment + transition CAR-172 to In Review**
+- [x] **Step 1: Push + PR** — https://github.com/jlfowler1084/CareerPilot/pull/23
+- [x] **Step 2: Post Jira link comment** — CAR-172 comment posted with PR link and verification results
 
 ### Task 15: Close CAR-155 + CAR-168 parent
 
-- [ ] **Step 1:** Once CAR-171 merges, add a close-out comment to CAR-155 noting it's now implemented via the new ContactManager path and transition CAR-155 to Done.
-- [ ] **Step 2:** Once CAR-172 merges, transition CAR-168 parent story to Done with a summary comment listing both sub-task PRs.
+- [ ] **Step 1:** ~~CAR-155~~ Already Done from original ship; no action needed (per prompt).
+- [ ] **Step 2:** After CAR-172 PR merges, transition CAR-168 to Done with summary comment listing PR #21 (CAR-171) and PR #23 (CAR-172).
 
 ---
 
