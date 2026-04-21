@@ -296,3 +296,17 @@ class TestFindByUrl:
         tracker.save_job(_sample_job(url="https://acme.com/job/1"))
         result = tracker.find_by_url("  https://acme.com/job/1  ")
         assert result is not None
+
+
+class TestSaveJobNotes:
+    def test_notes_from_job_data_persisted(self, tracker):
+        """save_job honors notes from job_data and persists to DB."""
+        app_id = tracker.save_job(_sample_job(notes="Referred by Jane"))
+        row = tracker.get_job(app_id)
+        assert row["notes"] == "Referred by Jane"
+
+    def test_notes_default_empty_when_not_provided(self, tracker):
+        """save_job defaults notes to empty string if absent from job_data (backward compat)."""
+        app_id = tracker.save_job(_sample_job())
+        row = tracker.get_job(app_id)
+        assert row["notes"] == ""

@@ -49,7 +49,7 @@ class ApplicationTracker:
             "INSERT INTO applications "
             "(title, company, location, url, source, salary_range, status, date_found, "
             "notes, profile_id, description, message_id) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, '', ?, ?, ?)",
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 job_data.get("title", ""),
                 job_data.get("company", ""),
@@ -59,6 +59,7 @@ class ApplicationTracker:
                 job_data.get("salary", job_data.get("salary_range", "")),
                 status,
                 now,
+                job_data.get("notes", ""),
                 job_data.get("profile_id", ""),
                 job_data.get("description"),
                 job_data.get("message_id", ""),
