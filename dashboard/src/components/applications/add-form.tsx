@@ -3,15 +3,24 @@
 import { useState } from "react"
 import { ChevronDown, ChevronUp, Plus } from "lucide-react"
 import type { Application } from "@/types"
+import {
+  findApplicationByUrl,
+  formatDuplicateConfirmMessage,
+} from "@/lib/url-dedup"
 
 interface AddFormProps {
   onAdd: (
     job: Partial<Application>,
     entryPoint: "manual"
   ) => Promise<unknown>
+  /**
+   * CAR-167: current user's applications, passed so the form can warn
+   * before adding a duplicate URL. Matches CLI `tracker add` behavior.
+   */
+  existingApplications?: Application[]
 }
 
-export function AddForm({ onAdd }: AddFormProps) {
+export function AddForm({ onAdd, existingApplications = [] }: AddFormProps) {
   const [open, setOpen] = useState(false)
   const [title, setTitle] = useState("")
   const [company, setCompany] = useState("")
@@ -24,13 +33,24 @@ export function AddForm({ onAdd }: AddFormProps) {
     e.preventDefault()
     if (!title.trim() || !company.trim()) return
 
+    // CAR-167: block on duplicate URL unless the user confirms. Parity
+    // with ApplicationTracker.find_by_url in the CLI (src/jobs/tracker.py).
+    const trimmedUrl = url.trim()
+    if (trimmedUrl) {
+      const existing = findApplicationByUrl(trimmedUrl, existingApplications)
+      if (existing) {
+        const proceed = window.confirm(formatDuplicateConfirmMessage(existing))
+        if (!proceed) return
+      }
+    }
+
     setSubmitting(true)
     await onAdd(
       {
         title: title.trim(),
         company: company.trim(),
         location: location.trim() || null,
-        url: url.trim() || null,
+        url: trimmedUrl || null,
         source: source.trim() || null,
       },
       "manual"

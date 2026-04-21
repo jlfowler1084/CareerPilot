@@ -144,11 +144,11 @@ function ApplicationsContent() {
       <UrlImport
         onSave={createFromExtraction}
         onUpdate={updateApplication}
-        existingUrls={applications.filter((a) => a.url).map((a) => a.url!)}
+        existingApplications={applications}
       />
 
       {/* Add Form */}
-      <AddForm onAdd={addApplication} />
+      <AddForm onAdd={addApplication} existingApplications={applications} />
 
       {/* Filter / Sort Bar */}
       <div className="flex items-center gap-3 flex-wrap">
