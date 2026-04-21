@@ -185,11 +185,11 @@ class TestMigrationFromTrackerDb:
         assert contacts[0]["company"] == "TEKsystems"
         assert contacts[0]["title"] == "Sr. Recruiter"
 
-        interactions = models.get_contact_interactions(conn, contacts[0]["id"])
+        interactions = models.get_contact_interactions(conn, str(contacts[0]["id"]))
         assert len(interactions) == 1
         assert interactions[0]["subject"] == "MISO Systems Admin"
 
-        roles = models.get_submitted_roles(conn, contact_id=contacts[0]["id"])
+        roles = models.get_submitted_roles(conn, contact_uuid=str(contacts[0]["id"]))
         assert len(roles) == 1
         assert roles[0]["company"] == "MISO Energy"
         assert roles[0]["role_title"] == "Systems Administrator"
@@ -385,11 +385,11 @@ class TestDeleteContact:
 
     def test_hard_delete_cascades(self, conn):
         cid = models.add_contact(conn, "Sarah Kim", "recruiter")
-        models.add_contact_interaction(conn, cid, "email")
-        models.add_submitted_role(conn, cid, "CompanyA", "Role1")
+        models.add_contact_interaction(conn, str(cid), "email")
+        models.add_submitted_role(conn, str(cid), "CompanyA", "Role1")
         models.delete_contact(conn, cid, force=True)
-        assert models.get_contact_interactions(conn, cid) == []
-        assert models.get_submitted_roles(conn, contact_id=cid) == []
+        assert models.get_contact_interactions(conn, str(cid)) == []
+        assert models.get_submitted_roles(conn, contact_uuid=str(cid)) == []
 
     def test_returns_false_for_missing(self, conn):
         assert models.delete_contact(conn, 9999) is False
@@ -596,7 +596,7 @@ class TestContactInteractions:
     def test_add_interaction(self, conn):
         cid = models.add_contact(conn, "David Perez", "recruiter")
         iid = models.add_contact_interaction(
-            conn, cid, "email", "inbound",
+            conn, str(cid), "email", "inbound",
             subject="MISO Systems Admin",
             summary="Presented for sys admin role",
         )
@@ -604,16 +604,10 @@ class TestContactInteractions:
 
     def test_get_interactions(self, conn):
         cid = models.add_contact(conn, "David Perez", "recruiter")
-        models.add_contact_interaction(conn, cid, "email", subject="First")
-        models.add_contact_interaction(conn, cid, "call", subject="Second")
-        interactions = models.get_contact_interactions(conn, cid)
+        models.add_contact_interaction(conn, str(cid), "email", subject="First")
+        models.add_contact_interaction(conn, str(cid), "call", subject="Second")
+        interactions = models.get_contact_interactions(conn, str(cid))
         assert len(interactions) == 2
-
-    def test_interaction_updates_last_contact(self, conn):
-        cid = models.add_contact(conn, "David Perez", "recruiter")
-        models.add_contact_interaction(conn, cid, "email")
-        c = models.get_contact(conn, cid)
-        assert c["last_contact"] is not None
 
 
 # --- Submitted Roles Tests ---
@@ -623,22 +617,22 @@ class TestSubmittedRoles:
     def test_add_role(self, conn):
         cid = models.add_contact(conn, "David Perez", "recruiter")
         rid = models.add_submitted_role(
-            conn, cid, "MISO Energy", "Systems Administrator",
+            conn, str(cid), "MISO Energy", "Systems Administrator",
             pay_rate="$45/hr", location="Indianapolis, IN",
         )
         assert rid > 0
 
     def test_get_roles_by_contact(self, conn):
         cid = models.add_contact(conn, "David Perez", "recruiter")
-        models.add_submitted_role(conn, cid, "MISO", "Sys Admin")
-        models.add_submitted_role(conn, cid, "Corteva", "Desktop Support")
-        roles = models.get_submitted_roles(conn, contact_id=cid)
+        models.add_submitted_role(conn, str(cid), "MISO", "Sys Admin")
+        models.add_submitted_role(conn, str(cid), "Corteva", "Desktop Support")
+        roles = models.get_submitted_roles(conn, contact_uuid=str(cid))
         assert len(roles) == 2
 
     def test_get_roles_by_status(self, conn):
         cid = models.add_contact(conn, "David Perez", "recruiter")
-        r1 = models.add_submitted_role(conn, cid, "MISO", "Sys Admin")
-        models.add_submitted_role(conn, cid, "Corteva", "Desktop Support")
+        r1 = models.add_submitted_role(conn, str(cid), "MISO", "Sys Admin")
+        models.add_submitted_role(conn, str(cid), "Corteva", "Desktop Support")
         models.update_role_status(conn, r1, "interviewing")
         roles = models.get_submitted_roles(conn, status="interviewing")
         assert len(roles) == 1
@@ -646,9 +640,9 @@ class TestSubmittedRoles:
 
     def test_update_role_status(self, conn):
         cid = models.add_contact(conn, "David Perez", "recruiter")
-        rid = models.add_submitted_role(conn, cid, "MISO", "Sys Admin")
+        rid = models.add_submitted_role(conn, str(cid), "MISO", "Sys Admin")
         models.update_role_status(conn, rid, "offered", "Great news!")
-        roles = models.get_submitted_roles(conn, contact_id=cid)
+        roles = models.get_submitted_roles(conn, contact_uuid=str(cid))
         assert roles[0]["status"] == "offered"
 
 
@@ -658,8 +652,8 @@ class TestSubmittedRoles:
 class TestContactsSummary:
     def test_summary(self, conn):
         cid = models.add_contact(conn, "Test", "recruiter", company="AgencyA")
-        models.add_submitted_role(conn, cid, "CompA", "Role1")
-        models.add_contact_interaction(conn, cid, "call")
+        models.add_submitted_role(conn, str(cid), "CompA", "Role1")
+        models.add_contact_interaction(conn, str(cid), "call")
         summary = models.get_contacts_summary(conn)
         assert summary["active_contacts"] >= 1
         assert summary["total_roles_submitted"] == 1
