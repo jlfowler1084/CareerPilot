@@ -374,6 +374,9 @@ def get_connection(db_path: Path = None) -> sqlite3.Connection:
     conn = sqlite3.connect(str(db_path))
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
+    # Must run before SCHEMA_SQL: SCHEMA_SQL creates an index on contact_uuid;
+    # if the old table still has contact_id that index creation fails.
+    _migrate_contact_uuid_schema(conn)
     conn.executescript(SCHEMA_SQL)
 
     # --- Migrations ---
@@ -381,7 +384,6 @@ def get_connection(db_path: Path = None) -> sqlite3.Connection:
     _migrate_llm_calls(conn)
     _migrate_transcripts_kind(conn)
     _backfill_interview_analyses(conn)
-    _migrate_contact_uuid_schema(conn)
     migrate_recruiters_to_contacts(conn)
     migrate_applications_description(conn)
 
@@ -693,110 +695,6 @@ def _migrate_tracker_db(conn):
                 )
 
 
-# --- Contacts CRUD ---
-
-
-def add_contact(conn, name, contact_type="recruiter", **kwargs):
-    """Insert a new contact. Returns the row id."""
-    allowed = {
-        "company", "title", "email", "phone", "linkedin_url",
-        "specialization", "source", "last_contact", "contact_method",
-        "next_followup", "relationship_status", "tags", "notes",
-    }
-    fields = {k: v for k, v in kwargs.items() if k in allowed and v is not None}
-    columns = ["name", "contact_type"] + list(fields.keys())
-    placeholders = ", ".join("?" for _ in columns)
-    col_names = ", ".join(columns)
-    values = [name, contact_type] + list(fields.values())
-
-    cursor = conn.execute(
-        f"INSERT INTO contacts ({col_names}) VALUES ({placeholders})", values,
-    )
-    conn.commit()
-    logger.debug("Added contact: %s (type=%s)", name, contact_type)
-    return cursor.lastrowid
-
-
-def get_contact(conn, contact_id):
-    """Get a single contact by id. Returns dict or None."""
-    row = conn.execute(
-        "SELECT * FROM contacts WHERE id = ?", (contact_id,)
-    ).fetchone()
-    return dict(row) if row else None
-
-
-def list_contacts(conn, contact_type=None, status=None, tag=None):
-    """Get contacts with optional filters, sorted by company then name."""
-    query = "SELECT * FROM contacts"
-    conditions = []
-    params = []
-
-    if contact_type:
-        conditions.append("contact_type = ?")
-        params.append(contact_type)
-    if status:
-        conditions.append("relationship_status = ?")
-        params.append(status)
-    if tag:
-        conditions.append("(',' || tags || ',') LIKE ?")
-        params.append(f"%,{tag},%")
-
-    if conditions:
-        query += " WHERE " + " AND ".join(conditions)
-    query += " ORDER BY company, name"
-
-    rows = conn.execute(query, params).fetchall()
-    return [dict(r) for r in rows]
-
-
-def update_contact(conn, contact_id, **kwargs):
-    """Update contact fields. Returns True if found, False otherwise."""
-    allowed = {
-        "name", "company", "title", "contact_type", "email", "phone",
-        "linkedin_url", "specialization", "source", "last_contact",
-        "contact_method", "next_followup", "relationship_status",
-        "tags", "notes",
-    }
-    fields = {k: v for k, v in kwargs.items() if k in allowed}
-    if not fields:
-        return False
-
-    row = conn.execute(
-        "SELECT id FROM contacts WHERE id = ?", (contact_id,)
-    ).fetchone()
-    if not row:
-        logger.warning("Contact id=%d not found", contact_id)
-        return False
-
-    set_clause = ", ".join(f"{k} = ?" for k in fields)
-    values = list(fields.values()) + [contact_id]
-    conn.execute(f"UPDATE contacts SET {set_clause} WHERE id = ?", values)
-    conn.commit()
-    logger.info("Updated contact id=%d: %s", contact_id, list(fields.keys()))
-    return True
-
-
-def delete_contact(conn, contact_id, force=False):
-    """Delete a contact. Soft delete (do_not_contact) unless force=True."""
-    row = conn.execute(
-        "SELECT id FROM contacts WHERE id = ?", (contact_id,)
-    ).fetchone()
-    if not row:
-        return False
-
-    if force:
-        conn.execute("DELETE FROM contact_interactions WHERE contact_uuid = ?", (str(contact_id),))
-        conn.execute("DELETE FROM submitted_roles WHERE contact_uuid = ?", (str(contact_id),))
-        conn.execute("DELETE FROM contacts WHERE id = ?", (contact_id,))
-    else:
-        conn.execute(
-            "UPDATE contacts SET relationship_status = 'do_not_contact' WHERE id = ?",
-            (contact_id,),
-        )
-    conn.commit()
-    return True
-
-
 def deactivate_portal(conn, portal_id):
     """Set a portal as inactive. Returns True if found."""
     return update_portal(conn, portal_id, active=0)
@@ -820,108 +718,6 @@ def get_stale_portals(conn, days=7):
         (cutoff,),
     ).fetchall()
     return [dict(r) for r in rows]
-
-
-def search_contacts(conn, query):
-    """Search contacts by name, company, email, or notes (LIKE matching)."""
-    pattern = f"%{query}%"
-    rows = conn.execute(
-        "SELECT * FROM contacts WHERE "
-        "name LIKE ? OR company LIKE ? OR email LIKE ? OR notes LIKE ? "
-        "ORDER BY name",
-        (pattern, pattern, pattern, pattern),
-    ).fetchall()
-    return [dict(r) for r in rows]
-
-
-def log_contact_interaction(conn, contact_id, method, note=""):
-    """Log a contact interaction.
-
-    Updates last_contact to now, sets contact_method, and appends a
-    timestamped entry to notes.
-    """
-    row = conn.execute(
-        "SELECT id, notes FROM contacts WHERE id = ?", (contact_id,)
-    ).fetchone()
-    if not row:
-        logger.warning("Contact id=%d not found", contact_id)
-        return False
-
-    now = datetime.now().isoformat(timespec="seconds")
-    existing_notes = row["notes"] or ""
-    entry = f"[{now}] ({method}) {note}".strip() if note else f"[{now}] ({method})"
-    new_notes = f"{existing_notes}\n{entry}".strip()
-
-    conn.execute(
-        "UPDATE contacts SET last_contact = ?, contact_method = ?, notes = ? "
-        "WHERE id = ?",
-        (now, method, new_notes, contact_id),
-    )
-    conn.commit()
-    logger.info("Logged contact for contact id=%d via %s", contact_id, method)
-    return True
-
-
-def get_stale_contacts(conn, days=14):
-    """Get contacts with active/warm status not contacted in `days`+ days."""
-    rows = conn.execute(
-        "SELECT * FROM contacts "
-        "WHERE relationship_status IN ('active', 'warm') "
-        "AND last_contact IS NOT NULL "
-        "AND julianday('now') - julianday(last_contact) >= ? "
-        "ORDER BY last_contact ASC",
-        (days,),
-    ).fetchall()
-    return [dict(r) for r in rows]
-
-
-def get_followup_due(conn):
-    """Get contacts with follow-ups due today or overdue."""
-    rows = conn.execute(
-        "SELECT * FROM contacts "
-        "WHERE next_followup IS NOT NULL "
-        "AND date(next_followup) <= date('now') "
-        "ORDER BY next_followup ASC",
-    ).fetchall()
-    return [dict(r) for r in rows]
-
-
-def add_tag(conn, contact_id, tag):
-    """Add a tag to a contact's comma-separated tag list."""
-    row = conn.execute(
-        "SELECT id, tags FROM contacts WHERE id = ?", (contact_id,)
-    ).fetchone()
-    if not row:
-        return False
-
-    existing = row["tags"] or ""
-    tag_list = [t.strip() for t in existing.split(",") if t.strip()]
-    if tag not in tag_list:
-        tag_list.append(tag)
-    new_tags = ",".join(tag_list)
-
-    conn.execute("UPDATE contacts SET tags = ? WHERE id = ?", (new_tags, contact_id))
-    conn.commit()
-    return True
-
-
-def remove_tag(conn, contact_id, tag):
-    """Remove a tag from a contact's comma-separated tag list."""
-    row = conn.execute(
-        "SELECT id, tags FROM contacts WHERE id = ?", (contact_id,)
-    ).fetchone()
-    if not row:
-        return False
-
-    existing = row["tags"] or ""
-    tag_list = [t.strip() for t in existing.split(",") if t.strip()]
-    if tag in tag_list:
-        tag_list.remove(tag)
-    new_tags = ",".join(tag_list)
-
-    conn.execute("UPDATE contacts SET tags = ? WHERE id = ?", (new_tags, contact_id))
-    conn.commit()
-    return True
 
 
 # --- Contact Interactions (from agencies tracker) ---
@@ -992,38 +788,6 @@ def update_role_status(conn, role_id, status, notes=None):
         (status, notes, role_id),
     )
     conn.commit()
-
-
-def get_contacts_summary(conn):
-    """Get summary stats for the contacts system."""
-    active_contacts = conn.execute(
-        "SELECT COUNT(*) FROM contacts WHERE relationship_status IN ('new', 'active', 'warm')"
-    ).fetchone()[0]
-    total_roles = conn.execute("SELECT COUNT(*) FROM submitted_roles").fetchone()[0]
-    active_roles = conn.execute(
-        "SELECT COUNT(*) FROM submitted_roles WHERE status IN ('submitted', 'interviewing')"
-    ).fetchone()[0]
-    total_interactions = conn.execute(
-        "SELECT COUNT(*) FROM contact_interactions"
-    ).fetchone()[0]
-    companies = conn.execute(
-        "SELECT COUNT(DISTINCT company) FROM contacts WHERE company IS NOT NULL"
-    ).fetchone()[0]
-    return {
-        "active_contacts": active_contacts,
-        "total_roles_submitted": total_roles,
-        "active_roles": active_roles,
-        "total_interactions": total_interactions,
-        "companies": companies,
-    }
-
-
-def find_contact_by_email(conn, email):
-    """Find a contact by email address. Returns dict or None."""
-    row = conn.execute(
-        "SELECT * FROM contacts WHERE lower(email) = ?", (email.lower(),)
-    ).fetchone()
-    return dict(row) if row else None
 
 
 # --- Company Intel CRUD ---
