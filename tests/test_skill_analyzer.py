@@ -343,42 +343,10 @@ class TestSkillApplicationMap:
 
 
 # --- Save Job with Description ---
-
-
-class TestSaveJobDescription:
-    def test_saves_description(self, conn):
-        from src.jobs.tracker import ApplicationTracker
-
-        tracker = ApplicationTracker.__new__(ApplicationTracker)
-        tracker._conn = conn
-
-        job_id = tracker.save_job({
-            "title": "Systems Engineer",
-            "company": "MISO Energy",
-            "description": "We need someone who knows Terraform and Kubernetes...",
-        })
-
-        row = conn.execute(
-            "SELECT description FROM applications WHERE id = ?", (job_id,)
-        ).fetchone()
-        assert row["description"] is not None
-        assert "Terraform" in row["description"]
-
-    def test_saves_without_description(self, conn):
-        from src.jobs.tracker import ApplicationTracker
-
-        tracker = ApplicationTracker.__new__(ApplicationTracker)
-        tracker._conn = conn
-
-        job_id = tracker.save_job({
-            "title": "Help Desk",
-            "company": "Acme",
-        })
-
-        row = conn.execute(
-            "SELECT description FROM applications WHERE id = ?", (job_id,)
-        ).fetchone()
-        assert row["description"] is None
+# Removed CAR-165: these tests bypassed ApplicationTracker.__init__ via __new__
+# and wrote directly to a SQLite connection, which no longer exists post-M2.
+# Equivalent coverage lives in:
+#   tests/test_tracker.py::TestSaveJob::test_description_maps_to_job_description
 
 
 # --- Skill Extraction (unit test with mock) ---

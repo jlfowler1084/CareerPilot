@@ -25,11 +25,10 @@ def _sample_job(**overrides):
 
 
 @pytest.fixture
-def applicant(tmp_path):
-    """Create a JobApplicant with temp databases."""
-    db_path = tmp_path / "test_tracker.db"
+def applicant(tmp_path, fake_supabase):
+    """Create a JobApplicant with a fake Supabase tracker + temp profile DB."""
     profile_db = tmp_path / "test_profile.db"
-    a = JobApplicant(db_path=db_path, profile_db_path=profile_db)
+    a = JobApplicant(profile_db_path=profile_db)
     # Seed some profile data for clipboard tests
     a._profile_mgr.update_personal(
         full_name="Joe Fowler",
@@ -158,7 +157,9 @@ class TestApplyTracking:
         with patch("src.jobs.applicant._try_copy_to_clipboard", return_value=True):
             result = applicant.apply_dice_easy(job)
         assert result["tracker_id"] is not None
-        assert result["tracker_id"] > 0
+        # Post-CAR-165: tracker_id is a Supabase UUID string, not an int
+        assert isinstance(result["tracker_id"], str)
+        assert len(result["tracker_id"]) > 0
 
     @patch("webbrowser.open")
     def test_apply_dice_easy_opens_browser(self, mock_open, applicant):
