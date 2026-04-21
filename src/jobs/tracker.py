@@ -26,21 +26,30 @@ class ApplicationTracker:
     def __init__(self, db_path: Path = None):
         self._conn = models.get_connection(db_path)
 
-    def save_job(self, job_data: Dict) -> int:
+    def save_job(self, job_data: Dict, status: str = "found") -> int:
         """Save a job from search results to the tracker.
 
         Args:
             job_data: Dict with title, company, location, url, source,
-                      salary_range, profile_id (all optional except title/company).
+                      salary_range, profile_id, message_id (all optional except title/company).
+            status: Initial status (default 'found'). Must be in VALID_STATUSES.
 
         Returns:
             The row id of the inserted application.
+
+        Raises:
+            ValueError: If status is not in VALID_STATUSES.
         """
+        if status not in VALID_STATUSES:
+            raise ValueError(
+                f"Invalid status '{status}'. Must be one of: {sorted(VALID_STATUSES)}"
+            )
         now = datetime.now().isoformat()
         cursor = self._conn.execute(
             "INSERT INTO applications "
-            "(title, company, location, url, source, salary_range, status, date_found, notes, profile_id, description) "
-            "VALUES (?, ?, ?, ?, ?, ?, 'found', ?, '', ?, ?)",
+            "(title, company, location, url, source, salary_range, status, date_found, "
+            "notes, profile_id, description, message_id) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, '', ?, ?, ?)",
             (
                 job_data.get("title", ""),
                 job_data.get("company", ""),
@@ -48,14 +57,28 @@ class ApplicationTracker:
                 job_data.get("url", ""),
                 job_data.get("source", ""),
                 job_data.get("salary", job_data.get("salary_range", "")),
+                status,
                 now,
                 job_data.get("profile_id", ""),
                 job_data.get("description"),
+                job_data.get("message_id", ""),
             ),
         )
         self._conn.commit()
-        logger.info("Saved job: %s at %s (id=%d)", job_data.get("title"), job_data.get("company"), cursor.lastrowid)
+        logger.info(
+            "Saved job: %s at %s (id=%d, status=%s)",
+            job_data.get("title"), job_data.get("company"), cursor.lastrowid, status,
+        )
         return cursor.lastrowid
+
+    def find_application_by_message_id(self, message_id: str) -> Optional[Dict]:
+        """Find an application by its source Gmail message_id. Returns dict or None."""
+        if not message_id:
+            return None
+        row = self._conn.execute(
+            "SELECT * FROM applications WHERE message_id = ?", (message_id,)
+        ).fetchone()
+        return dict(row) if row else None
 
     def update_status(self, job_id: int, new_status: str, notes: str = None) -> bool:
         """Update a job's status.

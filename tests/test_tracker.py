@@ -213,3 +213,58 @@ class TestGetJob:
     def test_nonexistent_returns_none(self, tracker):
         """Returns None for nonexistent ID."""
         assert tracker.get_job(999) is None
+
+
+# --- CAR-156: save_job with status + message_id + find_by_message_id ---
+
+
+class TestSaveJobWithStatus:
+    def test_default_status_still_found(self, tracker):
+        """Omitting status keeps the legacy default of 'found'."""
+        job_id = tracker.save_job(_sample_job())
+        assert tracker.get_job(job_id)["status"] == "found"
+
+    def test_custom_status_persists(self, tracker):
+        """Explicit status is stored on the row."""
+        job_id = tracker.save_job(_sample_job(), status="interested")
+        assert tracker.get_job(job_id)["status"] == "interested"
+
+    def test_invalid_status_raises(self, tracker):
+        """Unknown status values raise ValueError before insert."""
+        with pytest.raises(ValueError):
+            tracker.save_job(_sample_job(), status="garbage")
+
+    def test_message_id_persists(self, tracker):
+        """message_id in job_data is stored on the applications row."""
+        job = _sample_job()
+        job["message_id"] = "gmail_msg_abc123"
+        job_id = tracker.save_job(job)
+        row = tracker.get_job(job_id)
+        assert row["message_id"] == "gmail_msg_abc123"
+
+    def test_message_id_defaults_to_empty(self, tracker):
+        """When message_id is absent, the column stores an empty string."""
+        job_id = tracker.save_job(_sample_job())
+        assert tracker.get_job(job_id)["message_id"] == ""
+
+
+class TestFindApplicationByMessageId:
+    def test_finds_existing(self, tracker):
+        """Returns the application row that matches the given message_id."""
+        job = _sample_job()
+        job["message_id"] = "gmail_msg_xyz"
+        job_id = tracker.save_job(job)
+
+        result = tracker.find_application_by_message_id("gmail_msg_xyz")
+        assert result is not None
+        assert result["id"] == job_id
+
+    def test_returns_none_for_missing(self, tracker):
+        """Returns None when no row has the given message_id."""
+        tracker.save_job(_sample_job())  # No message_id
+        assert tracker.find_application_by_message_id("nonexistent") is None
+
+    def test_returns_none_for_empty(self, tracker):
+        """Empty or None message_id short-circuits to None."""
+        assert tracker.find_application_by_message_id("") is None
+        assert tracker.find_application_by_message_id(None) is None
