@@ -1,8 +1,9 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useRef, useEffect, useId } from "react"
 import { ChevronDown, ChevronUp, Plus } from "lucide-react"
-import type { Application } from "@/types"
+import type { Application, ApplicationStatus } from "@/types"
+import { STATUSES } from "@/lib/constants"
 import {
   findApplicationByUrl,
   formatDuplicateConfirmMessage,
@@ -12,7 +13,7 @@ interface AddFormProps {
   onAdd: (
     job: Partial<Application>,
     entryPoint: "manual"
-  ) => Promise<unknown>
+  ) => Promise<{ data: unknown; error: unknown }>
   /**
    * CAR-167: current user's applications, passed so the form can warn
    * before adding a duplicate URL. Matches CLI `tracker add` behavior.
@@ -28,6 +29,23 @@ export function AddForm({ onAdd, existingApplications = [] }: AddFormProps) {
   const [url, setUrl] = useState("")
   const [source, setSource] = useState("")
   const [submitting, setSubmitting] = useState(false)
+
+  const [detailsOpen, setDetailsOpen] = useState(false)
+  const [status, setStatus] = useState<ApplicationStatus | undefined>(undefined)
+  const [notes, setNotes] = useState("")
+  const [jobDescription, setJobDescription] = useState("")
+
+  const detailsId = useId()
+  const statusId = useId()
+  const notesId = useId()
+  const jobDescId = useId()
+  const statusSelectRef = useRef<HTMLSelectElement>(null)
+
+  useEffect(() => {
+    if (detailsOpen) {
+      statusSelectRef.current?.focus()
+    }
+  }, [detailsOpen])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -45,25 +63,33 @@ export function AddForm({ onAdd, existingApplications = [] }: AddFormProps) {
     }
 
     setSubmitting(true)
-    await onAdd(
+    const result = await onAdd(
       {
         title: title.trim(),
         company: company.trim(),
         location: location.trim() || null,
         url: trimmedUrl || null,
         source: source.trim() || null,
+        status,
+        notes,
+        job_description: jobDescription || null,
       },
       "manual"
     )
-
-    // Reset form
-    setTitle("")
-    setCompany("")
-    setLocation("")
-    setUrl("")
-    setSource("")
     setSubmitting(false)
-    setOpen(false)
+
+    if (result.error == null) {
+      setTitle("")
+      setCompany("")
+      setLocation("")
+      setUrl("")
+      setSource("")
+      setStatus(undefined)
+      setNotes("")
+      setJobDescription("")
+      setDetailsOpen(false)
+      setOpen(false)
+    }
   }
 
   return (
@@ -150,6 +176,72 @@ export function AddForm({ onAdd, existingApplications = [] }: AddFormProps) {
                 className="w-full text-sm border border-zinc-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-amber-300"
               />
             </div>
+          </div>
+          <div>
+            <button
+              type="button"
+              aria-expanded={detailsOpen}
+              aria-controls={detailsId}
+              onClick={() => setDetailsOpen(!detailsOpen)}
+              className="flex items-center gap-1.5 text-xs font-medium text-zinc-500 hover:text-zinc-700 transition-colors py-1"
+            >
+              More details
+              {detailsOpen ? (
+                <ChevronUp size={12} />
+              ) : (
+                <ChevronDown size={12} />
+              )}
+            </button>
+            {detailsOpen && (
+              <div id={detailsId} className="space-y-3 mt-2">
+                <div>
+                  <label htmlFor={statusId} className="text-[10px] font-medium text-zinc-500 uppercase tracking-wider mb-1 block">
+                    Status
+                  </label>
+                  <select
+                    id={statusId}
+                    ref={statusSelectRef}
+                    value={status ?? "interested"}
+                    onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
+                      setStatus(e.target.value as ApplicationStatus)
+                    }
+                    className="w-full text-sm border border-zinc-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-amber-300 bg-white"
+                  >
+                    {STATUSES.slice(0, 6).map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label htmlFor={notesId} className="text-[10px] font-medium text-zinc-500 uppercase tracking-wider mb-1 block">
+                    Notes
+                  </label>
+                  <textarea
+                    id={notesId}
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    placeholder="Private notes about this role..."
+                    rows={3}
+                    className="w-full text-sm border border-zinc-200 rounded-lg px-3 py-2 resize-none focus:outline-none focus:ring-1 focus:ring-amber-300"
+                  />
+                </div>
+                <div>
+                  <label htmlFor={jobDescId} className="text-[10px] font-medium text-zinc-500 uppercase tracking-wider mb-1 block">
+                    Job Description
+                  </label>
+                  <textarea
+                    id={jobDescId}
+                    value={jobDescription}
+                    onChange={(e) => setJobDescription(e.target.value)}
+                    placeholder="Paste the job description here..."
+                    rows={8}
+                    className="w-full text-sm border border-zinc-200 rounded-lg px-3 py-2 resize-none focus:outline-none focus:ring-1 focus:ring-amber-300"
+                  />
+                </div>
+              </div>
+            )}
           </div>
           <div className="flex justify-end">
             <button
