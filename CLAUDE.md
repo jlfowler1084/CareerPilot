@@ -35,20 +35,28 @@ CareerPilot is a Python CLI application for personal career management:
 
 ## Data Layer
 
-**Status: consolidation in progress.** See `docs/brainstorms/CAR-163-application-entry-paths-consolidation-audit.md` for the full audit. End-state decision is **Option (c) — unify on Supabase via Python client** (CAR-164 through CAR-170).
+**Status: CAR-163 consolidation complete. M1-M5b shipped 2026-04-21 (applications + contacts on Supabase); M6 finalized 2026-04-22 (remaining tables stay local).**
 
-**Current state (pre-migration, as of 2026-04-21):**
-- CLI writes local SQLite at `data/careerpilot.db` (via `src/jobs/tracker.py` `ApplicationTracker`, `src/db/models.py` contact helpers, etc.)
-- Dashboard writes Supabase (via `dashboard/src/hooks/use-applications.ts`, `dashboard/src/app/api/*/route.ts`)
-- **No sync between the two.** A row created via `cli tracker add` does NOT appear on the dashboard, and vice versa.
+Decision artifacts:
+- Original audit + Option-C rationale: `docs/brainstorms/CAR-163-application-entry-paths-consolidation-audit.md`
+- M6 per-table disposition: `docs/brainstorms/CAR-169-m6-remaining-tables-disposition.md`
 
-**End state (post-CAR-165 / M2):**
-- CLI and dashboard both write Supabase. `ApplicationTracker` becomes a thin wrapper around the Supabase Python client.
-- Local SQLite `applications` table is retired. Contacts follow in CAR-168 (M5). Other tables decided in CAR-169 (M6).
+**Supabase-backed (CLI + dashboard both write):**
+- **Applications** — CLI via `ApplicationTracker` (`src/jobs/tracker.py`); dashboard via `use-applications.addApplication` (`dashboard/src/hooks/use-applications.ts`).
+- **Contacts** — CLI via `ContactManager`; dashboard via `/api/contacts/route.ts`.
 
-**Canonical "add an application" entry paths (once migration lands):**
-- Dashboard "Add Application Manually" form or "Paste URL to auto-extract" — browser UX
-- CLI `tracker add` (wizard), `tracker import-from-email`, or `search` save-on-prompt — terminal/scripting UX
+**Local SQLite (final architecture per CAR-169 M6):**
+- `contact_interactions`, `submitted_roles` — deliberately local (Option-C choice from M5).
+- `llm_calls`, `llm_budget_resets`, `kv_store` — CLI-internal observability / scratch; no dashboard surface.
+- `skills`, `skill_log`, `skill_demand`, `skill_application_map`, `study_plan`, `transcripts` — Phase 4 scaffolding, empty today. Stay local until the feature ships a dashboard surface; migrate then as part of that feature ticket.
+- `ats_portals`, `company_intel` — low-volume CLI helpers; stay local.
+- `applications_deprecated_2026_04_21`, `contacts_deprecated_2026_04_21` — migration backups; drop after 2026-05-21.
+
+**Rule of thumb for future local-vs-cloud calls:** a table moves to Supabase only when (a) a dashboard UI reads or writes it, or (b) the user needs it shared across devices. Scaffolding for unreleased features stays local; migrate as part of the feature ticket that surfaces it.
+
+**Canonical "add an application" entry paths:**
+- Dashboard "Add Application Manually" form or "Paste URL to auto-extract" — browser UX.
+- CLI `tracker add` (wizard), `tracker import-from-email`, or `search` save-on-prompt — terminal/scripting UX.
 - Both write the same Supabase `applications` table, scoped by `user_id`.
 
 **Before introducing a new write path for applications or contacts**, read the audit doc and check whether the new path is needed or whether an existing seam (`ApplicationTracker.save_job` or `use-applications.addApplication`) covers it.
