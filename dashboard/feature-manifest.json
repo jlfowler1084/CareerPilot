@@ -645,7 +645,8 @@
       "patterns": [
         "addApplication",
         "updateApplication",
-        "deleteApplication"
+        "deleteApplication",
+        "pickValue"
       ],
       "area": "applications"
     },
@@ -1957,6 +1958,23 @@
         "onAdd",
         "company",
         "title"
+      ],
+      "area": "applications"
+    },
+    {
+      "ticket": "CAR-160",
+      "name": "Application Add Form — More Details",
+      "file": "src/components/applications/add-form.tsx",
+      "exports": [
+        "AddForm"
+      ],
+      "patterns": [
+        "More details",
+        "aria-controls",
+        "STATUSES.slice",
+        "rows={3}",
+        "rows={8}",
+        "job_description"
       ],
       "area": "applications"
     },
