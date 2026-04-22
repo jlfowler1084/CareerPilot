@@ -10,6 +10,11 @@ import type { Application, ApplicationStatus, ApplicationEventType, ExtractedJob
 
 const supabase = createClient()
 
+/** Returns raw when defined, fallback otherwise. Used in addApplication override logic. */
+function pickValue<T>(raw: T | undefined, fallback: T): T {
+  return raw !== undefined ? raw : fallback
+}
+
 async function insertApplicationEvent(
   userId: string,
   applicationId: string,
@@ -105,9 +110,18 @@ export function useApplications() {
       job: Partial<Application> | Job,
       entryPoint: "search" | "manual" = "manual"
     ) => {
-      if (!user) return
+      if (!user) return { data: null, error: new Error("Not authenticated") }
 
-      const status = entryPoint === "search" ? "interested" : "found"
+      /**
+       * Caller-supplied fields win when value !== undefined; otherwise fall
+       * back to the entryPoint default. Both search and manual paths share the
+       * same "interested" default — the previous ternary's two branches were
+       * identical after R4 so the constant is now the truthful expression.
+       * TODO(deferred): tighten the Partial<Application>|Job union input type
+       * in a follow-up refactor ticket — the current union works but the
+       * overlap makes static field access awkward.
+       */
+      const fallbackStatus: ApplicationStatus = "interested"
 
       const { data, error } = await supabase
         .from("applications")
@@ -125,7 +139,7 @@ export function useApplications() {
               : "salary" in job
                 ? (job as Job).salary
                 : null,
-          status,
+          status: pickValue("status" in job ? (job as Partial<Application>).status : undefined, fallbackStatus),
           job_type: "type" in job ? (job as Job).type : ("job_type" in job ? job.job_type : null),
           posted_date: "posted" in job ? (job as Job).posted : ("posted_date" in job ? job.posted_date : null),
           profile_id:
@@ -134,7 +148,8 @@ export function useApplications() {
               : "profile_id" in job
                 ? job.profile_id
                 : "",
-          notes: "",
+          notes: pickValue("notes" in job ? (job as Partial<Application>).notes : undefined, ""),
+          job_description: pickValue("job_description" in job ? (job as Partial<Application>).job_description : undefined, null),
           tailored_resume: "tailored_resume" in job ? (job as Partial<Application>).tailored_resume ?? null : null,
           cover_letter: "cover_letter" in job ? (job as Partial<Application>).cover_letter ?? null : null,
         } as any)
