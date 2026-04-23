@@ -54,7 +54,7 @@ def _run_cli(args, input_text=None):
     from click.testing import CliRunner
     from cli import cli
 
-    runner = CliRunner(mix_stderr=False)
+    runner = CliRunner()
     return runner.invoke(cli, args, input=input_text, catch_exceptions=False)
 
 
