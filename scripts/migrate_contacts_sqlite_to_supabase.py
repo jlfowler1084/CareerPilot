@@ -201,7 +201,14 @@ def migrate_contacts(
                         sqlite_id, new_id, row.get("name"),
                     )
                     result.rows_inserted += 1
-                    result.id_map[sqlite_id] = new_id
+                    if sqlite_id is None:
+                        logger.warning(
+                            "Row inserted but had no sqlite id — FK rewrite will "
+                            "skip it: %r",
+                            row.get("name"),
+                        )
+                    else:
+                        result.id_map[sqlite_id] = new_id
                 else:
                     result.errors.append(
                         f"Insert returned no data for sqlite_id={sqlite_id}"
@@ -214,6 +221,34 @@ def migrate_contacts(
     return result
 
 
+def _assert_rewrite_can_proceed(conn: sqlite3.Connection, table: str) -> bool:
+    """Return True if the FK rewrite may proceed on ``table``.
+
+    Returns False (caller should skip) when the ``contact_uuid`` destination
+    column is absent and the table holds no legacy rows. Raises RuntimeError
+    when the destination column is absent but legacy ``contact_id`` rows
+    exist — that state would silently lose data the next time
+    :func:`finalize_sqlite_table` DROPs the table (CAR-177 / CAR-178).
+    """
+    if _column_exists(conn, table, "contact_uuid"):
+        return True
+
+    if _column_exists(conn, table, "contact_id"):
+        row_count = conn.execute(
+            f"SELECT COUNT(*) FROM {table} WHERE contact_id IS NOT NULL"
+        ).fetchone()[0]
+        if row_count > 0:
+            raise RuntimeError(
+                f"{table}: {row_count} row(s) have contact_id but no "
+                "contact_uuid destination column. Add contact_uuid before "
+                "running the FK rewrite, or these rows will be lost when "
+                "finalize_sqlite_table DROPs this table."
+            )
+
+    logger.info("%s: no contact_uuid column — FK rewrite skipped", table)
+    return False
+
+
 def rewrite_interaction_fks(db_path: Path, id_map: Dict[int, str]) -> int:
     """Populate contact_interactions.contact_uuid from id_map.
 
@@ -223,10 +258,7 @@ def rewrite_interaction_fks(db_path: Path, id_map: Dict[int, str]) -> int:
     """
     conn = sqlite3.connect(str(db_path))
     try:
-        if not _column_exists(conn, "contact_interactions", "contact_uuid"):
-            logger.info(
-                "contact_interactions: no contact_uuid column — FK rewrite skipped"
-            )
+        if not _assert_rewrite_can_proceed(conn, "contact_interactions"):
             return 0
         cur = conn.execute(
             "SELECT id, contact_id FROM contact_interactions "
@@ -256,10 +288,7 @@ def rewrite_submitted_role_fks(db_path: Path, id_map: Dict[int, str]) -> int:
     """
     conn = sqlite3.connect(str(db_path))
     try:
-        if not _column_exists(conn, "submitted_roles", "contact_uuid"):
-            logger.info(
-                "submitted_roles: no contact_uuid column — FK rewrite skipped"
-            )
+        if not _assert_rewrite_can_proceed(conn, "submitted_roles"):
             return 0
         cur = conn.execute(
             "SELECT id, contact_id FROM submitted_roles "
