@@ -282,14 +282,48 @@ def rewrite_submitted_role_fks(db_path: Path, id_map: Dict[int, str]) -> int:
         conn.close()
 
 
+def _assert_drop_is_safe(
+    conn: sqlite3.Connection, table: str, rewrite_fn_name: str
+) -> None:
+    """Raise RuntimeError if dropping ``table`` would destroy un-rewritten rows.
+
+    Safe when the table is empty, or when every row has a non-null
+    ``contact_uuid``. Raises otherwise, pointing the caller at the rewrite
+    function to run first. CAR-174 / CAR-175.
+    """
+    row_count = conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+    if row_count == 0:
+        return
+
+    if not _column_exists(conn, table, "contact_uuid"):
+        raise RuntimeError(
+            f"finalize_sqlite_table: {table} has {row_count} row(s) but no "
+            f"contact_uuid column. Run migrate_contacts() and "
+            f"{rewrite_fn_name}() first to capture the Supabase UUIDs before "
+            f"rebuilding."
+        )
+
+    unwritten = conn.execute(
+        f"SELECT COUNT(*) FROM {table} WHERE contact_uuid IS NULL"
+    ).fetchone()[0]
+    if unwritten > 0:
+        raise RuntimeError(
+            f"finalize_sqlite_table: {table} has {unwritten} row(s) without "
+            f"contact_uuid. Run {rewrite_fn_name}() first to complete the FK "
+            f"rewrite before rebuilding."
+        )
+
+
 def finalize_sqlite_table(db_path: Path) -> str:
     """Rename `contacts` to `contacts_deprecated_YYYY_MM_DD` in-place.
 
     Also rebuilds `contact_interactions` and `submitted_roles` with the
     post-CAR-171 `contact_uuid TEXT NOT NULL` schema if they still carry the
     legacy `contact_id INTEGER` column (schema drift: CREATE TABLE IF NOT
-    EXISTS doesn't alter existing tables). Safe only when those tables have
-    zero rows — confirmed in Phase 1 audit. Returns the new table name.
+    EXISTS doesn't alter existing tables). Each rebuild is gated by
+    :func:`_assert_drop_is_safe`, which refuses to DROP a table that still
+    holds rows without a populated ``contact_uuid`` (CAR-174 / CAR-175).
+    Returns the new table name.
     """
     today = datetime.now().strftime("%Y_%m_%d")
     new_name = f"contacts_deprecated_{today}"
@@ -305,6 +339,9 @@ def finalize_sqlite_table(db_path: Path) -> str:
             )
 
         if _column_exists(conn, "contact_interactions", "contact_id"):
+            _assert_drop_is_safe(
+                conn, "contact_interactions", "rewrite_interaction_fks"
+            )
             logger.info(
                 "Rebuilding contact_interactions with contact_uuid schema "
                 "(CAR-171 drift fix)"
@@ -329,6 +366,9 @@ def finalize_sqlite_table(db_path: Path) -> str:
             """)
 
         if _column_exists(conn, "submitted_roles", "contact_id"):
+            _assert_drop_is_safe(
+                conn, "submitted_roles", "rewrite_submitted_role_fks"
+            )
             logger.info(
                 "Rebuilding submitted_roles with contact_uuid schema "
                 "(CAR-171 drift fix)"
