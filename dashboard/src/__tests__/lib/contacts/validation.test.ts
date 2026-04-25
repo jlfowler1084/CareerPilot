@@ -3,6 +3,7 @@ import {
   validateContactEmail,
   sanitizeContactName,
   validateContactInput,
+  normalizeContactEmail,
 } from "@/lib/contacts/validation"
 
 describe("validateContactEmail", () => {
@@ -125,5 +126,37 @@ describe("validateContactInput", () => {
     expect(result.errors).toHaveLength(2)
     expect(result.errors).toContain("Name is required")
     expect(result.errors).toContain("Invalid email format")
+  })
+})
+
+describe("normalizeContactEmail", () => {
+  it("lowercases mixed-case email", () => {
+    expect(normalizeContactEmail("dperez@TEKsystems.com")).toBe("dperez@teksystems.com")
+    expect(normalizeContactEmail("User@Example.COM")).toBe("user@example.com")
+  })
+
+  it("strips leading and trailing whitespace", () => {
+    expect(normalizeContactEmail("  user@example.com  ")).toBe("user@example.com")
+    expect(normalizeContactEmail("\tUser@Example.COM\n")).toBe("user@example.com")
+  })
+
+  it("returns null for null input", () => {
+    expect(normalizeContactEmail(null)).toBeNull()
+  })
+
+  it("returns null for undefined input", () => {
+    expect(normalizeContactEmail(undefined)).toBeNull()
+  })
+
+  it("returns null for empty string", () => {
+    expect(normalizeContactEmail("")).toBeNull()
+  })
+
+  it("returns null for whitespace-only string", () => {
+    expect(normalizeContactEmail("   ")).toBeNull()
+  })
+
+  it("returns already-lowercase email unchanged", () => {
+    expect(normalizeContactEmail("dperez@teksystems.com")).toBe("dperez@teksystems.com")
   })
 })
