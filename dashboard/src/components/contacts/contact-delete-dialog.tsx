@@ -81,19 +81,19 @@ export function ContactDeleteDialog({
           </p>
           <ul className="space-y-1.5 text-sm text-zinc-600">
             <li className="flex items-start gap-2">
-              <span className="text-amber-500 mt-0.5 flex-shrink-0">\u2022</span>
+              <span className="text-amber-500 mt-0.5 flex-shrink-0">{"\u2022"}</span>
               Linked applications will lose this contact link
             </li>
             <li className="flex items-start gap-2">
-              <span className="text-zinc-400 mt-0.5 flex-shrink-0">\u2022</span>
+              <span className="text-zinc-400 mt-0.5 flex-shrink-0">{"\u2022"}</span>
               Email records are not deleted
             </li>
             <li className="flex items-start gap-2">
-              <span className="text-zinc-400 mt-0.5 flex-shrink-0">\u2022</span>
+              <span className="text-zinc-400 mt-0.5 flex-shrink-0">{"\u2022"}</span>
               Conversation records are not deleted
             </li>
             <li className="flex items-start gap-2">
-              <span className="text-zinc-400 mt-0.5 flex-shrink-0">\u2022</span>
+              <span className="text-zinc-400 mt-0.5 flex-shrink-0">{"\u2022"}</span>
               If a new contact with the same email is created later, orphaned records
               will re-appear in their timeline
             </li>
