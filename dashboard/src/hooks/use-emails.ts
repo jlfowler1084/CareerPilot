@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useRef } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { extractDomain, extractPreview } from "@/lib/gmail/parse"
 import { findDomainMatch } from "@/lib/gmail/suggestions"
+import { shouldAutoCreateContact } from "@/lib/contacts/auto-create-gate"
 import type { Email, EmailApplicationLink, ClassificationResult, Application, ApplicationStatus } from "@/types"
 import { useAuth } from "@/contexts/auth-context"
 
@@ -525,14 +526,22 @@ export function useEmails() {
       console.error("[auto-track-backfill] Non-blocking error:", err)
     }
 
-    // CAR-118: Auto-create contacts from recruiter_outreach emails (fire-and-forget)
+    // CAR-118 / CAR-141: Auto-create contacts from recruiter_outreach emails (fire-and-forget)
+    // Gate filters out no-reply addresses, blocked domains, and un-replied threads before firing.
     {
       const recruiterEmails = classifiedResults.filter(
         (e) => e.category === "recruiter_outreach"
       )
-      if (recruiterEmails.length > 0) {
+      const currentUserEmail = user?.email ?? ""
+      const gatedEmails = recruiterEmails.filter((email) =>
+        shouldAutoCreateContact(
+          { from_email: email.from_email, from_name: email.from_name, replied_at: email.replied_at ?? null },
+          currentUserEmail
+        ).allow
+      )
+      if (gatedEmails.length > 0) {
         void Promise.allSettled(
-          recruiterEmails.map((email) =>
+          gatedEmails.map((email) =>
             fetch("/api/contacts/auto-create", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -543,6 +552,7 @@ export function useEmails() {
                 company: (email.classification_json as { company?: string | null } | null)?.company || null,
                 role: "recruiter",
                 application_id: email.suggested_application_id || null,
+                replied_at: email.replied_at ?? null,
               }),
             }).catch((err) => {
               console.error("[auto-create-contact] fetch error:", err)

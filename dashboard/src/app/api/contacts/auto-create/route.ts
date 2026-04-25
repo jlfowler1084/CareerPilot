@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createServerSupabaseClient } from "@/lib/supabase/server"
 import { validateContactEmail, sanitizeContactName, normalizeContactEmail } from "@/lib/contacts/validation"
+import { shouldAutoCreateContact } from "@/lib/contacts/auto-create-gate"
 
 export async function POST(req: NextRequest) {
   try {
@@ -12,6 +13,16 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json()
     const { from_email, from_name, from_domain, company, role, application_id } = body
+
+    // CAR-141: Gate check — rejects no-reply addresses, blocked domains, un-replied threads, and self-sends
+    const gate = shouldAutoCreateContact(
+      { from_email: from_email ?? null, from_name: body.from_name ?? null, replied_at: body.replied_at ?? null },
+      user.email ?? ""
+    )
+    if (!gate.allow) {
+      console.info(`[auto-create] skipped: ${gate.reason}`)
+      return NextResponse.json({ contact: null, created: false, skipped: gate.reason })
+    }
 
     // Validate email — if invalid, return gracefully (fire-and-forget)
     if (!from_email || !validateContactEmail(from_email)) {
