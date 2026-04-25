@@ -2,6 +2,17 @@
 # Regression Check — reads feature-manifest.json and verifies all entries
 set -e
 
+# On Windows, python3 may resolve to the MS Store alias which exits non-zero when
+# invoked. Test by actually running it; fall back to python if it fails.
+if command -v python3 >/dev/null 2>&1 && python3 --version >/dev/null 2>&1; then
+  PY=python3
+elif command -v python >/dev/null 2>&1; then
+  PY=python
+else
+  echo "ERROR: no working Python interpreter found (tried python3, python)"
+  exit 1
+fi
+
 MANIFEST="feature-manifest.json"
 if [ ! -f "$MANIFEST" ]; then
   MANIFEST="dashboard/feature-manifest.json"
@@ -11,17 +22,17 @@ if [ ! -f "$MANIFEST" ]; then
   exit 0
 fi
 
-BASE=$(python3 -c "import json; print(json.load(open('$MANIFEST')).get('base_path','.'))")
+BASE=$("$PY" -c "import json; print(json.load(open('$MANIFEST')).get('base_path','.'))")
 PASS=0
 FAIL=0
 FAILURES=""
 
 while IFS= read -r feature; do
-  NAME=$(echo "$feature" | python3 -c "import sys,json; f=json.load(sys.stdin); print(f['name'])")
-  FILE=$(echo "$feature" | python3 -c "import sys,json; f=json.load(sys.stdin); print(f['file'])")
-  TICKET=$(echo "$feature" | python3 -c "import sys,json; f=json.load(sys.stdin); print(f.get('ticket',''))")
-  EXPORTS=$(echo "$feature" | python3 -c "import sys,json; f=json.load(sys.stdin); print('|'.join(f.get('exports',[])))")
-  PATTERNS=$(echo "$feature" | python3 -c "import sys,json; f=json.load(sys.stdin); print('|||'.join(f.get('patterns',[])))")
+  NAME=$(echo "$feature" | "$PY" -c "import sys,json; f=json.load(sys.stdin); print(f['name'])")
+  FILE=$(echo "$feature" | "$PY" -c "import sys,json; f=json.load(sys.stdin); print(f['file'])")
+  TICKET=$(echo "$feature" | "$PY" -c "import sys,json; f=json.load(sys.stdin); print(f.get('ticket',''))")
+  EXPORTS=$(echo "$feature" | "$PY" -c "import sys,json; f=json.load(sys.stdin); print('|'.join(f.get('exports',[])))")
+  PATTERNS=$(echo "$feature" | "$PY" -c "import sys,json; f=json.load(sys.stdin); print('|||'.join(f.get('patterns',[])))")
 
   FULL_PATH="$BASE/$FILE"
   FAILED=0
@@ -63,7 +74,7 @@ while IFS= read -r feature; do
     FAIL=$((FAIL + 1))
     FAILURES="$FAILURES\n$NAME ($FILE)"
   fi
-done < <(python3 -c "import json; [print(json.dumps(f)) for f in json.load(open('$MANIFEST'))['features']]")
+done < <("$PY" -c "import json; [print(json.dumps(f)) for f in json.load(open('$MANIFEST'))['features']]")
 
 TOTAL=$((PASS + FAIL))
 echo ""
