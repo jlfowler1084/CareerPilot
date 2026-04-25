@@ -170,4 +170,20 @@ describe('assembleSource', () => {
     const result = assembleSource(fullIntel, '');
     expect(result).toContain('# Irving Materials — IT Network and Sys Admin — Interview Prep');
   });
+
+  it('omits Gaps to Address when array is empty', () => {
+    const intel: IntelligenceSnapshot = {
+      ...fullIntel,
+      interviewPrep: { ...fullIntel.interviewPrep, gapsToAddress: [] },
+    };
+    expect(assembleSource(intel, '')).not.toContain('## Gaps to Address');
+  });
+
+  it('omits Questions to Ask Them when array is empty', () => {
+    const intel: IntelligenceSnapshot = {
+      ...fullIntel,
+      interviewPrep: { ...fullIntel.interviewPrep, questionsToAsk: [] },
+    };
+    expect(assembleSource(intel, '')).not.toContain('## Questions to Ask Them');
+  });
 });
