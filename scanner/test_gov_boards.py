@@ -100,7 +100,8 @@ class TestWorkOne:
                 "description_snippet": "Manages network infrastructure",
             }
         ]
-        with patch("workone_scraper.requests.post", return_value=_mock_api_response(raw_jobs)):
+        with patch("workone_scraper.ANTHROPIC_API_KEY", "test-key"), \
+             patch("workone_scraper.requests.post", return_value=_mock_api_response(raw_jobs)):
             results = search_workone()
 
         assert len(results) >= 1
@@ -118,7 +119,8 @@ class TestWorkOne:
             {"title": "Systems Administrator", "company": "INDOT", "location": "Indy",
              "salary": "", "url": "", "job_type": "", "posted_date": "", "description_snippet": ""},
         ]
-        with patch("workone_scraper.requests.post", return_value=_mock_api_response(raw_jobs)):
+        with patch("workone_scraper.ANTHROPIC_API_KEY", "test-key"), \
+             patch("workone_scraper.requests.post", return_value=_mock_api_response(raw_jobs)):
             results = search_workone()
 
         titles = [j["title"] for j in results]
