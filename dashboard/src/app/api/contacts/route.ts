@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createServerSupabaseClient } from "@/lib/supabase/server"
-import { validateContactInput, sanitizeContactName } from "@/lib/contacts/validation"
+import { validateContactInput, sanitizeContactName, normalizeContactEmail } from "@/lib/contacts/validation"
 
 export type RecencyFilter = { from?: string; to?: string } | null
 
@@ -136,7 +136,7 @@ export async function POST(req: NextRequest) {
     }
 
     const name = sanitizeContactName(body.name)
-    const email: string | null = body.email || null
+    const email: string | null = normalizeContactEmail(body.email ?? null)
 
     // Dedup check: same user + same email
     if (email) {

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createServerSupabaseClient } from "@/lib/supabase/server"
-import { validateContactEmail, sanitizeContactName } from "@/lib/contacts/validation"
+import { validateContactEmail, sanitizeContactName, normalizeContactEmail } from "@/lib/contacts/validation"
 
 export async function POST(req: NextRequest) {
   try {
@@ -18,6 +18,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ contact: null, created: false })
     }
 
+    // normalizeContactEmail returns null only for null/empty input; from_email is validated non-empty above
+    const normalizedEmail = normalizeContactEmail(from_email) as string
+
     const name = from_name ? sanitizeContactName(from_name) : from_email
 
     // Check if contact already exists
@@ -25,7 +28,7 @@ export async function POST(req: NextRequest) {
       .from("contacts")
       .select("*")
       .eq("user_id", user.id)
-      .eq("email", from_email)
+      .eq("email", normalizedEmail)
       .maybeSingle()
 
     let contact = existing
@@ -38,7 +41,7 @@ export async function POST(req: NextRequest) {
         .insert({
           user_id: user.id,
           name,
-          email: from_email,
+          email: normalizedEmail,
           company: company || from_domain || null,
           source: "recruiter_email",
           last_contact_date: new Date().toISOString(),
