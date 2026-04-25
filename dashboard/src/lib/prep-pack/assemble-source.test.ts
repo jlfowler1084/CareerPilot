@@ -21,13 +21,20 @@ const fullIntel: IntelligenceSnapshot = {
   interviewPrep: {
     careerNarrativeAngle: 'My 20-year progression represents deliberate evolution...',
     likelyQuestions: [
-      { question: 'Walk me through standardizing 175 servers.', answer: 'Reference Venable VMware experience...' },
-      { question: 'Automate VM provisioning with PowerShell.', answer: 'Draw on PowerCLI experience...' },
+      { question: 'Walk me through standardizing 175 servers.', category: 'technical', suggestedApproach: 'Reference Venable VMware experience...' },
+      { question: 'Automate VM provisioning with PowerShell.', category: 'technical', suggestedApproach: 'Draw on PowerCLI experience...' },
     ],
-    gapsToAddress: 'Limited Splunk dashboard experience compared to their needs.',
-    talkingPoints: 'Lead with PowerShell automation portfolio.',
-    questionsToAsk: 'What does success look like in the first 90 days?',
-    stageTips: 'Bring printed PowerShell module example.',
+    gapsToAddress: [
+      { gap: 'Limited Splunk dashboard experience compared to their needs.', mitigation: 'Highlight 30+ dashboards built on alternative platforms.' },
+    ],
+    talkingPoints: [
+      'Lead with PowerShell automation portfolio.',
+      'Mention modular framework architecture.',
+    ],
+    questionsToAsk: [
+      { question: 'What does success look like in the first 90 days?', why: 'Signals interest in delivering early value.' },
+    ],
+    stageTips: ['Bring printed PowerShell module example.', 'Arrive 10 minutes early.'],
   },
 };
 
@@ -37,7 +44,6 @@ describe('assembleSource', () => {
     const lines = result.split('\n');
     expect(lines[0]).toBe('### Instructions');
     expect(lines[1]).toBe('Lean heavy on SCCM');
-    // The first H1 should follow the instruction block
     expect(result).toMatch(/^### Instructions[\s\S]+?\n# Irving Materials/);
   });
 
@@ -71,11 +77,35 @@ describe('assembleSource', () => {
     }
   });
 
-  it('renders likely-question entries as ### subheadings with answers', () => {
+  it('renders likely-question entries as ### subheadings with the suggested approach', () => {
     const result = assembleSource(fullIntel, '');
     expect(result).toContain('### Walk me through standardizing 175 servers.');
     expect(result).toContain('Reference Venable VMware experience...');
     expect(result).toContain('### Automate VM provisioning with PowerShell.');
+  });
+
+  it('renders gaps as **Gap:** / **Mitigation:** pairs', () => {
+    const result = assembleSource(fullIntel, '');
+    expect(result).toContain('**Gap:** Limited Splunk dashboard experience compared to their needs.');
+    expect(result).toContain('**Mitigation:** Highlight 30+ dashboards built on alternative platforms.');
+  });
+
+  it('renders talking points as a bullet list', () => {
+    const result = assembleSource(fullIntel, '');
+    expect(result).toContain('- Lead with PowerShell automation portfolio.');
+    expect(result).toContain('- Mention modular framework architecture.');
+  });
+
+  it('renders questions-to-ask as **Q:** / **Why:** pairs', () => {
+    const result = assembleSource(fullIntel, '');
+    expect(result).toContain('**Q:** What does success look like in the first 90 days?');
+    expect(result).toContain('**Why:** Signals interest in delivering early value.');
+  });
+
+  it('renders stage tips as a bullet list', () => {
+    const result = assembleSource(fullIntel, '');
+    expect(result).toContain('- Bring printed PowerShell module example.');
+    expect(result).toContain('- Arrive 10 minutes early.');
   });
 
   it('omits Red Flags section entirely when empty', () => {
@@ -94,6 +124,15 @@ describe('assembleSource', () => {
     };
     const result = assembleSource(intel, '');
     expect(result).not.toContain('## Likely Interview Questions');
+  });
+
+  it('omits Talking Points when array is empty', () => {
+    const intel: IntelligenceSnapshot = {
+      ...fullIntel,
+      interviewPrep: { ...fullIntel.interviewPrep, talkingPoints: [] },
+    };
+    const result = assembleSource(intel, '');
+    expect(result).not.toContain('## Talking Points');
   });
 
   it('omits Tech Stack when techStack array is empty or undefined', () => {

@@ -7,7 +7,7 @@ function nonEmpty(s: string | undefined | null): s is string {
 
 function bulletList(items: string[] | undefined): string {
   if (!items || items.length === 0) return '';
-  return items.map((x) => `- ${x}`).join('\n');
+  return items.map((x) => `- ${x.trim()}`).join('\n');
 }
 
 export function assembleSource(intel: IntelligenceSnapshot, customFocus: string): string {
@@ -58,21 +58,35 @@ export function assembleSource(intel: IntelligenceSnapshot, customFocus: string)
 
   if (ip.likelyQuestions && ip.likelyQuestions.length > 0) {
     const blocks = ip.likelyQuestions
-      .map((q) => `### ${q.question.trim()}\n${q.answer.trim()}`)
+      .map((q) => `### ${q.question.trim()}\n${q.suggestedApproach.trim()}`)
       .join('\n\n');
     sections.push(`## Likely Interview Questions\n\n${blocks}`);
   }
 
-  if (nonEmpty(ip.gapsToAddress))   sections.push(`## Gaps to Address\n${ip.gapsToAddress.trim()}`);
-  if (nonEmpty(ip.talkingPoints))   sections.push(`## Talking Points\n${ip.talkingPoints.trim()}`);
-  if (nonEmpty(ip.questionsToAsk))  sections.push(`## Questions to Ask Them\n${ip.questionsToAsk.trim()}`);
+  if (ip.gapsToAddress && ip.gapsToAddress.length > 0) {
+    const blocks = ip.gapsToAddress
+      .map((g) => `**Gap:** ${g.gap.trim()}\n**Mitigation:** ${g.mitigation.trim()}`)
+      .join('\n\n');
+    sections.push(`## Gaps to Address\n\n${blocks}`);
+  }
+
+  if (ip.talkingPoints && ip.talkingPoints.length > 0) {
+    sections.push(`## Talking Points\n${bulletList(ip.talkingPoints)}`);
+  }
+
+  if (ip.questionsToAsk && ip.questionsToAsk.length > 0) {
+    const blocks = ip.questionsToAsk
+      .map((q) => `**Q:** ${q.question.trim()}\n**Why:** ${q.why.trim()}`)
+      .join('\n\n');
+    sections.push(`## Questions to Ask Them\n\n${blocks}`);
+  }
 
   if (cr.questionsToResearch && cr.questionsToResearch.length > 0) {
     sections.push(`## Questions to Research Before the Interview\n${bulletList(cr.questionsToResearch)}`);
   }
 
-  if (nonEmpty(ip.stageTips)) {
-    sections.push(`## Stage Tips\n${ip.stageTips.trim()}`);
+  if (ip.stageTips && ip.stageTips.length > 0) {
+    sections.push(`## Stage Tips\n${bulletList(ip.stageTips)}`);
   }
 
   return sections.join('\n\n') + '\n';

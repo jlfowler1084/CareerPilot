@@ -28,10 +28,11 @@ export interface IntelligenceSnapshot {
   applicationId: string;
 
   companyResearch?: {
+    overview?: string;
     culture?: string;
-    glassdoor?: string;
     headcount?: string;
     fundingStage?: string;
+    glassdoor?: string;
     techStack?: string[];
     whyGoodFit?: string;
     redFlags?: string;
@@ -41,11 +42,15 @@ export interface IntelligenceSnapshot {
 
   interviewPrep?: {
     careerNarrativeAngle?: string;
-    likelyQuestions?: Array<{ question: string; answer: string }>;
-    gapsToAddress?: string;
-    talkingPoints?: string;
-    questionsToAsk?: string;
-    stageTips?: string;
+    likelyQuestions?: Array<{
+      question: string;
+      category?: 'behavioral' | 'technical' | 'situational' | 'culture_fit';
+      suggestedApproach: string;
+    }>;
+    talkingPoints?: string[];
+    gapsToAddress?: Array<{ gap: string; mitigation: string }>;
+    questionsToAsk?: Array<{ question: string; why: string }>;
+    stageTips?: string[];
   };
 }
 
