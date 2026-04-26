@@ -14,6 +14,7 @@ import { CommunicationsSection } from "@/components/applications/communications-
 import { InterviewPrepSection } from "@/components/applications/interview-prep-section"
 import { CoachingSection } from "@/components/coaching/coaching-section"
 import { IntelligenceTab } from "@/components/intelligence/intelligence-tab"
+import { ResearchTab } from "@/components/intelligence/research-tab"
 import { TailorModal } from "@/components/applications/tailor-modal"
 import { CoverLetterModal } from "@/components/applications/cover-letter-modal"
 import { ScheduleModal } from "@/components/applications/schedule-modal"
@@ -23,7 +24,7 @@ import { useIntelligence } from "@/hooks/use-intelligence"
 import { useApplicationEvents } from "@/hooks/use-application-events"
 import { STATUSES } from "@/lib/constants"
 import { RelativeTime } from "@/components/ui/relative-time"
-import { ExternalLink, Trash2, Save, Mail, Phone, Sparkles, FileCheck, CalendarDays, CalendarCheck, FileText, BrainCircuit, ChevronDown, ChevronRight, Download, Loader2 } from "lucide-react"
+import { ExternalLink, Trash2, Save, Mail, Phone, Sparkles, FileCheck, CalendarDays, CalendarCheck, FileText, BrainCircuit, ChevronDown, ChevronRight, Download, Loader2, FileSearch } from "lucide-react"
 import type { Application, ApplicationStatus, ApplicationEvent } from "@/types"
 
 const EVENT_ICONS: Record<string, string> = {
@@ -373,6 +374,10 @@ export function ApplicationRow({
                 <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
               )}
             </TabsTrigger>
+            <TabsTrigger value="research" className="text-xs px-3 py-1 h-7 flex items-center gap-1.5">
+              <FileSearch size={12} />
+              Research
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="details">
@@ -577,6 +582,14 @@ export function ApplicationRow({
 
           <TabsContent value="intelligence">
             <IntelligenceTab applicationId={application.id} />
+          </TabsContent>
+
+          <TabsContent value="research">
+            <ResearchTab
+              applicationId={application.id}
+              companyName={application.company}
+              enabled={isExpanded}
+            />
           </TabsContent>
         </Tabs>
       </div>

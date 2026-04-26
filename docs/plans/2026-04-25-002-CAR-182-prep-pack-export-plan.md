@@ -25,23 +25,26 @@ Description (paste into Jira): copy the "Goal" and "Confirmed decisions" section
 
 Note the assigned ticket ID. Subsequent commits use `[CAR-182]` prefix.
 
-- [ ] **Step 2: Create worktree from main**
+- [ ] **Step 2: Create worktree from `feature/dashboard-v2`**
+
+CareerPilot's `origin/HEAD` is `feature/dashboard-v2` (a long-lived integration branch, not `main`). Feature branches fork from it and PR back into it.
 
 Run from `F:\Projects\CareerPilot`:
 ```bash
 git fetch origin
-git worktree add .worktrees/CAR-182-prep-pack-export -b feat/CAR-182-prep-pack-export origin/main
+git worktree add .worktrees/CAR-182-prep-pack-export -b worktree/CAR-182-prep-pack-export origin/feature/dashboard-v2
 ```
 
-Replace `CAR-182` with the actual ticket ID from Step 1.
+The branch name follows the existing CAR naming pattern (`worktree/CAR-NNN-slug`).
 
 - [ ] **Step 3: Verify worktree**
 
 ```bash
 cd .worktrees/CAR-182-prep-pack-export
 git status
+git rev-parse --abbrev-ref --symbolic-full-name @{u}
 ```
-Expected: `On branch feat/CAR-182-prep-pack-export ... nothing to commit, working tree clean`
+Expected: branch `worktree/CAR-182-prep-pack-export`, clean tree, upstream `origin/feature/dashboard-v2`.
 
 All subsequent tasks run inside this worktree.
 
@@ -548,15 +551,17 @@ The `useIntelligence` hook returns `{ brief: CompanyBriefRow | null, preps: Inte
 - Create: `dashboard/src/lib/prep-pack/adapter.test.ts`
 - Create: `dashboard/src/lib/prep-pack/adapter.ts`
 
-- [ ] **Step 1: Capture fixture from a real Intelligence record**
+- [ ] **Step 1: Establish field-name ground truth (DEVIATION FROM ORIGINAL PLAN)**
 
-Before writing the test, sample one real record so the fixture matches what the LLM generator actually produces. Run from the dashboard:
+The original plan called for capturing a real Supabase fixture. During execution, the orchestrator discovered that `.env.local` only contains `NEXT_PUBLIC_SUPABASE_ANON_KEY` (RLS-bound, no usable session) and no `SUPABASE_SERVICE_ROLE_KEY`. Capturing a live fixture would require credentials we don't have in scope.
 
-```bash
-cd dashboard && npx tsx -e "import { createClient } from '@supabase/supabase-js'; const c = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!); (async () => { const apps = await c.from('applications').select('id, title, company').ilike('company', '%irving%').limit(1); const id = apps.data?.[0]?.id; const brief = await c.from('company_briefs').select('*').eq('application_id', id).maybeSingle(); const preps = await c.from('interview_prep').select('*').eq('application_id', id); console.log(JSON.stringify({app: apps.data?.[0], brief: brief.data, preps: preps.data}, null, 2)); })();"
-```
+**Substituted with stronger ground truth:** read the generator source files. The Intelligence JSON blobs are *produced* by:
+- `dashboard/src/lib/intelligence/generators/company-brief.ts` lines 7-18 → `CompanyBriefData`
+- `dashboard/src/lib/intelligence/generators/interview-prep.ts` lines 7-24 → `InterviewPrepData`
 
-Save the output to `dashboard/src/lib/prep-pack/__fixtures__/irving-materials.json`. This is your single source of truth for what the JSON blobs actually contain. The adapter's tests assert against this exact shape.
+These are the canonical schema definitions; live data is just snapshots of what they produce. Reading source > capturing one row. **Field names confirmed during Task A3.5 schema correction; see commit `1432b93`.**
+
+Skip the live-fixture capture. Synthetic test fixtures in `adapter.test.ts` are derived directly from the generator types.
 
 - [ ] **Step 2: Inspect the fixture and identify the field names**
 
@@ -1885,11 +1890,22 @@ Watch:
 
 - [ ] **Step 4: Verify the Discord embed reports actual formats**
 
-If the Kindle file landed as `.azw3` instead of `.kfx`, the Discord message must say `Kindle: AZW3 (requested KFX — fallback)`. This is the spec's contract from the brainstorm doc.
+If the Kindle file landed as `.azw3` instead of `.kfx`, the Discord message must say `Kindle: AZW3 (requested KFX -- fallback)`. This is the spec's contract from the brainstorm doc.
 
 If the Discord message claims KFX but the actual file is AZW3, the wrapper has a bug — fix `run-prep-pack.ps1`'s artifact-inspection logic before considering this task done.
 
-- [ ] **Step 5: No commit needed (manual verification task)**
+- [ ] **Step 5: Verify deferred-from-B1 call-mapping assertions**
+
+B1 deliberately deferred Pester mock tests for `Mode→Structure`, `ProduceKindle` pass-through, and `OutputPrefix` derivation (Pester mocking the SecondBrain module is brittle). F1 picks up the verification by inspection of the real run:
+
+- Open `%LOCALAPPDATA%\CareerPilot\prep-pack\logs\<stem>.log` after the run.
+- Confirm the transcript shows `Invoke-SBAutobook` was called with `Structure='Single'` (when wizard mode was Single) or `Structure='Auto'` (when wizard mode was Series).
+- Confirm `OutputPrefix` matches the input file's basename (e.g., `irving_materials_it_network_and_sys_admin_prep_2026-04-25-1830`).
+- Confirm `ProduceKindle` is `True` (when wizard checkbox was checked) or absent.
+
+If any of these don't match the wizard configuration, B1 has a parameter-mapping bug that B1's parameter-validation tests can't catch — fix the wrapper before this task is considered done.
+
+- [ ] **Step 6: No commit needed (manual verification task)**
 
 ### Task F2: Register the new cross-project dependency
 
@@ -1998,13 +2014,13 @@ git commit -m "[CAR-182] feat: register prep-pack-export feature in manifest"
 
 ```bash
 cd "F:/Projects/CareerPilot/.worktrees/CAR-182-prep-pack-export"
-git push -u origin feat/CAR-182-prep-pack-export
+git push -u origin worktree/CAR-182-prep-pack-export
 ```
 
-- [ ] **Step 2: Open PR**
+- [ ] **Step 2: Open PR (target `feature/dashboard-v2`, NOT `main`)**
 
 ```bash
-gh pr create --title "[CAR-182] Prep Pack export — wizard + subprocess pipeline" --body "$(cat <<'EOF'
+gh pr create --base feature/dashboard-v2 --title "[CAR-182] Prep Pack export — wizard + subprocess pipeline" --body "$(cat <<'EOF'
 ## Summary
 - Two-step wizard on application card exports Intelligence to a `.txt` and runs `Invoke-SBAutobook` as a detached subprocess
 - Produces audiobook (MP3) + optional Kindle ebook (KFX/AZW3) + vault note
