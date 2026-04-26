@@ -75,7 +75,17 @@ $logPath = Join-Path $logDir "$jobStem.log"
 Start-Transcript -Path $logPath -Append | Out-Null
 
 $startTime = Get-Date
-$structure = if ($Mode -eq 'Series') { 'Auto' } else { 'Single' }
+
+# Both wizard modes (Single book / Series) use cmdlet -Structure Auto for
+# AI-expanded narration. Structure Single is verbatim TTS conversion (no
+# planner, no rewrite) -- not what we want for prep packs. Single vs Series
+# book count is controlled by the source file's ### Instructions block
+# (a "Merge into one book." directive forces a single book; absence lets
+# the planner pick). The wizard injects that directive before submission.
+# See AutobookCmdlets.ps1:634 for the merge-pattern regex,
+# and AutobookCmdlets.ps1:944-958 for Structure Single's verbatim semantics.
+Write-Host "[run-prep-pack] Mode=$Mode -> cmdlet Structure=Auto" -ForegroundColor Cyan
+$structure = 'Auto'
 
 # Apply EbookAutomation config override for kindle format via env var.
 if ($ProduceKindle) {

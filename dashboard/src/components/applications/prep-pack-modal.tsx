@@ -48,10 +48,23 @@ export function PrepPackModal({
   const [sourceText, setSourceText] = useState<string>('');
   const [submitting, setSubmitting] = useState(false);
 
+  // When Mode='Single', prepend a merge directive so the SB-Autobook planner
+  // produces ONE consolidated book rather than a series. Both wizard modes use
+  // cmdlet Structure='Auto' (AI-expanded narration); Single vs Series is
+  // differentiated only by this instruction-block directive.
+  // See AutobookCmdlets.ps1:634 for the merge-pattern regex.
+  const effectiveCustomFocus = useMemo(() => {
+    const focus = config.customFocus.trim();
+    if (config.mode === 'Single') {
+      return focus ? `Merge into one book.\n\n${focus}` : 'Merge into one book.';
+    }
+    return focus;
+  }, [config.customFocus, config.mode]);
+
   // Re-assembled fresh whenever Step 1 inputs change; user can override in Step 2.
   const assembledPreview = useMemo(
-    () => assembleSource(intelligence, config.customFocus),
-    [intelligence, config.customFocus],
+    () => assembleSource(intelligence, effectiveCustomFocus),
+    [intelligence, effectiveCustomFocus],
   );
 
   const goToPreview = () => {
