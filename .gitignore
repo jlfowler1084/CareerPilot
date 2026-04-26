@@ -72,3 +72,8 @@ data/cover_letters/
 # Git worktrees (INFRA-71)
 .worktrees/
 
+# CareerPilot research artifacts (CAR-183) — privacy by default; opt-in commit via `git add -f`
+docs/research/*.md
+!docs/research/.gitkeep
+.research/
+
