@@ -2,8 +2,6 @@
 import { NextResponse } from 'next/server';
 import * as childProcess from 'node:child_process';
 import * as fsp from 'node:fs/promises';
-import * as fs from 'node:fs';
-import * as os from 'node:os';
 import path from 'node:path';
 import { z } from 'zod';
 import { buildJobStem } from '@/lib/prep-pack/naming';
@@ -88,29 +86,28 @@ export async function POST(request: Request): Promise<Response> {
     args.push('-KindleFormat', config.kindleFormat);
   }
 
-  // Spawn detached background subprocess. CRITICAL on Windows:
-  //   stdio: 'ignore' + detached: true + pwsh.exe -File causes pwsh to exit
-  //   cleanly (code 0, ~120ms) without running the script body. Symptom is
-  //   "the route returns 202, no error fires, but no script output appears."
-  //   Fix is to give the child real stdio handles to the null device so
-  //   pwsh's host has something to bind to. The handles are unref'd by the
-  //   OS once the child exits; we close ours immediately after spawn.
-  // See: https://nodejs.org/api/child_process.html#optionsdetached
-  // Lifecycle listeners stay for observability.
+  // Spawn pwsh.exe to run the wrapper script. CRITICAL on Windows:
+  //   pwsh.exe -File <script> needs an inherited terminal session to actually
+  //   execute the script body. With detached:true + closed/null-device stdio,
+  //   pwsh starts (PID gets issued), allocates no host, then exits cleanly
+  //   (code 0, ~120ms) without running ANY of the script. Multiple workarounds
+  //   tried (null-device fds, os.devNull, windowsHide variations) — none
+  //   reliably keep pwsh's host alive to run -File.
+  //
+  // Pragmatic fix: detached:false + stdio:inherit. The child inherits the
+  // dev server's terminal, pwsh's host binds successfully, the script runs.
+  // Tradeoff: if the dev server is killed mid-render, the wrapper dies too.
+  // For a single-user local feature that's acceptable — re-clicking Render
+  // is cheap and the wrapper writes a transcript anyway. Bonus: wrapper's
+  // live output (planner steps, chapter generation, Calibre progress) shows
+  // in the dev server terminal, so users can watch progress without tailing
+  // the transcript file.
   console.error(`[prep-pack] spawning: ${PWSH_BIN} ${args.join(' ')}`);
-  // os.devNull resolves to '\\\\.\\nul' on Windows (UNC path to the null
-  // device) and '/dev/null' on POSIX. Do NOT use the bare string 'nul' on
-  // Windows — Node's fs.openSync resolves that as a relative path and
-  // creates a literal file named 'nul' in cwd, which then trips Turbopack's
-  // PostCSS loader (Windows reserves 'nul' as a device name even in
-  // subdirectories, so reads return os error 1).
-  const outFd = fs.openSync(os.devNull, 'a');
   const child = childProcess.spawn(PWSH_BIN, args, {
-    detached: true,
-    stdio: ['ignore', outFd, outFd],
+    detached: false,
+    stdio: ['ignore', 'inherit', 'inherit'],
     windowsHide: false,
   });
-  fs.closeSync(outFd);
 
   child.on('error', (err) => {
     console.error(
@@ -127,7 +124,10 @@ export async function POST(request: Request): Promise<Response> {
     );
   });
 
-  child.unref();
+  // No child.unref(): detached:false ties the child's lifetime to the
+  // parent's event loop. The route handler returns 202 immediately while
+  // the spawn is still running — the request response is decoupled from
+  // child completion via Node's async I/O model.
 
   const expectedOutputs: PrepPackJobResponse['expectedOutputs'] = {
     vaultNote: path.join(VAULT_NOTE_DIR, `${stem}.md`),

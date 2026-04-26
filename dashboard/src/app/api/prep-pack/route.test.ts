@@ -104,13 +104,12 @@ describe('POST /api/prep-pack', () => {
     expect(args).toContain('-Mode');  expect(args).toContain('Single');
     expect(args).toContain('-ProduceKindle');
     expect(args).toContain('-KindleFormat'); expect(args).toContain('KFX');
-    expect(opts.detached).toBe(true);
-    // stdio is [stdin, stdout, stderr]: stdin ignored, stdout/stderr to null device
-    // (real handles required so pwsh -File runs the script body on Windows; see route.ts)
-    expect(Array.isArray(opts.stdio)).toBe(true);
-    expect(opts.stdio[0]).toBe('ignore');
-    expect(typeof opts.stdio[1]).toBe('number'); // file descriptor
-    expect(typeof opts.stdio[2]).toBe('number');
+    // stdio: ['ignore', 'inherit', 'inherit'] — stdin closed, stdout/stderr
+    // forwarded to dev server terminal so pwsh's host binds correctly and the
+    // user sees live wrapper output. detached:false ties the wrapper's lifetime
+    // to the dev server. See route.ts for the rationale.
+    expect(opts.detached).toBe(false);
+    expect(opts.stdio).toEqual(['ignore', 'inherit', 'inherit']);
   });
 
   it('omits -ProduceKindle and -KindleFormat when produceKindle=false', async () => {
