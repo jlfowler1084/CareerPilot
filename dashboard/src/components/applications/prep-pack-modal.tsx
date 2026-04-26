@@ -231,7 +231,15 @@ export function PrepPackModal({
 
         {step === 2 && (
           <div className="space-y-4 flex-1 min-h-0 flex flex-col">
-            <Label htmlFor="source-text">Source text — edit freely before rendering</Label>
+            <div>
+              <Label htmlFor="source-text">Source text — edit freely before rendering</Label>
+              <p className="text-xs text-muted-foreground mt-1">
+                This is what SB-Autobook expands into a book. Trim, reorder,
+                or annotate the <code>## </code> sections, but keep at least
+                a few — the <code>### Instructions</code> block alone is not
+                enough for the planner.
+              </p>
+            </div>
             <Textarea
               id="source-text"
               value={sourceText}

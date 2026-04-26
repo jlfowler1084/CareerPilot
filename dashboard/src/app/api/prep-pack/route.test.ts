@@ -42,7 +42,17 @@ const minimalReq: PrepPackJobRequest = {
     kindleFormat: 'KFX',
     customFocus: '',
   },
-  sourceText: '# Test source\n\nBody text.',
+  // Must contain at least one `## ` heading and 200+ chars of stripped
+  // content to pass the route's source-content validation.
+  sourceText:
+    '# Test source — Test Title\n\n' +
+    '## Career Narrative Angle\n' +
+    'Lorem ipsum dolor sit amet, consectetur adipiscing elit. ' +
+    'Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. ' +
+    'Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris.\n\n' +
+    '## Why This Role Fits\n' +
+    'Duis aute irure dolor in reprehenderit in voluptate velit esse ' +
+    'cillum dolore eu fugiat nulla pariatur.\n',
 };
 
 beforeEach(() => {
@@ -81,7 +91,8 @@ describe('POST /api/prep-pack', () => {
     expect(writeFileMock).toHaveBeenCalledTimes(1);
     const [path, content] = writeFileMock.mock.calls[0];
     expect(path).toMatch(/Inbox.*\.txt$/);
-    expect(content).toBe('# Test source\n\nBody text.');
+    // Schema applies .trim() on parse; assert against the trimmed value.
+    expect(content).toBe(minimalReq.sourceText.trim());
   });
 
   it('spawns pwsh with the wrapper script and the wizard arguments', async () => {
@@ -171,6 +182,43 @@ describe('POST /api/prep-pack', () => {
 
   it('returns 400 when config.voice is invalid', async () => {
     const r = { ...minimalReq, config: { ...minimalReq.config, voice: 'Banana' } };
+    const req = new Request('http://localhost/api/prep-pack', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(r),
+    });
+    const res = await POST(req);
+    expect(res.status).toBe(400);
+    expect(spawnMock).not.toHaveBeenCalled();
+  });
+
+  it('returns 400 when sourceText has only an instruction block (no ## headings)', async () => {
+    const r: PrepPackJobRequest = {
+      ...minimalReq,
+      sourceText:
+        '### Instructions\n' +
+        'Merge into one continuous document. Lean heavy on PowerShell.\n' +
+        'Make it sound like a study guide.\n',
+    };
+    const req = new Request('http://localhost/api/prep-pack', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(r),
+    });
+    const res = await POST(req);
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.reason).toMatch(/no `## ` section headings/i);
+    expect(spawnMock).not.toHaveBeenCalled();
+  });
+
+  it('returns 400 when sourceText is too short after instruction-block stripping', async () => {
+    const r: PrepPackJobRequest = {
+      ...minimalReq,
+      sourceText:
+        '### Instructions\nMerge.\n' +
+        '# Title\n## Tiny\nshort.\n', // < 200 chars after stripping instructions
+    };
     const req = new Request('http://localhost/api/prep-pack', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

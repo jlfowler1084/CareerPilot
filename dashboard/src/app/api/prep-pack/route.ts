@@ -45,6 +45,60 @@ const RequestSchema = z.object({
   sourceText: z.string().trim().min(1),
 });
 
+/**
+ * Validate that the user's edited sourceText still has enough structure for
+ * SB-Autobook's planner to chew on. The cmdlet parses and STRIPS the leading
+ * `### Instructions` block before planning; if what's left has no `## `
+ * section headings, the planner throws "No content provided" 24 seconds in.
+ *
+ * This pre-flight check returns a clear 400 instead of letting the user
+ * wait for a silent subprocess failure. Editing the source IS the wizard's
+ * value — this just ensures the edit didn't accidentally strip everything.
+ */
+function validateSourceHasContent(sourceText: string): { ok: true } | { ok: false; reason: string } {
+  // Strip the leading ### Instructions block (mirrors the cmdlet's regex
+  // at AutobookCmdlets.ps1's Read-SBAutobookInstructionBlock).
+  const lines = sourceText.split('\n');
+  let inInstructions = false;
+  const stripped: string[] = [];
+  for (const line of lines) {
+    if (/^### Instructions\s*$/.test(line)) {
+      inInstructions = true;
+      continue;
+    }
+    if (inInstructions) {
+      // Instruction block ends at the first H1 (#) or H2 (##) heading
+      if (/^#{1,2} /.test(line)) {
+        inInstructions = false;
+      } else {
+        continue;
+      }
+    }
+    stripped.push(line);
+  }
+  const strippedText = stripped.join('\n');
+
+  // Need at least one `## ` heading for the planner to chunk on.
+  if (!/^## /m.test(strippedText)) {
+    return {
+      ok: false,
+      reason:
+        'Source text has no `## ` section headings. The wizard expects ' +
+        'structured content (Career Narrative Angle, Why This Role Fits, ' +
+        'etc.) — the `### Instructions` block alone is not enough for ' +
+        'SB-Autobook to plan a book. Edit Step 2 to keep the section blocks.',
+    };
+  }
+  if (strippedText.trim().length < 200) {
+    return {
+      ok: false,
+      reason: 'Source text after instruction-block stripping is too short ' +
+        '(< 200 chars). Need real content for the LLM planner to expand.',
+    };
+  }
+  return { ok: true };
+}
+
 export async function POST(request: Request): Promise<Response> {
   let parsed;
   try {
@@ -58,6 +112,19 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   const { intelligence, config, sourceText } = parsed;
+
+  // Pre-flight: ensure the user's edited source still has enough structure
+  // to plan a book against. Catches the "user deleted all the content
+  // sections" failure mode with a clear error instead of a silent
+  // subprocess failure 24 seconds later.
+  const contentCheck = validateSourceHasContent(sourceText);
+  if (!contentCheck.ok) {
+    return NextResponse.json(
+      { status: 'rejected', reason: contentCheck.reason },
+      { status: 400 },
+    );
+  }
+
   const stem = buildJobStem(intelligence.company, intelligence.jobTitle, new Date());
   const inputPath = path.join(VAULT_INBOX, `${stem}.txt`);
 
