@@ -1,0 +1,233 @@
+# dashboard/tools/run-prep-pack.ps1
+<#
+.SYNOPSIS
+    Wraps Invoke-SBAutobook for the CareerPilot Prep Pack pipeline. Posts a
+    Discord webhook on completion or failure.
+
+.DESCRIPTION
+    Translates wizard-supplied parameters into the cmdlet's parameter set,
+    runs the full pipeline, inspects the output directories to determine
+    actual artifacts produced (defends against silent KFX->AZW3 fallback
+    in EbookAutomation's Convert-ToKindle), then POSTs a Discord webhook.
+
+    Designed to be invoked detached from the Next.js API route via
+    child_process.spawn. All logging goes to a per-job transcript file
+    in $env:LOCALAPPDATA\CareerPilot\prep-pack\logs\<stem>.log.
+
+.PARAMETER InputFile
+    Absolute path to the assembled source .txt in the SecondBrain Inbox.
+
+.PARAMETER Voice
+    SAPI voice for TTS. One of: Steffan, Aria, Jenny, Guy.
+
+.PARAMETER Depth
+    SB-Autobook depth profile. One of: Quick, Standard, Deep.
+
+.PARAMETER Mode
+    Single = one book; Series = let SB-Autobook plan a 3-book split.
+
+.PARAMETER ProduceKindle
+    If set, also produces a Kindle ebook via ConvertTo-SBAutobookKindle.
+
+.PARAMETER KindleFormat
+    KFX (default) or AZW3. Drives EbookAutomation's output_format config via
+    EBOOKAUTOMATION_KINDLE_FORMAT env var. Ignored unless -ProduceKindle is also set.
+
+.PARAMETER DiscordWebhookUrl
+    Optional. URL to POST a status payload to on completion or failure.
+    If unset, the script still runs the pipeline but does not notify.
+#>
+[CmdletBinding()]
+param(
+    [Parameter(Mandatory)]
+    [ValidateScript({ if (-not (Test-Path $_)) { throw "Input file not found: $_" } else { $true } })]
+    [string]$InputFile,
+
+    [Parameter(Mandatory)]
+    [ValidateSet('Steffan', 'Aria', 'Jenny', 'Guy')]
+    [string]$Voice,
+
+    [Parameter(Mandatory)]
+    [ValidateSet('Quick', 'Standard', 'Deep')]
+    [string]$Depth,
+
+    [Parameter(Mandatory)]
+    [ValidateSet('Single', 'Series')]
+    [string]$Mode,
+
+    [switch]$ProduceKindle,
+
+    [ValidateSet('KFX', 'AZW3')]
+    [string]$KindleFormat = 'KFX',
+
+    [string]$DiscordWebhookUrl
+)
+
+$ErrorActionPreference = 'Stop'
+
+$jobStem = [System.IO.Path]::GetFileNameWithoutExtension($InputFile)
+$logDir  = Join-Path $env:LOCALAPPDATA 'CareerPilot\prep-pack\logs'
+if (-not (Test-Path $logDir)) {
+    New-Item -ItemType Directory -Path $logDir -Force | Out-Null
+}
+$logPath = Join-Path $logDir "$jobStem.log"
+
+# Canary: prove the script reached this point even if Start-Transcript fails.
+# When spawned by Node with stdio:ignore + windowsHide:true, pwsh has no console
+# host and Start-Transcript can fail silently. The canary file decouples
+# "did the script start" from "did the transcript open".
+"started at $(Get-Date -Format 's') | InputFile=$InputFile" |
+    Out-File "$logDir\$jobStem.canary" -Encoding UTF8 -Force
+
+try { Start-Transcript -Path $logPath -Append | Out-Null }
+catch { Write-Warning "Start-Transcript failed: $_. Continuing without transcript." }
+
+$startTime = Get-Date
+
+# Both wizard modes (Single book / Series) use cmdlet -Structure Auto for
+# AI-expanded narration. Structure Single is verbatim TTS conversion (no
+# planner, no rewrite) -- not what we want for prep packs. Single vs Series
+# book count is controlled by the source file's ### Instructions block
+# (a "Merge into one book." directive forces a single book; absence lets
+# the planner pick). The wizard injects that directive before submission.
+# See AutobookCmdlets.ps1:634 for the merge-pattern regex,
+# and AutobookCmdlets.ps1:944-958 for Structure Single's verbatim semantics.
+Write-Host "[run-prep-pack] Mode=$Mode -> cmdlet Structure=Auto" -ForegroundColor Cyan
+$structure = 'Auto'
+
+# Apply EbookAutomation config override for kindle format via env var.
+if ($ProduceKindle) {
+    $env:EBOOKAUTOMATION_KINDLE_FORMAT = $KindleFormat.ToLower()
+}
+
+$exitCode = 0
+$errorTail = $null
+
+try {
+    $sbModule = 'F:\Obsidian\SecondBrain\Resources\SB-PSModules\SecondBrain.psd1'
+    if (Test-Path $sbModule) {
+        Import-Module $sbModule -ErrorAction Stop
+    } else {
+        throw "SecondBrain module not found at $sbModule"
+    }
+
+    $invokeArgs = @{
+        FromFile     = $InputFile
+        Structure    = $structure
+        Voice        = $Voice
+        Depth        = $Depth
+        OutputPrefix = $jobStem
+    }
+    if ($ProduceKindle) { $invokeArgs.ProduceKindle = $true }
+
+    Invoke-SBAutobook @invokeArgs | Out-Null
+}
+catch {
+    $exitCode = 1
+    $errorTail = $_ | Out-String
+    Write-Error $errorTail
+}
+finally {
+    $duration = (Get-Date) - $startTime
+
+    # Inspect actual artifacts produced.
+    #
+    # The cmdlet does NOT use our jobStem in output filenames -- it slugifies
+    # the LLM-generated book title instead (e.g.,
+    # 'SB_Irving_Materials_Interview_Prep_PowerShell_Standardization_a_kindle.kfx').
+    # So matching '*$jobStem*' would miss everything.
+    #
+    # Instead we detect by "most recently modified file in this output dir
+    # since this run started." Since the cmdlet is the only thing writing to
+    # these directories during a render, the latest matching file IS ours.
+    # Falls back to $null if nothing landed (e.g., balcon missing -> no MP3).
+    $artifacts = @{
+        Mp3          = $null
+        VaultNote    = $null
+        KindleFile   = $null
+        KindleFormat = $null
+    }
+
+    function Get-LatestSinceStart {
+        param([string]$Dir, [string[]]$Extensions, [datetime]$Since)
+        if (-not (Test-Path $Dir)) { return $null }
+        Get-ChildItem $Dir -File -ErrorAction SilentlyContinue |
+            Where-Object { $_.LastWriteTime -ge $Since -and $_.Extension -in $Extensions } |
+            Sort-Object LastWriteTime -Descending |
+            Select-Object -First 1
+    }
+
+    $mp3 = Get-LatestSinceStart -Dir 'F:\Projects\EbookAutomation\output\audiobooks' `
+                                -Extensions '.mp3' -Since $startTime
+    if ($mp3) { $artifacts.Mp3 = $mp3.FullName }
+
+    $note = Get-LatestSinceStart -Dir 'F:\Obsidian\SecondBrain\Learning\Audiobooks' `
+                                 -Extensions '.md' -Since $startTime
+    if ($note) { $artifacts.VaultNote = $note.FullName }
+
+    if ($ProduceKindle) {
+        $kindle = Get-LatestSinceStart -Dir 'F:\Projects\EbookAutomation\output\kindle' `
+                                       -Extensions '.kfx', '.azw3' -Since $startTime
+        if ($kindle) {
+            $artifacts.KindleFile   = $kindle.FullName
+            $artifacts.KindleFormat = $kindle.Extension.TrimStart('.').ToUpper()
+        }
+    }
+
+    if ($DiscordWebhookUrl) {
+        $title = if ($exitCode -eq 0) {
+            "Prep Pack ready: $jobStem"
+        } else {
+            "Prep Pack FAILED: $jobStem"
+        }
+
+        $body = if ($exitCode -eq 0) {
+            $kindleNote = if ($ProduceKindle -and $artifacts.KindleFormat) {
+                if ($artifacts.KindleFormat -ne $KindleFormat) {
+                    "[OK] Kindle: $($artifacts.KindleFormat) (requested $KindleFormat -- fallback)"
+                } else {
+                    "[OK] Kindle: $($artifacts.KindleFormat)"
+                }
+            } elseif ($ProduceKindle) {
+                "[FAIL] Kindle: requested $KindleFormat, none produced"
+            } else { "" }
+
+            @"
+Runtime: $('{0:mm\:ss}' -f $duration)
+[OK] MP3: $(if ($artifacts.Mp3) { Split-Path $artifacts.Mp3 -Leaf } else { 'NOT FOUND' })
+[OK] Vault note: $(if ($artifacts.VaultNote) { Split-Path $artifacts.VaultNote -Leaf } else { 'NOT FOUND' })
+$kindleNote
+Stem: $jobStem
+"@
+        } else {
+            $tail = if ($errorTail) {
+                ($errorTail -split "`n" | Select-Object -Last 30) -join "`n"
+            } else { 'No transcript captured' }
+
+            @"
+Exit code: $exitCode
+Last 30 lines:
+$tail
+Full log: $logPath
+"@
+        }
+
+        try {
+            $payload = @{
+                title  = $title
+                body   = $body
+                status = if ($exitCode -eq 0) { 'success' } else { 'failure' }
+            } | ConvertTo-Json -Compress
+
+            Invoke-RestMethod -Uri $DiscordWebhookUrl -Method Post -Body $payload `
+                -ContentType 'application/json' -ErrorAction Stop | Out-Null
+        }
+        catch {
+            Write-Warning "Discord webhook failed: $_"
+        }
+    }
+
+    Stop-Transcript | Out-Null
+}
+
+exit $exitCode
