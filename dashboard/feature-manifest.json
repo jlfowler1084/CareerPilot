@@ -630,8 +630,7 @@
       "file": "src/app/(main)/applications/page.tsx",
       "exports": [],
       "patterns": [
-        "ApplicationRow",
-        "DetailPanel"
+        "ApplicationRow"
       ],
       "area": "applications"
     },
@@ -1935,20 +1934,6 @@
     },
     {
       "ticket": "CAR-62",
-      "name": "Application Detail Side Panel",
-      "file": "src/components/applications/detail-panel.tsx",
-      "exports": [
-        "DetailPanel"
-      ],
-      "patterns": [
-        "Sheet",
-        "CommunicationsSection",
-        "ConversationsSection"
-      ],
-      "area": "applications"
-    },
-    {
-      "ticket": "CAR-62",
       "name": "Application Add Form",
       "file": "src/components/applications/add-form.tsx",
       "exports": [
@@ -1999,7 +1984,7 @@
       ],
       "patterns": [
         "onSave",
-        "existingUrls"
+        "existingApplications"
       ],
       "area": "applications"
     },
