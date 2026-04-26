@@ -2773,6 +2773,66 @@
         "All Time"
       ],
       "area": "contacts"
+    },
+    {
+      "ticket": "CAR-183",
+      "name": "Research API Route",
+      "file": "src/app/api/research/[applicationId]/route.ts",
+      "exports": [
+        "GET",
+        "slugify",
+        "findLatestResearchFile"
+      ],
+      "patterns": [
+        "applicationId",
+        "found",
+        "slug",
+        "markdown",
+        "/careerpilot-research"
+      ],
+      "area": "research"
+    },
+    {
+      "ticket": "CAR-183",
+      "name": "Research Hook",
+      "file": "src/hooks/use-research.ts",
+      "exports": [
+        "useResearch",
+        "classifyResearch404"
+      ],
+      "patterns": [
+        "ResearchFound",
+        "ResearchMissing",
+        "/api/research/"
+      ],
+      "area": "research"
+    },
+    {
+      "ticket": "CAR-183",
+      "name": "Research Tab Component",
+      "file": "src/components/intelligence/research-tab.tsx",
+      "exports": [
+        "ResearchTab"
+      ],
+      "patterns": [
+        "ReactMarkdown",
+        "remarkGfm",
+        "/careerpilot-research",
+        "No research yet"
+      ],
+      "area": "research"
+    },
+    {
+      "ticket": "CAR-183",
+      "name": "Research Tab Wiring",
+      "file": "src/components/applications/application-row.tsx",
+      "exports": [],
+      "patterns": [
+        "ResearchTab",
+        "value=\"research\"",
+        "FileSearch"
+      ],
+      "area": "research"
     }
   ]
 }
