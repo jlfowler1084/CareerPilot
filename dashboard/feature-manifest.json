@@ -2818,6 +2818,30 @@
         "FileSearch"
       ],
       "area": "research"
+    },
+    {
+      "ticket": "CAR-182",
+      "name": "Prep Pack Modal",
+      "file": "src/components/applications/prep-pack-modal.tsx",
+      "exports": ["PrepPackModal"],
+      "patterns": ["Custom Focus", "Render", "Voice", "Depth", "Mode"],
+      "area": "applications"
+    },
+    {
+      "ticket": "CAR-182",
+      "name": "Prep Pack Source Assembler",
+      "file": "src/lib/prep-pack/assemble-source.ts",
+      "exports": ["assembleSource"],
+      "patterns": ["### Instructions", "Career Narrative Angle", "Tech Stack"],
+      "area": "prep-pack"
+    },
+    {
+      "ticket": "CAR-182",
+      "name": "Prep Pack API Route",
+      "file": "src/app/api/prep-pack/route.ts",
+      "exports": ["POST"],
+      "patterns": ["Invoke-SBAutobook", "spawn", "DiscordWebhookUrl"],
+      "area": "api"
     }
   ]
 }
