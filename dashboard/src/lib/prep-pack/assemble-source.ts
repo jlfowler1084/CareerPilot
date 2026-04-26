@@ -10,7 +10,11 @@ function bulletList(items: string[] | undefined): string {
   return items.map((x) => `- ${x.trim()}`).join('\n');
 }
 
-export function assembleSource(intel: IntelligenceSnapshot, customFocus: string): string {
+export function assembleSource(
+  intel: IntelligenceSnapshot,
+  customFocus: string,
+  researchMarkdown?: string,
+): string {
   const sections: string[] = [];
 
   // Custom Focus → ### Instructions block (only when non-empty).
@@ -87,6 +91,10 @@ export function assembleSource(intel: IntelligenceSnapshot, customFocus: string)
 
   if (ip.stageTips && ip.stageTips.length > 0) {
     sections.push(`## Stage Tips\n${bulletList(ip.stageTips)}`);
+  }
+
+  if (nonEmpty(researchMarkdown)) {
+    sections.push(`## Deep Research\n\n${researchMarkdown.trim()}`);
   }
 
   return sections.join('\n\n') + '\n';
