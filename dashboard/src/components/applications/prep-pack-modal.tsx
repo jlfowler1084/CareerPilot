@@ -200,13 +200,13 @@ export function PrepPackModal({
               <Label htmlFor="custom-focus">Custom Focus (optional)</Label>
               <Textarea
                 id="custom-focus"
-                placeholder="e.g., Lean heavy on SCCM. Skip the personal background section."
+                placeholder="Lean heavy on SCCM. Skip the personal background section."
                 value={config.customFocus}
                 onChange={(e) => setConfig({ ...config, customFocus: e.target.value })}
                 className="mt-2 min-h-[80px]"
               />
               <p className="text-xs text-muted-foreground mt-1">
-                Forwarded as authoritative emphasis/exclusion guidance to SB-Autobook.
+                Plain text — the wizard adds the markdown heading automatically. SB-Autobook treats this as authoritative emphasis/exclusion guidance.
               </p>
             </div>
 
