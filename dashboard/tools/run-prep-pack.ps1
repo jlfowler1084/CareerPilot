@@ -131,6 +131,16 @@ finally {
     $duration = (Get-Date) - $startTime
 
     # Inspect actual artifacts produced.
+    #
+    # The cmdlet does NOT use our jobStem in output filenames -- it slugifies
+    # the LLM-generated book title instead (e.g.,
+    # 'SB_Irving_Materials_Interview_Prep_PowerShell_Standardization_a_kindle.kfx').
+    # So matching '*$jobStem*' would miss everything.
+    #
+    # Instead we detect by "most recently modified file in this output dir
+    # since this run started." Since the cmdlet is the only thing writing to
+    # these directories during a render, the latest matching file IS ours.
+    # Falls back to $null if nothing landed (e.g., balcon missing -> no MP3).
     $artifacts = @{
         Mp3          = $null
         VaultNote    = $null
@@ -138,30 +148,29 @@ finally {
         KindleFormat = $null
     }
 
-    $audioDir = 'F:\Projects\EbookAutomation\output\audiobooks'
-    if (Test-Path $audioDir) {
-        $mp3 = Get-ChildItem $audioDir -Filter "*$jobStem*.mp3" -ErrorAction SilentlyContinue |
-            Sort-Object LastWriteTime -Descending | Select-Object -First 1
-        if ($mp3) { $artifacts.Mp3 = $mp3.FullName }
+    function Get-LatestSinceStart {
+        param([string]$Dir, [string[]]$Extensions, [datetime]$Since)
+        if (-not (Test-Path $Dir)) { return $null }
+        Get-ChildItem $Dir -File -ErrorAction SilentlyContinue |
+            Where-Object { $_.LastWriteTime -ge $Since -and $_.Extension -in $Extensions } |
+            Sort-Object LastWriteTime -Descending |
+            Select-Object -First 1
     }
 
-    $vaultDir = 'F:\Obsidian\SecondBrain\Learning\Audiobooks'
-    if (Test-Path $vaultDir) {
-        $note = Get-ChildItem $vaultDir -Filter "*$jobStem*.md" -ErrorAction SilentlyContinue |
-            Sort-Object LastWriteTime -Descending | Select-Object -First 1
-        if ($note) { $artifacts.VaultNote = $note.FullName }
-    }
+    $mp3 = Get-LatestSinceStart -Dir 'F:\Projects\EbookAutomation\output\audiobooks' `
+                                -Extensions '.mp3' -Since $startTime
+    if ($mp3) { $artifacts.Mp3 = $mp3.FullName }
+
+    $note = Get-LatestSinceStart -Dir 'F:\Obsidian\SecondBrain\Learning\Audiobooks' `
+                                 -Extensions '.md' -Since $startTime
+    if ($note) { $artifacts.VaultNote = $note.FullName }
 
     if ($ProduceKindle) {
-        $kindleDir = 'F:\Projects\EbookAutomation\output\kindle'
-        if (Test-Path $kindleDir) {
-            $kindle = Get-ChildItem $kindleDir -Filter "*$jobStem*" -ErrorAction SilentlyContinue |
-                Where-Object { $_.Extension -in @('.kfx', '.azw3') } |
-                Sort-Object LastWriteTime -Descending | Select-Object -First 1
-            if ($kindle) {
-                $artifacts.KindleFile   = $kindle.FullName
-                $artifacts.KindleFormat = $kindle.Extension.TrimStart('.').ToUpper()
-            }
+        $kindle = Get-LatestSinceStart -Dir 'F:\Projects\EbookAutomation\output\kindle' `
+                                       -Extensions '.kfx', '.azw3' -Since $startTime
+        if ($kindle) {
+            $artifacts.KindleFile   = $kindle.FullName
+            $artifacts.KindleFormat = $kindle.Extension.TrimStart('.').ToUpper()
         }
     }
 
