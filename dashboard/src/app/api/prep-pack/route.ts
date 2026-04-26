@@ -15,6 +15,15 @@ const VAULT_NOTE_DIR = 'F:\\Obsidian\\SecondBrain\\Learning\\Audiobooks';
 // Path to the wrapper script. process.cwd() is the dashboard/ dir when Next.js runs;
 // tools/ sits next to src/.
 const WRAPPER_SCRIPT = path.resolve(process.cwd(), 'tools', 'run-prep-pack.ps1');
+
+// Absolute pwsh path. Node's spawn inherits the parent's PATH, but Next.js
+// dev servers can be started from environments where pwsh isn't on PATH.
+// Using the conventional Windows install path is more reliable than relying
+// on lookup. Fall back to bare 'pwsh' so this still works on a dev machine
+// where it's on PATH but installed somewhere unconventional.
+const PWSH_DEFAULT = 'C:\\Program Files\\PowerShell\\7\\pwsh.exe';
+const PWSH_BIN = process.env.PWSH_BIN ?? PWSH_DEFAULT;
+
 const DISCORD_RELAY_URL = process.env.DISCORD_RELAY_URL ?? 'http://localhost:3000/api/discord-relay';
 
 const RequestSchema = z.object({
@@ -77,11 +86,22 @@ export async function POST(request: Request): Promise<Response> {
     args.push('-KindleFormat', config.kindleFormat);
   }
 
-  const child = childProcess.spawn('pwsh', args, {
+  const child = childProcess.spawn(PWSH_BIN, args, {
     detached: true,
     stdio: 'ignore',
     windowsHide: true,
   });
+
+  // Without an error listener, `stdio: 'ignore'` masks spawn failures
+  // (e.g., pwsh not found). Log them to the dev server console so they
+  // don't disappear silently — the user has already seen the 202.
+  child.on('error', (err) => {
+    console.error(
+      `[prep-pack] subprocess spawn failed for stem ${stem}: ${err.message}. ` +
+        `PWSH_BIN=${PWSH_BIN}. Set PWSH_BIN env var to override.`,
+    );
+  });
+
   child.unref();
 
   const expectedOutputs: PrepPackJobResponse['expectedOutputs'] = {

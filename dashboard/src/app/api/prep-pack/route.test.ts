@@ -94,7 +94,8 @@ describe('POST /api/prep-pack', () => {
 
     expect(spawnMock).toHaveBeenCalledTimes(1);
     const [cmd, args, opts] = spawnMock.mock.calls[0];
-    expect(cmd).toBe('pwsh');
+    // cmd is the resolved pwsh path (absolute, or 'pwsh' fallback via PWSH_BIN env)
+    expect(cmd).toMatch(/pwsh(\.exe)?$/i);
     expect(args).toContain('-NoProfile');
     expect(args).toContain('-File');
     expect(args.find((a: string) => a.endsWith('run-prep-pack.ps1'))).toBeDefined();
