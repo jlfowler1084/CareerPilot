@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import * as childProcess from 'node:child_process';
 import * as fsp from 'node:fs/promises';
 import * as fs from 'node:fs';
+import * as os from 'node:os';
 import path from 'node:path';
 import { z } from 'zod';
 import { buildJobStem } from '@/lib/prep-pack/naming';
@@ -97,8 +98,13 @@ export async function POST(request: Request): Promise<Response> {
   // See: https://nodejs.org/api/child_process.html#optionsdetached
   // Lifecycle listeners stay for observability.
   console.error(`[prep-pack] spawning: ${PWSH_BIN} ${args.join(' ')}`);
-  const nullDevice = process.platform === 'win32' ? 'nul' : '/dev/null';
-  const outFd = fs.openSync(nullDevice, 'a');
+  // os.devNull resolves to '\\\\.\\nul' on Windows (UNC path to the null
+  // device) and '/dev/null' on POSIX. Do NOT use the bare string 'nul' on
+  // Windows — Node's fs.openSync resolves that as a relative path and
+  // creates a literal file named 'nul' in cwd, which then trips Turbopack's
+  // PostCSS loader (Windows reserves 'nul' as a device name even in
+  // subdirectories, so reads return os error 1).
+  const outFd = fs.openSync(os.devNull, 'a');
   const child = childProcess.spawn(PWSH_BIN, args, {
     detached: true,
     stdio: ['ignore', outFd, outFd],
