@@ -86,19 +86,30 @@ export async function POST(request: Request): Promise<Response> {
     args.push('-KindleFormat', config.kindleFormat);
   }
 
+  // Diagnostic spawn: full lifecycle visibility for debugging the silent-spawn
+  // class of bug. windowsHide:false so a console window briefly flashes — that
+  // visual confirmation is worth more than the lost background-process polish
+  // for a single-user feature. detached:true and unref() ensure the parent
+  // doesn't keep a handle on the child.
+  console.error(`[prep-pack] spawning: ${PWSH_BIN} ${args.join(' ')}`);
   const child = childProcess.spawn(PWSH_BIN, args, {
     detached: true,
     stdio: 'ignore',
-    windowsHide: true,
+    windowsHide: false,
   });
 
-  // Without an error listener, `stdio: 'ignore'` masks spawn failures
-  // (e.g., pwsh not found). Log them to the dev server console so they
-  // don't disappear silently — the user has already seen the 202.
   child.on('error', (err) => {
     console.error(
-      `[prep-pack] subprocess spawn failed for stem ${stem}: ${err.message}. ` +
+      `[prep-pack] spawn ERROR for stem ${stem}: ${err.message}. ` +
         `PWSH_BIN=${PWSH_BIN}. Set PWSH_BIN env var to override.`,
+    );
+  });
+  child.on('spawn', () => {
+    console.error(`[prep-pack] spawn OK for stem ${stem}: pid=${child.pid}`);
+  });
+  child.on('exit', (code, signal) => {
+    console.error(
+      `[prep-pack] subprocess EXIT for stem ${stem}: code=${code} signal=${signal}`,
     );
   });
 

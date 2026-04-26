@@ -72,7 +72,15 @@ if (-not (Test-Path $logDir)) {
 }
 $logPath = Join-Path $logDir "$jobStem.log"
 
-Start-Transcript -Path $logPath -Append | Out-Null
+# Canary: prove the script reached this point even if Start-Transcript fails.
+# When spawned by Node with stdio:ignore + windowsHide:true, pwsh has no console
+# host and Start-Transcript can fail silently. The canary file decouples
+# "did the script start" from "did the transcript open".
+"started at $(Get-Date -Format 's') | InputFile=$InputFile" |
+    Out-File "$logDir\$jobStem.canary" -Encoding UTF8 -Force
+
+try { Start-Transcript -Path $logPath -Append | Out-Null }
+catch { Write-Warning "Start-Transcript failed: $_. Continuing without transcript." }
 
 $startTime = Get-Date
 
