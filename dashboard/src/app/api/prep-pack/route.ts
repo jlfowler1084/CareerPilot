@@ -2,6 +2,7 @@
 import { NextResponse } from 'next/server';
 import * as childProcess from 'node:child_process';
 import * as fsp from 'node:fs/promises';
+import * as fs from 'node:fs';
 import path from 'node:path';
 import { z } from 'zod';
 import { buildJobStem } from '@/lib/prep-pack/naming';
@@ -86,17 +87,24 @@ export async function POST(request: Request): Promise<Response> {
     args.push('-KindleFormat', config.kindleFormat);
   }
 
-  // Diagnostic spawn: full lifecycle visibility for debugging the silent-spawn
-  // class of bug. windowsHide:false so a console window briefly flashes — that
-  // visual confirmation is worth more than the lost background-process polish
-  // for a single-user feature. detached:true and unref() ensure the parent
-  // doesn't keep a handle on the child.
+  // Spawn detached background subprocess. CRITICAL on Windows:
+  //   stdio: 'ignore' + detached: true + pwsh.exe -File causes pwsh to exit
+  //   cleanly (code 0, ~120ms) without running the script body. Symptom is
+  //   "the route returns 202, no error fires, but no script output appears."
+  //   Fix is to give the child real stdio handles to the null device so
+  //   pwsh's host has something to bind to. The handles are unref'd by the
+  //   OS once the child exits; we close ours immediately after spawn.
+  // See: https://nodejs.org/api/child_process.html#optionsdetached
+  // Lifecycle listeners stay for observability.
   console.error(`[prep-pack] spawning: ${PWSH_BIN} ${args.join(' ')}`);
+  const nullDevice = process.platform === 'win32' ? 'nul' : '/dev/null';
+  const outFd = fs.openSync(nullDevice, 'a');
   const child = childProcess.spawn(PWSH_BIN, args, {
     detached: true,
-    stdio: 'ignore',
+    stdio: ['ignore', outFd, outFd],
     windowsHide: false,
   });
+  fs.closeSync(outFd);
 
   child.on('error', (err) => {
     console.error(
