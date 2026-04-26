@@ -1890,11 +1890,22 @@ Watch:
 
 - [ ] **Step 4: Verify the Discord embed reports actual formats**
 
-If the Kindle file landed as `.azw3` instead of `.kfx`, the Discord message must say `Kindle: AZW3 (requested KFX — fallback)`. This is the spec's contract from the brainstorm doc.
+If the Kindle file landed as `.azw3` instead of `.kfx`, the Discord message must say `Kindle: AZW3 (requested KFX -- fallback)`. This is the spec's contract from the brainstorm doc.
 
 If the Discord message claims KFX but the actual file is AZW3, the wrapper has a bug — fix `run-prep-pack.ps1`'s artifact-inspection logic before considering this task done.
 
-- [ ] **Step 5: No commit needed (manual verification task)**
+- [ ] **Step 5: Verify deferred-from-B1 call-mapping assertions**
+
+B1 deliberately deferred Pester mock tests for `Mode→Structure`, `ProduceKindle` pass-through, and `OutputPrefix` derivation (Pester mocking the SecondBrain module is brittle). F1 picks up the verification by inspection of the real run:
+
+- Open `%LOCALAPPDATA%\CareerPilot\prep-pack\logs\<stem>.log` after the run.
+- Confirm the transcript shows `Invoke-SBAutobook` was called with `Structure='Single'` (when wizard mode was Single) or `Structure='Auto'` (when wizard mode was Series).
+- Confirm `OutputPrefix` matches the input file's basename (e.g., `irving_materials_it_network_and_sys_admin_prep_2026-04-25-1830`).
+- Confirm `ProduceKindle` is `True` (when wizard checkbox was checked) or absent.
+
+If any of these don't match the wizard configuration, B1 has a parameter-mapping bug that B1's parameter-validation tests can't catch — fix the wrapper before this task is considered done.
+
+- [ ] **Step 6: No commit needed (manual verification task)**
 
 ### Task F2: Register the new cross-project dependency
 
