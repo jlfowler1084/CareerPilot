@@ -91,7 +91,7 @@ export function PrepPackModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl">
+      <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col overflow-hidden">
         <DialogHeader>
           <DialogTitle>
             Prep Pack — {intelligence.company} — {intelligence.jobTitle}
@@ -108,7 +108,7 @@ export function PrepPackModal({
         )}
 
         {step === 1 && !intelligenceLoading && (
-          <div className="space-y-6">
+          <div className="space-y-6 flex-1 min-h-0 overflow-y-auto pr-1">
             <div>
               <Label>Voice</Label>
               <RadioGroup
@@ -217,13 +217,13 @@ export function PrepPackModal({
         )}
 
         {step === 2 && (
-          <div className="space-y-4">
+          <div className="space-y-4 flex-1 min-h-0 flex flex-col">
             <Label htmlFor="source-text">Source text — edit freely before rendering</Label>
             <Textarea
               id="source-text"
               value={sourceText}
               onChange={(e) => setSourceText(e.target.value)}
-              className="font-mono text-sm min-h-[400px]"
+              className="font-mono text-sm h-[60vh] resize-none overflow-y-auto"
             />
             <div className="flex justify-between">
               <Button variant="outline" onClick={() => setStep(1)} disabled={submitting}>
