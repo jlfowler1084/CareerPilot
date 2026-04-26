@@ -5,7 +5,7 @@
 // still called unconditionally per React rules.
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { toast } from "sonner"
 import { formatDistanceToNow } from "date-fns"
 import { StatusBadge } from "@/components/shared/status-badge"
@@ -18,13 +18,15 @@ import { ResearchTab } from "@/components/intelligence/research-tab"
 import { TailorModal } from "@/components/applications/tailor-modal"
 import { CoverLetterModal } from "@/components/applications/cover-letter-modal"
 import { ScheduleModal } from "@/components/applications/schedule-modal"
+import { PrepPackModal } from "@/components/applications/prep-pack-modal"
+import { toIntelligenceSnapshot } from "@/lib/prep-pack/adapter"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Input } from "@/components/ui/input"
 import { useIntelligence } from "@/hooks/use-intelligence"
 import { useApplicationEvents } from "@/hooks/use-application-events"
 import { STATUSES } from "@/lib/constants"
 import { RelativeTime } from "@/components/ui/relative-time"
-import { ExternalLink, Trash2, Save, Mail, Phone, Sparkles, FileCheck, CalendarDays, CalendarCheck, FileText, BrainCircuit, ChevronDown, ChevronRight, Download, Loader2, FileSearch } from "lucide-react"
+import { ExternalLink, Trash2, Save, Mail, Phone, Sparkles, FileCheck, CalendarDays, CalendarCheck, FileText, BrainCircuit, ChevronDown, ChevronRight, Download, Loader2, FileSearch, Headphones } from "lucide-react"
 import type { Application, ApplicationStatus, ApplicationEvent } from "@/types"
 
 const EVENT_ICONS: Record<string, string> = {
@@ -74,9 +76,19 @@ export function ApplicationRow({
   const [tailorViewMode, setTailorViewMode] = useState(false)
   const [coverLetterOpen, setCoverLetterOpen] = useState(false)
   const [scheduleOpen, setScheduleOpen] = useState(false)
+  const [prepPackOpen, setPrepPackOpen] = useState(false)
   const [statusUpdating, setStatusUpdating] = useState(false)
   const [isExpanded, setIsExpanded] = useState(false)
-  const { hasData: hasIntelligence } = useIntelligence(application.id, isExpanded)
+  const { hasData: hasIntelligence, brief, preps, loading: intelligenceLoading } =
+    useIntelligence(application.id, isExpanded || prepPackOpen)
+
+  const prepPackSnapshot = useMemo(
+    () => toIntelligenceSnapshot(application, { brief, preps }),
+    [application, brief, preps],
+  )
+
+  const prepPackDisabled = !brief && preps.length === 0
+
   const { events, loading: eventsLoading } = useApplicationEvents(
     isExpanded ? application.id : null
   )
@@ -302,6 +314,17 @@ export function ApplicationRow({
             </button>
           )}
 
+          {/* Prep Pack */}
+          <button
+            onClick={() => setPrepPackOpen(true)}
+            disabled={prepPackDisabled}
+            className="text-[10px] font-semibold px-2 py-1 rounded-md text-zinc-400 hover:text-violet-600 transition-colors flex items-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed"
+            title={prepPackDisabled ? "Fill in Company Research or Interview Prep first" : "Generate audiobook + Kindle ebook"}
+          >
+            <Headphones size={10} />
+            Prep Pack
+          </button>
+
           {/* Schedule */}
           {SCHEDULABLE_STATUSES.includes(application.status) && (
             <button
@@ -357,6 +380,13 @@ export function ApplicationRow({
         onSave={async (updates) => {
           await onUpdate(application.id, updates)
         }}
+      />
+
+      <PrepPackModal
+        open={prepPackOpen}
+        onOpenChange={setPrepPackOpen}
+        intelligence={prepPackSnapshot}
+        intelligenceLoading={intelligenceLoading}
       />
 
       {/* Tab navigation — only rendered when expanded */}
