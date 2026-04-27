@@ -39,10 +39,15 @@ class ContactManager:
         user_id: Optional[str] = None,
     ) -> None:
         if user_id is None:
-            # Mirror ApplicationTracker: read from settings (which loads .env),
-            # then fall back to raw os.environ for test-injection paths.
-            from config import settings as _settings
-            user_id = _settings.CAREERPILOT_USER_ID or os.environ.get("CAREERPILOT_USER_ID")
+            # Runtime env wins over the value captured into settings at
+            # module-import time (CAR-179). `os.environ` already includes both
+            # shell overrides and `.env` values populated by settings'
+            # load_dotenv(); reading it here also lets tests monkeypatch
+            # CAREERPILOT_USER_ID after settings has been imported.
+            user_id = os.environ.get("CAREERPILOT_USER_ID")
+            if not user_id:
+                from config import settings as _settings
+                user_id = _settings.CAREERPILOT_USER_ID
         if not user_id:
             raise ContactManagerNotConfiguredError(
                 "ContactManager requires a user_id (arg or CAREERPILOT_USER_ID env var). "
@@ -198,22 +203,28 @@ class ContactManager:
         return rows[0] if rows else None
 
     def search_contacts(self, query: str) -> List[Dict]:
-        """Full-text search across name, company, email, notes."""
+        """Full-text search across name, company, email, notes.
+
+        Runs one ``.ilike()`` query per searched column and merges by id.
+        Using ``or_()`` with an interpolated filter string would let commas
+        and periods in ``query`` corrupt the PostgREST predicate (CAR-176);
+        per-column queries let supabase-py handle value escaping internally.
+        """
         if not query:
             return []
         pat = f"%{query}%"
-        filter_str = (
-            f"name.ilike.{pat},company.ilike.{pat},"
-            f"email.ilike.{pat},notes.ilike.{pat}"
-        )
-        response = (
-            self._client.table("contacts")
-            .select("*")
-            .eq("user_id", self._user_id)
-            .or_(filter_str)
-            .execute()
-        )
-        return response.data or []
+        seen: Dict[str, Dict] = {}
+        for column in ("name", "company", "email", "notes"):
+            response = (
+                self._client.table("contacts")
+                .select("*")
+                .eq("user_id", self._user_id)
+                .ilike(column, pat)
+                .execute()
+            )
+            for row in (response.data or []):
+                seen[row["id"]] = row
+        return list(seen.values())
 
     def get_stale_contacts(self, days: int = 14) -> List[Dict]:
         """Get active/warm contacts with no contact in `days`+ days."""

@@ -247,6 +247,26 @@ class TestConstruction:
             ContactManager(client=FakeSupabaseClient())
         assert "user_id" in str(exc.value).lower() or "CAREERPILOT_USER_ID" in str(exc.value)
 
+    # CAR-179: runtime env must win over settings captured at import time.
+
+    def test_env_wins_over_settings_when_both_set(self, monkeypatch):
+        """Shell/runtime CAREERPILOT_USER_ID overrides the value cached in
+        settings at import time — required so test fixtures and shell
+        overrides both work."""
+        monkeypatch.setattr("config.settings.CAREERPILOT_USER_ID", "settings-value")
+        monkeypatch.setenv("CAREERPILOT_USER_ID", "env-value")
+        m = ContactManager(client=FakeSupabaseClient())
+        assert m._user_id == "env-value"
+
+    def test_falls_back_to_settings_when_env_unset(self, monkeypatch):
+        """If the env var is unset, settings acts as the fallback source so
+        production runs (where load_dotenv has populated settings) still
+        resolve a user_id."""
+        monkeypatch.delenv("CAREERPILOT_USER_ID", raising=False)
+        monkeypatch.setattr("config.settings.CAREERPILOT_USER_ID", "settings-value")
+        m = ContactManager(client=FakeSupabaseClient())
+        assert m._user_id == "settings-value"
+
 
 # ---------------------------------------------------------------------------
 # CRUD
@@ -418,6 +438,33 @@ class TestQueries:
     def test_search_contacts_no_results(self, mgr):
         mgr.add_contact("Alice")
         assert mgr.search_contacts("zzzzz") == []
+
+    # CAR-176: user-supplied special chars must not corrupt the query.
+
+    def test_search_contacts_query_with_comma(self, mgr):
+        """A query containing a comma returns the matching contact, not a
+        malformed OR-predicate."""
+        mgr.add_contact("Smith, Jane")
+        mgr.add_contact("Bob Doe")
+        result = mgr.search_contacts("Smith, Jane")
+        assert len(result) == 1
+        assert result[0]["name"] == "Smith, Jane"
+
+    def test_search_contacts_query_with_period(self, mgr):
+        """A query containing a period (e.g. initialed name) returns correct
+        results — period must not be treated as a PostgREST separator."""
+        mgr.add_contact("J. Smith")
+        mgr.add_contact("Bob Doe")
+        result = mgr.search_contacts("J. Smith")
+        assert len(result) == 1
+        assert result[0]["name"] == "J. Smith"
+
+    def test_search_contacts_merges_multi_column_hits_without_duplicates(self, mgr):
+        """A contact whose name AND company both match the query is returned
+        once (per-column queries merged by id)."""
+        mgr.add_contact("Acme Corp", company="Acme Corp")
+        result = mgr.search_contacts("Acme")
+        assert len(result) == 1
 
     def test_get_stale_contacts(self, mgr):
         cid = mgr.add_contact("Sarah Kim")
