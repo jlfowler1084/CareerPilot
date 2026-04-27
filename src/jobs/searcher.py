@@ -14,7 +14,9 @@ from typing import Dict, List, Optional
 import requests
 
 from config import settings
-from config.search_profiles import SEARCH_PROFILES
+# SEARCH_PROFILES import removed in CAR-188 — profiles now live in Supabase.
+# The legacy JobSearcher.run_profiles() below is deprecated; use
+# src.jobs.search_engine.run_profiles() instead.
 
 logger = logging.getLogger(__name__)
 
@@ -259,62 +261,23 @@ class JobSearcher:
             return []
 
     def run_profiles(self, profile_ids: List[str] = None) -> List[Dict]:
-        """Run selected search profiles and return combined, deduplicated results.
+        """DEPRECATED — use ``src.jobs.search_engine.run_profiles()`` instead.
+
+        Profiles are now stored in Supabase ``search_profiles`` table (CAR-188).
+        This method retained for backwards-compatibility only; calling it will
+        raise ``NotImplementedError``.
 
         Args:
-            profile_ids: List of profile IDs to run. None = run all.
+            profile_ids: Ignored.
 
-        Returns:
-            List of job result dicts with profile_id and profile_label attached.
+        Raises:
+            NotImplementedError: Always.
         """
-        if profile_ids is None:
-            profile_ids = list(SEARCH_PROFILES.keys())
-
-        all_results = []
-
-        for pid in profile_ids:
-            profile = SEARCH_PROFILES.get(pid)
-            if not profile:
-                logger.warning("Unknown profile: %s", pid)
-                continue
-
-            keyword = profile["keyword"]
-            location = profile["location"]
-            sources = profile.get("sources", "both")
-            contract_only = profile.get("contract_only", False)
-            label = profile.get("label", pid)
-
-            logger.info("Running profile '%s': %s in %s (%s)", pid, keyword, location or "remote", sources)
-
-            profile_results = []
-
-            if sources in ("both", "indeed"):
-                indeed_results = self.search_indeed(keyword, location)
-                profile_results.extend(indeed_results)
-
-            if sources in ("both", "dice"):
-                dice_results = self.search_dice(keyword, location, contract_only=contract_only)
-                profile_results.extend(dice_results)
-
-            # Attach profile metadata
-            for r in profile_results:
-                r["profile_id"] = pid
-                r["profile_label"] = label
-
-            logger.info("Profile '%s': %d results", pid, len(profile_results))
-            all_results.extend(profile_results)
-
-        # Filter irrelevant results
-        before_filter = len(all_results)
-        all_results = [r for r in all_results if not _is_irrelevant(r.get("title", ""))]
-        filtered = before_filter - len(all_results)
-        if filtered:
-            logger.info("Filtered %d irrelevant results", filtered)
-
-        # Deduplicate by title + company (case-insensitive)
-        all_results = self._deduplicate(all_results)
-
-        return all_results
+        raise NotImplementedError(
+            "JobSearcher.run_profiles() is deprecated as of CAR-188.  "
+            "Use src.jobs.search_engine.run_profiles() instead — profiles "
+            "are now sourced from Supabase, not from config/search_profiles.py."
+        )
 
     @staticmethod
     def _deduplicate(results: List[Dict]) -> List[Dict]:

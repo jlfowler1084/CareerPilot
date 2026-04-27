@@ -184,7 +184,7 @@ class TestJobSearchResultsManagerHappy:
     def test_upsert_new_row_appears_with_correct_user_id(self, fake_supabase):
         mgr = _make_manager(fake_supabase)
         listing = _make_listing(source_id="happy-1")
-        row_id = mgr.upsert(listing)
+        row_id, is_new = mgr.upsert(listing)
 
         rows = fake_supabase._tables["job_search_results"]
         assert len(rows) == 1
@@ -192,6 +192,7 @@ class TestJobSearchResultsManagerHappy:
         assert rows[0]["id"] == row_id
         assert rows[0]["source"] == "dice"
         assert rows[0]["source_id"] == "happy-1"
+        assert is_new is True
 
     def test_upsert_new_row_has_last_seen_at_set(self, fake_supabase):
         mgr = _make_manager(fake_supabase)
@@ -398,7 +399,7 @@ class TestJobSearchResultsManagerEdgeCases:
         listing = _make_listing(source_id="no-status")
         # upsert should not pass 'status' through even if caller tries.
         # The allowed-key filter means status won't appear in the payload.
-        row_id = mgr.upsert(listing)
+        row_id, is_new = mgr.upsert(listing)
         rows = fake_supabase._tables["job_search_results"]
         # Status should be whatever the fake default is ('new'), not any override.
         assert rows[0]["status"] == "new"
@@ -447,7 +448,8 @@ class TestJobSearchResultsManagerIntegration:
 
         # Step 1: Upsert a new listing
         listing = _make_listing(source_id="life-1", profile_id=profile_id)
-        row_id = mgr.upsert(listing)
+        row_id, is_new = mgr.upsert(listing)
+        assert is_new is True
 
         rows = fake_supabase._tables["job_search_results"]
         assert len(rows) == 1
@@ -457,9 +459,10 @@ class TestJobSearchResultsManagerIntegration:
         # Step 2: Upsert the same listing again (simulate re-run)
         import time
         time.sleep(0.01)
-        mgr.upsert(listing)
+        _, is_new_second = mgr.upsert(listing)
         rows = fake_supabase._tables["job_search_results"]
         assert len(rows) == 1, "Should not duplicate on second upsert"
+        assert is_new_second is False, "Second upsert of same listing should not be 'new'"
         second_seen = rows[0]["last_seen_at"]
         assert second_seen >= first_seen
 

@@ -183,7 +183,10 @@ class _FakeTable:
                     # Update existing row in place.
                     existing.update(payload)
                     existing["updated_at"] = now_iso
-                    return SimpleNamespace(data=existing)
+                    # Mark as an update (not a new insert) for is_new detection.
+                    result_row = dict(existing)
+                    result_row["_fake_is_new"] = False
+                    return SimpleNamespace(data=result_row)
             # No conflict match (or no on_conflict key) — insert as new.
             row = {
                 "id": str(uuid.uuid4()),
@@ -197,7 +200,10 @@ class _FakeTable:
                 **payload,
             }
             self._rows.append(row)
-            return SimpleNamespace(data=row)
+            # Mark as a new insert for is_new detection.
+            result_row = dict(row)
+            result_row["_fake_is_new"] = True
+            return SimpleNamespace(data=result_row)
 
         matched = [r for r in self._rows if self._matches(r)]
 

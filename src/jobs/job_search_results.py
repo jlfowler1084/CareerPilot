@@ -10,7 +10,7 @@ Usage
     from src.jobs.job_search_results import JobSearchResultsManager
 
     mgr = JobSearchResultsManager()
-    row_id = mgr.upsert({
+    row_id, is_new = mgr.upsert({
         "source": "dice",
         "source_id": "abc123",
         "url": "https://dice.com/job/abc123",
@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from config import settings
 
@@ -100,12 +100,13 @@ class JobSearchResultsManager:
     # Writes
     # ------------------------------------------------------------------
 
-    def upsert(self, listing: Dict) -> str:
+    def upsert(self, listing: Dict) -> "Tuple[str, bool]":
         """Insert-or-update a job listing on (user_id, source, source_id).
 
         Sets `user_id` to the manager's owner. Stamps `discovered_at` to
         NOW() on insert (via the column default); bumps `last_seen_at` on
-        every call. Returns the row's UUID.
+        every call. Returns a tuple of ``(row_id, is_new)`` where
+        ``is_new`` is ``True`` if the row was inserted (not updated).
 
         Parameters
         ----------
@@ -121,8 +122,10 @@ class JobSearchResultsManager:
 
         Returns
         -------
-        str
-            The Supabase UUID of the upserted row.
+        Tuple[str, bool]
+            ``(row_id, is_new)`` — the Supabase UUID of the upserted row,
+            and a flag indicating whether it was a fresh insert (``True``)
+            or an update to an existing row (``False``).
 
         Raises
         ------
@@ -159,14 +162,25 @@ class JobSearchResultsManager:
             )
         # Supabase upsert returns a single-item list; extract the row.
         row = response.data if isinstance(response.data, dict) else response.data[0]
+        # Detect new-vs-updated:
+        # - FakeSupabaseClient sets _fake_is_new sentinel for test accuracy.
+        # - Real Supabase: new rows have discovered_at >= now_iso (column default
+        #   is NOW() on insert, which equals or slightly exceeds the Python now_iso
+        #   since the DB timestamp is set after the Python timestamp); existing rows
+        #   retain their original earlier discovered_at.
+        if "_fake_is_new" in row:
+            is_new: bool = bool(row["_fake_is_new"])
+        else:
+            is_new = row.get("discovered_at", "") >= now_iso
         logger.info(
-            "Upserted job_search_result: %s at %s (id=%s, source=%s)",
+            "%s job_search_result: %s at %s (id=%s, source=%s)",
+            "Inserted" if is_new else "Updated",
             row.get("title"),
             row.get("company"),
             row.get("id"),
             row.get("source"),
         )
-        return row["id"]
+        return row["id"], is_new
 
     def bump_last_seen(self, source: str, source_id: str) -> None:
         """Bump last_seen_at for an existing row without changing other fields.
