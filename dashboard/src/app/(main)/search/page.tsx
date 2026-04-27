@@ -1,21 +1,27 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import { useSearchResults } from "@/hooks/use-search-results"
 import { useSearchProfiles } from "@/hooks/use-search-profiles"
 import { useSuggestions } from "@/hooks/use-suggestions"
 import { useAutoApplyQueue } from "@/hooks/use-auto-apply-queue"
 import { useSkillsInventory } from "@/hooks/use-skills-inventory"
+import { useApplications } from "@/hooks/use-applications"
 import { ResultRow } from "@/components/search/result-row"
 import { DetailPanel } from "@/components/search/detail-panel"
 import { SuggestionsFeed } from "@/components/search/suggestions-feed"
 import { AutoApplyQueue } from "@/components/search/auto-apply-queue"
+import { TailorModal } from "@/components/applications/tailor-modal"
+import { CoverLetterModal } from "@/components/applications/cover-letter-modal"
+import { ApplyFlow } from "@/components/search/apply-flow"
 import { EmptyState } from "@/components/shared/empty-state"
 import { scoreJob } from "@/lib/fit-scoring"
+import { rowToJob } from "@/lib/search-results/to-job"
+import { buildApplicationInput } from "@/lib/search-results/track-input"
 import { Mail, ListChecks, SearchX } from "lucide-react"
 import type { JobSearchResultRow } from "@/types/supabase"
-import type { FitScore } from "@/types"
+import type { Job, FitScore } from "@/types"
 import type { SearchResultStatus } from "@/lib/search-results/filters"
 
 type ActiveTab = "search" | "suggestions" | "queue"
@@ -48,6 +54,24 @@ export default function SearchPage() {
   const [profileFilter, setProfileFilter] = useState<string | null>(null)
   const [selectedRow, setSelectedRow] = useState<JobSearchResultRow | null>(null)
 
+  // ── Modal state ───────────────────────────────────────────────────────────
+  const [tailorRow, setTailorRow] = useState<JobSearchResultRow | null>(null)
+  const [tailorOpen, setTailorOpen] = useState(false)
+  // When Track+Tailor runs first, the new application id is stored here so
+  // TailorModal.onSave can attach the resume directly to the application.
+  const [tailorApplicationId, setTailorApplicationId] = useState<string | null>(null)
+
+  const [coverLetterRow, setCoverLetterRow] = useState<JobSearchResultRow | null>(null)
+  const [coverLetterOpen, setCoverLetterOpen] = useState(false)
+
+  const [applyRow, setApplyRow] = useState<JobSearchResultRow | null>(null)
+  const [applyOpen, setApplyOpen] = useState(false)
+
+  // Stash refs: allow tailor/cover-letter before the user clicks Track.
+  // When Track fires, the stashed content is attached to the new application.
+  const tailoredResumesRef = useRef<Map<string, string>>(new Map())
+  const coverLettersRef = useRef<Map<string, string>>(new Map())
+
   const filters = useMemo(
     () => ({ status: statusFilter, source: sourceFilter, profileId: profileFilter ?? undefined }),
     [statusFilter, sourceFilter, profileFilter]
@@ -55,6 +79,7 @@ export default function SearchPage() {
 
   const { rows, allRows, loading, updateRow } = useSearchResults(filters)
   const { profiles } = useSearchProfiles()
+  const { addApplication, updateApplication } = useApplications()
 
   // Suggestions tab — preserved from the legacy page (CAR-78).
   const {
@@ -68,6 +93,15 @@ export default function SearchPage() {
     queue: autoApplyQueue, loading: queueLoading, counts: queueCounts,
     addToQueue, approveJob, rejectJob, approveAllAbove, clearRejected, isInQueue,
   } = useAutoApplyQueue()
+
+  // Per-row fit scores (keyed by row.id).
+  const rowFitScores = useMemo(() => {
+    const map = new Map<string, FitScore>()
+    for (const row of rows) {
+      map.set(row.id, scoreJob(rowToJob(row), skills))
+    }
+    return map
+  }, [rows, skills])
 
   const suggestionScores = useMemo(() => {
     const map = new Map<string, FitScore>()
@@ -124,7 +158,117 @@ export default function SearchPage() {
     }
   }, [searchParams])
 
+  // ── Per-row handlers ──────────────────────────────────────────────────────
+
+  // Track: create application + stamp row (no navigation — panel's TrackButton
+  // handles the navigate-to-research UX; this is the lightweight list-level version).
+  async function handleTrack(row: JobSearchResultRow): Promise<string | null> {
+    if (row.application_id) return row.application_id
+    const input = buildApplicationInput(row)
+    // Attach any pre-tailored resume or cover letter from the stash refs.
+    const stashedResume = tailoredResumesRef.current.get(row.id)
+    const stashedCover = coverLettersRef.current.get(row.id)
+    const result = await addApplication(
+      {
+        ...input,
+        ...(stashedResume ? { tailored_resume: stashedResume } : {}),
+        ...(stashedCover ? { cover_letter: stashedCover } : {}),
+      },
+      "search"
+    )
+    const newId = result?.data?.id ?? null
+    if (newId) {
+      await updateRow(row.id, { status: "tracked", application_id: newId })
+      tailoredResumesRef.current.delete(row.id)
+      coverLettersRef.current.delete(row.id)
+    }
+    return newId
+  }
+
+  function handleTailor(row: JobSearchResultRow) {
+    setTailorRow(row)
+    setTailorApplicationId(row.application_id ?? null)
+    setTailorOpen(true)
+  }
+
+  function handleCoverLetter(row: JobSearchResultRow) {
+    setCoverLetterRow(row)
+    setCoverLetterOpen(true)
+  }
+
+  function handleApply(row: JobSearchResultRow) {
+    setApplyRow(row)
+    setApplyOpen(true)
+  }
+
+  async function handleApplied(job: Job) {
+    if (!applyRow) return
+    const existingAppId = applyRow.application_id
+    if (existingAppId) {
+      await updateApplication(existingAppId, {
+        status: "applied",
+        date_applied: new Date().toISOString().slice(0, 10),
+      })
+    } else {
+      // Not yet tracked — create application with applied status.
+      const result = await addApplication(
+        {
+          ...buildApplicationInput(applyRow),
+          status: "applied",
+          date_applied: new Date().toISOString().slice(0, 10),
+        },
+        "search"
+      )
+      const newId = result?.data?.id
+      if (newId) {
+        await updateRow(applyRow.id, { status: "tracked", application_id: newId })
+      }
+    }
+    void job // consumed by ApplyFlow; application update is row-based above
+  }
+
+  async function handleTrackAndTailor(row: JobSearchResultRow) {
+    const newId = await handleTrack(row)
+    setTailorRow(row)
+    setTailorApplicationId(newId)
+    setTailorOpen(true)
+  }
+
+  function handleAddToQueue(row: JobSearchResultRow) {
+    const job = rowToJob(row)
+    const fitScore = rowFitScores.get(row.id)
+    if (!fitScore) return
+    addToQueue(job, fitScore)
+  }
+
+  function isRowInQueue(row: JobSearchResultRow): boolean {
+    return isInQueue({ title: row.title ?? "", company: row.company ?? "" })
+  }
+
+  // TailorModal.onSave: stash the resume into the ref (for pre-track tailor),
+  // and if an application already exists, persist it directly.
+  async function handleTailorSave(resume: string) {
+    if (!tailorRow) return
+    tailoredResumesRef.current.set(tailorRow.id, resume)
+    const appId = tailorApplicationId ?? tailorRow.application_id
+    if (appId) {
+      await updateApplication(appId, { tailored_resume: resume })
+    }
+  }
+
+  async function handleCoverLetterSave(letter: string) {
+    if (!coverLetterRow) return
+    coverLettersRef.current.set(coverLetterRow.id, letter)
+    const appId = coverLetterRow.application_id
+    if (appId) {
+      await updateApplication(appId, { cover_letter: letter })
+    }
+  }
+
   const newCount = allRows.filter((r) => r.status === "new").length
+
+  // Active row's fit score (for DetailPanel's isInQueue check).
+  const selectedFitScore = selectedRow ? rowFitScores.get(selectedRow.id) : undefined
 
   return (
     <div className="p-6 space-y-6">
@@ -311,6 +455,14 @@ export default function SearchPage() {
                   row={row}
                   selected={selectedRow?.id === row.id}
                   onSelect={setSelectedRow}
+                  onTrack={(r) => { void handleTrack(r) }}
+                  onApply={handleApply}
+                  onTailor={handleTailor}
+                  onCoverLetter={handleCoverLetter}
+                  onTrackAndTailor={(r) => { void handleTrackAndTailor(r) }}
+                  onAddToQueue={handleAddToQueue}
+                  isInQueue={isRowInQueue}
+                  fitScore={rowFitScores.get(row.id)}
                 />
               ))}
             </div>
@@ -322,7 +474,66 @@ export default function SearchPage() {
         row={selectedRow}
         onClose={() => setSelectedRow(null)}
         onUpdateRow={updateRow}
+        onTailor={handleTailor}
+        onCoverLetter={handleCoverLetter}
+        onApply={handleApply}
+        onAddToQueue={handleAddToQueue}
+        onTrackAndTailor={(r) => { void handleTrackAndTailor(r) }}
+        fitScore={selectedFitScore}
+        isInQueue={selectedRow ? isRowInQueue(selectedRow) : false}
       />
+
+      {/* ── Modals ────────────────────────────────────────────────────────── */}
+
+      {tailorRow && (
+        <TailorModal
+          application={{
+            title: tailorRow.title ?? "",
+            company: tailorRow.company ?? "",
+            url: tailorRow.url,
+            tailored_resume: tailoredResumesRef.current.get(tailorRow.id) ?? null,
+          }}
+          open={tailorOpen}
+          onOpenChange={(open) => {
+            setTailorOpen(open)
+            if (!open) {
+              setTailorRow(null)
+              setTailorApplicationId(null)
+            }
+          }}
+          onSave={handleTailorSave}
+        />
+      )}
+
+      {coverLetterRow && (
+        <CoverLetterModal
+          application={{
+            title: coverLetterRow.title ?? "",
+            company: coverLetterRow.company ?? "",
+            url: coverLetterRow.url,
+          }}
+          open={coverLetterOpen}
+          onOpenChange={(open) => {
+            setCoverLetterOpen(open)
+            if (!open) setCoverLetterRow(null)
+          }}
+          onSave={handleCoverLetterSave}
+        />
+      )}
+
+      {applyRow && (
+        <ApplyFlow
+          job={rowToJob(applyRow)}
+          isOpen={applyOpen}
+          onClose={() => {
+            setApplyOpen(false)
+            setApplyRow(null)
+          }}
+          onApplied={handleApplied}
+          tailoredResume={tailoredResumesRef.current.get(applyRow.id) ?? null}
+          coverLetter={coverLettersRef.current.get(applyRow.id) ?? null}
+        />
+      )}
     </div>
   )
 }

@@ -2895,6 +2895,38 @@
       "exports": ["PrepPackModal"],
       "patterns": ["useResearch", "researchMarkdown"],
       "area": "applications"
+    },
+    {
+      "ticket": "CAR-190",
+      "name": "rowToJob adapter",
+      "file": "src/lib/search-results/to-job.ts",
+      "exports": ["rowToJob"],
+      "patterns": ["JobSearchResultRow", "Job", "Not listed"],
+      "area": "search"
+    },
+    {
+      "ticket": "CAR-190",
+      "name": "ResultRow with per-row actions",
+      "file": "src/components/search/result-row.tsx",
+      "exports": ["ResultRow"],
+      "patterns": ["JobCard", "rowToJob", "onTrack", "onTailor", "fitScore"],
+      "area": "search"
+    },
+    {
+      "ticket": "CAR-190",
+      "name": "DetailPanel action strip",
+      "file": "src/components/search/detail-panel.tsx",
+      "exports": ["DetailPanel"],
+      "patterns": ["onTailor", "onCoverLetter", "onApply", "onAddToQueue", "Tailor Resume", "Cover Letter"],
+      "area": "search"
+    },
+    {
+      "ticket": "CAR-190",
+      "name": "Search page per-row handler wiring",
+      "file": "src/app/(main)/search/page.tsx",
+      "exports": ["default"],
+      "patterns": ["handleTrack", "handleTailor", "handleCoverLetter", "handleApply", "handleTrackAndTailor", "TailorModal", "CoverLetterModal", "ApplyFlow"],
+      "area": "search"
     }
   ]
 }
