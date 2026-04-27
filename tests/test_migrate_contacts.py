@@ -352,6 +352,40 @@ class TestMigrateContacts:
         row = fake_supabase._tables["contacts"][0]
         assert row["tags"] == ["python", "react"]
 
+    # CAR-180: defensive None-guard on sqlite_id before id_map assignment.
+
+    def test_row_without_sqlite_id_is_skipped_from_id_map(
+        self, tmp_path, fake_supabase, monkeypatch, caplog
+    ):
+        """A row missing the 'id' key must not land a None key in id_map.
+
+        Not reachable via normal SQLite (AUTOINCREMENT PKs are always present),
+        so the path is exercised by monkeypatching read_sqlite_contacts.
+        """
+        import logging
+
+        from src.db.contacts import ContactManager
+
+        db = _make_contacts_db(tmp_path, [])
+        monkeypatch.setattr(
+            migrate_mod,
+            "read_sqlite_contacts",
+            lambda _p: [{"name": "Alice", "email": "alice@a.com"}],  # no 'id'
+        )
+        mgr = ContactManager()
+
+        with caplog.at_level(logging.WARNING):
+            result = migrate_mod.migrate_contacts(
+                db, mgr, fake_supabase, dry_run=False
+            )
+
+        assert result.rows_inserted == 1
+        assert result.id_map == {}
+        assert None not in result.id_map
+        assert any(
+            "FK rewrite will skip" in rec.message for rec in caplog.records
+        )
+
 
 # ---------------------------------------------------------------------------
 # TestRewriteInteractionFKs
@@ -393,6 +427,22 @@ class TestRewriteInteractionFKs:
 
         count = migrate_mod.rewrite_interaction_fks(db, {1: "uuid-1"})
         assert count == 0
+
+    # CAR-177: asymmetric schema guard must raise when rows would be lost.
+
+    def test_raises_when_legacy_rows_without_contact_uuid_column(self, tmp_path):
+        """contact_uuid missing + contact_id rows present → raise, not silent 0."""
+        db = _make_contacts_db(tmp_path, [{"name": "Alice"}])
+        conn = sqlite3.connect(str(db))
+        conn.execute(
+            "INSERT INTO contact_interactions (contact_id, interaction_type) "
+            "VALUES (1, 'call')"
+        )
+        conn.commit()
+        conn.close()
+
+        with pytest.raises(RuntimeError, match="contact_interactions.*contact_uuid"):
+            migrate_mod.rewrite_interaction_fks(db, {1: "uuid-1"})
 
 
 # ---------------------------------------------------------------------------
@@ -436,6 +486,22 @@ class TestRewriteSubmittedRoleFKs:
         conn.close()
         count = migrate_mod.rewrite_submitted_role_fks(db, {1: "uuid-1"})
         assert count == 0
+
+    # CAR-178: asymmetric schema guard must raise when rows would be lost.
+
+    def test_raises_when_legacy_rows_without_contact_uuid_column(self, tmp_path):
+        """contact_uuid missing + contact_id rows present → raise, not silent 0."""
+        db = _make_contacts_db(tmp_path, [{"name": "Alice"}])
+        conn = sqlite3.connect(str(db))
+        conn.execute(
+            "INSERT INTO submitted_roles (contact_id, company, role_title) "
+            "VALUES (1, 'Acme', 'SWE')"
+        )
+        conn.commit()
+        conn.close()
+
+        with pytest.raises(RuntimeError, match="submitted_roles.*contact_uuid"):
+            migrate_mod.rewrite_submitted_role_fks(db, {1: "uuid-1"})
 
 
 # ---------------------------------------------------------------------------
