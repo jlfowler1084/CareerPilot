@@ -10,6 +10,10 @@ import { useSkillsInventory } from "@/hooks/use-skills-inventory"
 import { useApplications } from "@/hooks/use-applications"
 import { ResultRow } from "@/components/search/result-row"
 import { DetailPanel } from "@/components/search/detail-panel"
+import { ProfileChips } from "@/components/search/profile-chips"
+import { SearchFiltersBar, DEFAULT_FILTERS } from "@/components/search/search-filters"
+import { AdvancedFiltersPanel } from "@/components/search/advanced-filters"
+import { QueryMode, QueryModeToggle } from "@/components/search/query-mode"
 import { SuggestionsFeed } from "@/components/search/suggestions-feed"
 import { AutoApplyQueue } from "@/components/search/auto-apply-queue"
 import { TailorModal } from "@/components/applications/tailor-modal"
@@ -19,12 +23,20 @@ import { EmptyState } from "@/components/shared/empty-state"
 import { scoreJob } from "@/lib/fit-scoring"
 import { rowToJob } from "@/lib/search-results/to-job"
 import { buildApplicationInput } from "@/lib/search-results/track-input"
-import { Mail, ListChecks, SearchX } from "lucide-react"
+import { applyFilters } from "@/lib/search-filter-utils"
+import { applyAdvancedFilters, DEFAULT_ADVANCED_FILTERS } from "@/lib/search-filter-utils"
+import { applyQueryFilter, parseQuery } from "@/lib/query-parser"
+import { parseSalary } from "@/lib/search-filter-utils"
+import { Mail, ListChecks, SearchX, ListFilter } from "lucide-react"
 import type { JobSearchResultRow } from "@/types/supabase"
 import type { Job, FitScore } from "@/types"
+import type { SearchFilters } from "@/lib/search-filter-utils"
+import type { AdvancedFilters } from "@/lib/search-filter-utils"
 import type { SearchResultStatus } from "@/lib/search-results/filters"
+import type { SearchProfile } from "@/hooks/use-search-profiles"
 
 type ActiveTab = "search" | "suggestions" | "queue"
+type SortOrder = "newest" | "fit" | "salary" | "company"
 
 const STATUS_OPTIONS: { value: SearchResultStatus | "all"; label: string }[] = [
   { value: "new", label: "New" },
@@ -34,11 +46,19 @@ const STATUS_OPTIONS: { value: SearchResultStatus | "all"; label: string }[] = [
   { value: "stale", label: "Stale" },
 ]
 
-const SOURCE_OPTIONS: { value: "all" | "indeed" | "dice"; label: string }[] = [
-  { value: "all", label: "All Sources" },
-  { value: "indeed", label: "Indeed" },
-  { value: "dice", label: "Dice" },
-]
+const HIDDEN_PROFILES_KEY = "careerpilot_hidden_profiles"
+const AUTO_QUEUE_KEY = "careerpilot_auto_queue_enabled"
+
+function loadLocalSet(key: string): Set<string> {
+  try {
+    const raw = localStorage.getItem(key)
+    return raw ? new Set(JSON.parse(raw)) : new Set()
+  } catch { return new Set() }
+}
+
+function saveLocalSet(key: string, set: Set<string>) {
+  try { localStorage.setItem(key, JSON.stringify([...set])) } catch {}
+}
 
 export default function SearchPage() {
   const searchParams = useSearchParams()
@@ -50,70 +70,164 @@ export default function SearchPage() {
 
   const [activeTab, setActiveTab] = useState<ActiveTab>(initialTab)
   const [statusFilter, setStatusFilter] = useState<SearchResultStatus | "all">("new")
-  const [sourceFilter, setSourceFilter] = useState<"all" | "indeed" | "dice">("all")
-  const [profileFilter, setProfileFilter] = useState<string | null>(null)
   const [selectedRow, setSelectedRow] = useState<JobSearchResultRow | null>(null)
 
-  // ── Modal state ───────────────────────────────────────────────────────────
+  // ── B1: Profile chips state ───────────────────────────────────────────────
+  // Empty set = all profiles shown. Non-empty = filter to those IDs.
+  const [selectedProfileIds, setSelectedProfileIds] = useState<Set<string>>(new Set())
+  const [hiddenProfileIds, setHiddenProfileIds] = useState<Set<string>>(() => loadLocalSet(HIDDEN_PROFILES_KEY))
+
+  // ── B2: Filter state ──────────────────────────────────────────────────────
+  const [quickFilters, setQuickFilters] = useState<SearchFilters>(DEFAULT_FILTERS)
+  const [advancedFilters, setAdvancedFilters] = useState<AdvancedFilters>(DEFAULT_ADVANCED_FILTERS)
+  const [queryMode, setQueryMode] = useState(false)
+  const [queryString, setQueryString] = useState("")
+  const [sortOrder, setSortOrder] = useState<SortOrder>("newest")
+
+  // ── B3: Auto-queue toggle ─────────────────────────────────────────────────
+  const [autoQueueEnabled, setAutoQueueEnabled] = useState(() => {
+    try { return localStorage.getItem(AUTO_QUEUE_KEY) === "true" } catch { return false }
+  })
+
+  // ── Modal state (Phase A) ─────────────────────────────────────────────────
   const [tailorRow, setTailorRow] = useState<JobSearchResultRow | null>(null)
   const [tailorOpen, setTailorOpen] = useState(false)
-  // When Track+Tailor runs first, the new application id is stored here so
-  // TailorModal.onSave can attach the resume directly to the application.
   const [tailorApplicationId, setTailorApplicationId] = useState<string | null>(null)
-
   const [coverLetterRow, setCoverLetterRow] = useState<JobSearchResultRow | null>(null)
   const [coverLetterOpen, setCoverLetterOpen] = useState(false)
-
   const [applyRow, setApplyRow] = useState<JobSearchResultRow | null>(null)
   const [applyOpen, setApplyOpen] = useState(false)
-
-  // Stash refs: allow tailor/cover-letter before the user clicks Track.
-  // When Track fires, the stashed content is attached to the new application.
   const tailoredResumesRef = useRef<Map<string, string>>(new Map())
   const coverLettersRef = useRef<Map<string, string>>(new Map())
 
-  const filters = useMemo(
-    () => ({ status: statusFilter, source: sourceFilter, profileId: profileFilter ?? undefined }),
-    [statusFilter, sourceFilter, profileFilter]
+  // ── Data hooks ────────────────────────────────────────────────────────────
+  // Only status-filter at Supabase level; profile + quick + advanced filters run client-side.
+  const { rows: statusRows, allRows, loading, updateRow } = useSearchResults(
+    useMemo(() => ({ status: statusFilter }), [statusFilter])
   )
 
-  const { rows, allRows, loading, updateRow } = useSearchResults(filters)
-  const { profiles } = useSearchProfiles()
+  const { profiles, createProfile, updateProfile, deleteProfile } = useSearchProfiles()
   const { addApplication, updateApplication } = useApplications()
 
-  // Suggestions tab — preserved from the legacy page (CAR-78).
   const {
     suggestions, loading: suggestionsLoading, newCount: suggestionsNewCount,
     extractSuggestions, dismissSuggestion, trackSuggestion, bulkDismiss,
   } = useSuggestions()
 
-  // Auto-Apply tab — preserved from the legacy page (CAR-18).
   const { skills } = useSkillsInventory()
   const {
     queue: autoApplyQueue, loading: queueLoading, counts: queueCounts,
     addToQueue, approveJob, rejectJob, approveAllAbove, clearRejected, isInQueue,
   } = useAutoApplyQueue()
 
-  // Per-row fit scores (keyed by row.id).
+  // ── Fit scores (computed for ALL rows so sort-by-fit + auto-queue work) ───
   const rowFitScores = useMemo(() => {
     const map = new Map<string, FitScore>()
-    for (const row of rows) {
+    for (const row of allRows) {
       map.set(row.id, scoreJob(rowToJob(row), skills))
     }
     return map
-  }, [rows, skills])
+  }, [allRows, skills])
 
+  // ── B2: Full client-side filter pipeline ──────────────────────────────────
+  const displayRows = useMemo(() => {
+    // Step 1: Profile filter
+    const profileFiltered =
+      selectedProfileIds.size === 0
+        ? statusRows
+        : statusRows.filter((r) => r.profile_id && selectedProfileIds.has(r.profile_id))
+
+    // Step 2: Convert to Job[] — done once; same object refs used by all filters
+    const jobs: Job[] = profileFiltered.map(rowToJob)
+    // Map from Job object reference → its source row (for zip-back after filtering)
+    const jobToRow = new Map<Job, JobSearchResultRow>(
+      profileFiltered.map((row, i) => [jobs[i], row])
+    )
+
+    // Step 3: Apply quick / advanced / query filters
+    let filtered: Job[]
+    if (queryMode && queryString.trim()) {
+      filtered = applyQueryFilter(jobs, parseQuery(queryString))
+    } else {
+      filtered = applyAdvancedFilters(applyFilters(jobs, quickFilters), advancedFilters)
+    }
+
+    // Step 4: Zip back to rows (Array.filter preserves object references)
+    const filteredRows = filtered
+      .map((j) => jobToRow.get(j))
+      .filter((r): r is JobSearchResultRow => r !== undefined)
+
+    // Step 5: Sort
+    switch (sortOrder) {
+      case "newest":
+        filteredRows.sort(
+          (a, b) =>
+            new Date(b.discovered_at).getTime() - new Date(a.discovered_at).getTime()
+        )
+        break
+      case "fit":
+        filteredRows.sort(
+          (a, b) => (rowFitScores.get(b.id)?.total ?? 0) - (rowFitScores.get(a.id)?.total ?? 0)
+        )
+        break
+      case "salary":
+        filteredRows.sort((a, b) => {
+          const sa = parseSalary(a.salary ?? "")?.annual ?? 0
+          const sb = parseSalary(b.salary ?? "")?.annual ?? 0
+          return sb - sa
+        })
+        break
+      case "company":
+        filteredRows.sort((a, b) =>
+          (a.company ?? "").localeCompare(b.company ?? "")
+        )
+        break
+    }
+
+    return filteredRows
+  }, [statusRows, selectedProfileIds, quickFilters, advancedFilters, queryMode, queryString, sortOrder, rowFitScores])
+
+  // Jobs after profile-filter only (for AdvancedFiltersPanel company autocomplete)
+  const jobsForAdvancedFilter = useMemo(() => {
+    const profileFiltered =
+      selectedProfileIds.size === 0
+        ? statusRows
+        : statusRows.filter((r) => r.profile_id && selectedProfileIds.has(r.profile_id))
+    return profileFiltered.map(rowToJob)
+  }, [statusRows, selectedProfileIds])
+
+  // ── B3: Scan metadata derived from allRows ────────────────────────────────
+  const scanMetadata = useMemo(() => {
+    if (allRows.length === 0) return null
+    const latest = allRows.reduce(
+      (max, r) => (r.discovered_at > max ? r.discovered_at : max),
+      ""
+    )
+    const newCount = allRows.filter((r) => r.status === "new").length
+    return { latest, newCount }
+  }, [allRows])
+
+  // ── B3: Auto-queue 80+ effect ─────────────────────────────────────────────
+  useEffect(() => {
+    if (!autoQueueEnabled) return
+    for (const row of displayRows) {
+      if (!row.easy_apply) continue
+      const fitScore = rowFitScores.get(row.id)
+      if (fitScore && fitScore.total >= 80) {
+        const job = rowToJob(row)
+        if (!isInQueue(job)) addToQueue(job, fitScore)
+      }
+    }
+    // Only re-run when toggle turns on or displayed rows change meaningfully.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoQueueEnabled, displayRows])
+
+  // ── Suggestion helpers (preserved from Phase A) ───────────────────────────
   const suggestionScores = useMemo(() => {
     const map = new Map<string, FitScore>()
     for (const s of suggestions) {
       const key = `${s.title}|||${s.company}`.toLowerCase()
-      map.set(key, scoreJob({
-        title: s.title,
-        company: s.company,
-        location: s.location || "",
-        salary: s.salary || "Not listed",
-        source: s.source || "",
-      }, skills))
+      map.set(key, scoreJob({ title: s.title, company: s.company, location: s.location || "", salary: s.salary || "Not listed", source: s.source || "" }, skills))
     }
     return map
   }, [suggestions, skills])
@@ -125,32 +239,18 @@ export default function SearchPage() {
   function handleSuggestionQueue(s: { title: string; company: string; location: string | null; salary: string | null; source: string; job_url: string | null }) {
     const score = getSuggestionFitScore(s)
     if (!score) return
-    addToQueue({
-      title: s.title,
-      company: s.company,
-      location: s.location || "",
-      salary: s.salary || "Not listed",
-      url: s.job_url || "",
-      source: `${s.source} Suggestion` as "Indeed" | "Dice",
-      posted: "",
-      type: "",
-      profileId: "",
-      profileLabel: "Suggestion",
-    }, score)
+    addToQueue({ title: s.title, company: s.company, location: s.location || "", salary: s.salary || "Not listed", url: s.job_url || "", source: `${s.source} Suggestion` as "Indeed" | "Dice", posted: "", type: "", profileId: "", profileLabel: "Suggestion" }, score)
   }
 
   function isSuggestionInQueue(s: { title: string; company: string }): boolean {
     return isInQueue({ title: s.title, company: s.company })
   }
 
-  // Auto-extract suggestions on first load (preserved from legacy page).
   useEffect(() => {
     extractSuggestions().catch(() => {})
-    // Run once on mount.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Reflect ?tab= changes (e.g., navigation from the Overview Auto-Apply widget).
   useEffect(() => {
     const tab = searchParams?.get("tab")
     if (tab === "suggestions" || tab === "queue" || tab === "search") {
@@ -158,22 +258,83 @@ export default function SearchPage() {
     }
   }, [searchParams])
 
-  // ── Per-row handlers ──────────────────────────────────────────────────────
+  // ── B1: Profile chips handlers ────────────────────────────────────────────
+  function handleToggleProfile(id: string) {
+    setSelectedProfileIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
 
-  // Track: create application + stamp row (no navigation — panel's TrackButton
-  // handles the navigate-to-research UX; this is the lightweight list-level version).
+  function handleSelectAllProfiles() {
+    setSelectedProfileIds(new Set())
+  }
+
+  function handleSelectNoneProfiles() {
+    // Select none = empty visible selection; pass Set of all visible IDs so the
+    // filter shows nothing. Since empty = all, we need to explicitly pick none.
+    const visible = profiles.filter((p) => !hiddenProfileIds.has(p.id))
+    setSelectedProfileIds(new Set(visible.map((p) => p.id)))
+    // Then clear — actually we want NO profiles. Let's toggle to a set that
+    // contains a sentinel no real profile will match. Instead: set to a Set
+    // with a dummy ID so the filter produces 0 rows.
+    setSelectedProfileIds(() => {
+      // All visible IDs selected for deselection:
+      const all = new Set(visible.map((p) => p.id))
+      // Remove all of them so filter shows nothing — but empty = all.
+      // Workaround: set to {"__none__"} — no row has this profile_id.
+      return new Set(["__none__"])
+    })
+  }
+
+  function handleHideProfile(id: string) {
+    if (id === "__show_all__") {
+      const next = new Set<string>()
+      setHiddenProfileIds(next)
+      saveLocalSet(HIDDEN_PROFILES_KEY, next)
+    } else {
+      const next = new Set(hiddenProfileIds)
+      next.add(id)
+      setHiddenProfileIds(next)
+      saveLocalSet(HIDDEN_PROFILES_KEY, next)
+      // If this profile was selected, deselect it.
+      setSelectedProfileIds((prev) => {
+        const s = new Set(prev)
+        s.delete(id)
+        return s
+      })
+    }
+  }
+
+  function handleDuplicateProfile(profile: SearchProfile) {
+    createProfile({
+      name: `${profile.name} (copy)`,
+      keyword: profile.keyword,
+      location: profile.location,
+      source: profile.source,
+      contract_only: profile.contract_only,
+      icon: profile.icon,
+    })
+  }
+
+  // Compute the display-selected set for ProfileChips (empty = all visible)
+  const profilesDisplaySelected = useMemo(() => {
+    if (selectedProfileIds.size === 0) {
+      return new Set(profiles.filter((p) => !hiddenProfileIds.has(p.id)).map((p) => p.id))
+    }
+    return selectedProfileIds
+  }, [selectedProfileIds, profiles, hiddenProfileIds])
+
+  // ── Per-row handlers (Phase A) ────────────────────────────────────────────
   async function handleTrack(row: JobSearchResultRow): Promise<string | null> {
     if (row.application_id) return row.application_id
     const input = buildApplicationInput(row)
-    // Attach any pre-tailored resume or cover letter from the stash refs.
     const stashedResume = tailoredResumesRef.current.get(row.id)
     const stashedCover = coverLettersRef.current.get(row.id)
     const result = await addApplication(
-      {
-        ...input,
-        ...(stashedResume ? { tailored_resume: stashedResume } : {}),
-        ...(stashedCover ? { cover_letter: stashedCover } : {}),
-      },
+      { ...input, ...(stashedResume ? { tailored_resume: stashedResume } : {}), ...(stashedCover ? { cover_letter: stashedCover } : {}) },
       "search"
     )
     const newId = result?.data?.id ?? null
@@ -205,26 +366,13 @@ export default function SearchPage() {
     if (!applyRow) return
     const existingAppId = applyRow.application_id
     if (existingAppId) {
-      await updateApplication(existingAppId, {
-        status: "applied",
-        date_applied: new Date().toISOString().slice(0, 10),
-      })
+      await updateApplication(existingAppId, { status: "applied", date_applied: new Date().toISOString().slice(0, 10) })
     } else {
-      // Not yet tracked — create application with applied status.
-      const result = await addApplication(
-        {
-          ...buildApplicationInput(applyRow),
-          status: "applied",
-          date_applied: new Date().toISOString().slice(0, 10),
-        },
-        "search"
-      )
+      const result = await addApplication({ ...buildApplicationInput(applyRow), status: "applied", date_applied: new Date().toISOString().slice(0, 10) }, "search")
       const newId = result?.data?.id
-      if (newId) {
-        await updateRow(applyRow.id, { status: "tracked", application_id: newId })
-      }
+      if (newId) await updateRow(applyRow.id, { status: "tracked", application_id: newId })
     }
-    void job // consumed by ApplyFlow; application update is row-based above
+    void job
   }
 
   async function handleTrackAndTailor(row: JobSearchResultRow) {
@@ -245,50 +393,56 @@ export default function SearchPage() {
     return isInQueue({ title: row.title ?? "", company: row.company ?? "" })
   }
 
-  // TailorModal.onSave: stash the resume into the ref (for pre-track tailor),
-  // and if an application already exists, persist it directly.
   async function handleTailorSave(resume: string) {
     if (!tailorRow) return
     tailoredResumesRef.current.set(tailorRow.id, resume)
     const appId = tailorApplicationId ?? tailorRow.application_id
-    if (appId) {
-      await updateApplication(appId, { tailored_resume: resume })
-    }
+    if (appId) await updateApplication(appId, { tailored_resume: resume })
   }
 
   async function handleCoverLetterSave(letter: string) {
     if (!coverLetterRow) return
     coverLettersRef.current.set(coverLetterRow.id, letter)
     const appId = coverLetterRow.application_id
-    if (appId) {
-      await updateApplication(appId, { cover_letter: letter })
-    }
+    if (appId) await updateApplication(appId, { cover_letter: letter })
   }
 
+  // ── Derived counts ────────────────────────────────────────────────────────
   const newCount = allRows.filter((r) => r.status === "new").length
-
-  // Active row's fit score (for DetailPanel's isInQueue check).
   const selectedFitScore = selectedRow ? rowFitScores.get(selectedRow.id) : undefined
+
+  // Format a UTC ISO string as a human-readable time (e.g. "7:02 AM")
+  function formatScanTime(iso: string): string {
+    try {
+      return new Date(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
+    } catch { return "" }
+  }
 
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-bold">Job Search</h2>
-        <div className="text-xs text-zinc-500">
-          The CLI runs daily on the workstation. Track results below.
-        </div>
+        {/* B3: Scan metadata header */}
+        {scanMetadata ? (
+          <div className="text-xs text-zinc-500 dark:text-zinc-400">
+            Last discovered: {formatScanTime(scanMetadata.latest)}
+            {scanMetadata.newCount > 0 && (
+              <span className="ml-2 font-semibold text-blue-600 dark:text-blue-400">
+                {scanMetadata.newCount} new
+              </span>
+            )}
+          </div>
+        ) : (
+          <div className="text-xs text-zinc-500">
+            The CLI runs daily on the workstation. Track results below.
+          </div>
+        )}
       </div>
 
-      {/* Tab nav (preserved) */}
+      {/* Tab nav */}
       <div className="flex items-center gap-0 border-b border-zinc-200 dark:border-zinc-700">
-        <button
-          type="button"
-          onClick={() => setActiveTab("search")}
-          className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px ${
-            activeTab === "search"
-              ? "border-amber-500 text-amber-700 dark:text-amber-400"
-              : "border-transparent text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300"
-          }`}
+        <button type="button" onClick={() => setActiveTab("search")}
+          className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px ${activeTab === "search" ? "border-amber-500 text-amber-700 dark:text-amber-400" : "border-transparent text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300"}`}
         >
           Results
           {newCount > 0 && (
@@ -297,38 +451,20 @@ export default function SearchPage() {
             </span>
           )}
         </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab("suggestions")}
-          className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px flex items-center gap-2 ${
-            activeTab === "suggestions"
-              ? "border-amber-500 text-amber-700 dark:text-amber-400"
-              : "border-transparent text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300"
-          }`}
+        <button type="button" onClick={() => setActiveTab("suggestions")}
+          className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px flex items-center gap-2 ${activeTab === "suggestions" ? "border-amber-500 text-amber-700 dark:text-amber-400" : "border-transparent text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300"}`}
         >
-          <Mail size={14} />
-          Suggestions
+          <Mail size={14} /> Suggestions
           {suggestionsNewCount > 0 && (
-            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700">
-              {suggestionsNewCount}
-            </span>
+            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700">{suggestionsNewCount}</span>
           )}
         </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab("queue")}
-          className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px flex items-center gap-2 ${
-            activeTab === "queue"
-              ? "border-amber-500 text-amber-700 dark:text-amber-400"
-              : "border-transparent text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300"
-          }`}
+        <button type="button" onClick={() => setActiveTab("queue")}
+          className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px flex items-center gap-2 ${activeTab === "queue" ? "border-amber-500 text-amber-700 dark:text-amber-400" : "border-transparent text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300"}`}
         >
-          <ListChecks size={14} />
-          Auto-Apply
+          <ListChecks size={14} /> Auto-Apply
           {queueCounts.pending > 0 && (
-            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 border border-blue-300 dark:border-blue-700">
-              {queueCounts.pending}
-            </span>
+            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 border border-blue-300 dark:border-blue-700">{queueCounts.pending}</span>
           )}
         </button>
       </div>
@@ -358,31 +494,17 @@ export default function SearchPage() {
           onApproveAllAbove={approveAllAbove}
           onClearRejected={clearRejected}
           onGenerateBatch={async (ids) => {
-            const resp = await fetch("/api/auto-apply/generate-batch", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ queueIds: ids }),
-            })
+            const resp = await fetch("/api/auto-apply/generate-batch", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ queueIds: ids }) })
             if (!resp.ok) throw new Error("Batch generation failed")
           }}
           onStartSession={async (ids) => {
-            const resp = await fetch("/api/auto-apply/session", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ queueIds: ids }),
-            })
+            const resp = await fetch("/api/auto-apply/session", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ queueIds: ids }) })
             if (!resp.ok) throw new Error("Failed to start session")
           }}
           onStopSession={async () => {
-            const applyingIds = autoApplyQueue
-              .filter((q) => q.status === "applying")
-              .map((q) => q.id)
+            const applyingIds = autoApplyQueue.filter((q) => q.status === "applying").map((q) => q.id)
             for (const id of applyingIds) {
-              await fetch("/api/auto-apply/session", {
-                method: "PATCH",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ queueId: id, status: "skipped", error: "Session stopped by user" }),
-              })
+              await fetch("/api/auto-apply/session", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ queueId: id, status: "skipped", error: "Session stopped by user" }) })
             }
           }}
         />
@@ -390,7 +512,53 @@ export default function SearchPage() {
 
       {activeTab === "search" && (
         <div className="space-y-4">
-          {/* Filter controls */}
+          {/* B1: Profile chips */}
+          {profiles.length > 0 && (
+            <div className="rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4">
+              <ProfileChips
+                profiles={profiles}
+                selectedProfiles={profilesDisplaySelected}
+                toggleProfile={handleToggleProfile}
+                selectAll={handleSelectAllProfiles}
+                selectNone={handleSelectNoneProfiles}
+                onEditProfile={(id, updates) => updateProfile(id, updates)}
+                onDeleteProfile={(id) => deleteProfile(id)}
+                onDuplicateProfile={handleDuplicateProfile}
+                onHideProfile={handleHideProfile}
+                hiddenProfiles={hiddenProfileIds}
+              />
+            </div>
+          )}
+
+          {/* B2: Filters — query mode OR quick+advanced */}
+          {queryMode ? (
+            <QueryMode
+              queryString={queryString}
+              onQueryChange={setQueryString}
+              onToggle={() => { setQueryMode(false); setQueryString("") }}
+              totalCount={statusRows.length}
+              filteredCount={displayRows.length}
+            />
+          ) : (
+            <div className="space-y-2">
+              <SearchFiltersBar
+                filters={quickFilters}
+                onFiltersChange={setQuickFilters}
+                totalCount={statusRows.length}
+                filteredCount={displayRows.length}
+              />
+              <div className="flex items-center justify-between px-1">
+                <AdvancedFiltersPanel
+                  filters={advancedFilters}
+                  onFiltersChange={setAdvancedFilters}
+                  jobs={jobsForAdvancedFilter}
+                />
+                <QueryModeToggle onClick={() => setQueryMode(true)} />
+              </div>
+            </div>
+          )}
+
+          {/* Status filter + sort + result count row */}
           <div className="flex flex-wrap items-center gap-3">
             <select
               value={statusFilter}
@@ -399,57 +567,63 @@ export default function SearchPage() {
               className="text-xs px-3 py-1.5 rounded-lg border border-zinc-200 bg-white text-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:border-zinc-700 focus:outline-none focus:ring-1 focus:ring-amber-300"
             >
               {STATUS_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
               ))}
             </select>
-            <select
-              value={sourceFilter}
-              onChange={(e) => setSourceFilter(e.target.value as "all" | "indeed" | "dice")}
-              aria-label="Filter by source"
-              className="text-xs px-3 py-1.5 rounded-lg border border-zinc-200 bg-white text-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:border-zinc-700 focus:outline-none focus:ring-1 focus:ring-amber-300"
-            >
-              {SOURCE_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-            <select
-              value={profileFilter ?? ""}
-              onChange={(e) => setProfileFilter(e.target.value || null)}
-              aria-label="Filter by profile"
-              className="text-xs px-3 py-1.5 rounded-lg border border-zinc-200 bg-white text-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:border-zinc-700 focus:outline-none focus:ring-1 focus:ring-amber-300"
-            >
-              <option value="">All Profiles</option>
-              {profiles.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-            <div className="ml-auto text-xs text-zinc-500">
-              {loading ? "Loading…" : `${rows.length} result${rows.length === 1 ? "" : "s"}`}
+
+            {/* B3: Auto-queue toggle */}
+            <label className="inline-flex items-center gap-1.5 cursor-pointer text-xs text-zinc-500 dark:text-zinc-400 select-none">
+              <input
+                type="checkbox"
+                checked={autoQueueEnabled}
+                onChange={(e) => {
+                  const v = e.target.checked
+                  setAutoQueueEnabled(v)
+                  try { localStorage.setItem(AUTO_QUEUE_KEY, String(v)) } catch {}
+                }}
+                className="rounded border-zinc-300 dark:border-zinc-600 text-amber-500 focus:ring-amber-300 h-3.5 w-3.5"
+              />
+              Auto-queue 80+ Easy Apply
+            </label>
+
+            <div className="ml-auto flex items-center gap-3">
+              {/* B2: Sort */}
+              <div className="flex items-center gap-1.5 text-xs text-zinc-500 dark:text-zinc-400">
+                <ListFilter size={12} />
+                <select
+                  value={sortOrder}
+                  onChange={(e) => setSortOrder(e.target.value as SortOrder)}
+                  aria-label="Sort results"
+                  className="text-xs px-2 py-1 rounded-lg border border-zinc-200 bg-white text-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:border-zinc-700 focus:outline-none focus:ring-1 focus:ring-amber-300"
+                >
+                  <option value="newest">Newest</option>
+                  <option value="fit">Best Fit</option>
+                  <option value="salary">Salary</option>
+                  <option value="company">Company</option>
+                </select>
+              </div>
+              <span className="text-xs text-zinc-500">
+                {loading ? "Loading…" : `${displayRows.length} result${displayRows.length === 1 ? "" : "s"}`}
+              </span>
             </div>
           </div>
 
           {/* Results list */}
-          {!loading && rows.length === 0 && (
+          {!loading && displayRows.length === 0 && (
             <EmptyState
               icon={SearchX}
               title="No search results yet"
               description={
                 allRows.length === 0
                   ? "The CLI runs daily; check back tomorrow, or run python -m cli search run-profiles on the workstation."
-                  : "No results match the current filters. Try widening the status or source filters."
+                  : "No results match the current filters. Try widening filters or switching status."
               }
             />
           )}
 
-          {rows.length > 0 && (
+          {displayRows.length > 0 && (
             <div className="space-y-2">
-              {rows.map((row) => (
+              {displayRows.map((row) => (
                 <ResultRow
                   key={row.id}
                   row={row}
@@ -483,40 +657,21 @@ export default function SearchPage() {
         isInQueue={selectedRow ? isRowInQueue(selectedRow) : false}
       />
 
-      {/* ── Modals ────────────────────────────────────────────────────────── */}
-
+      {/* Modals */}
       {tailorRow && (
         <TailorModal
-          application={{
-            title: tailorRow.title ?? "",
-            company: tailorRow.company ?? "",
-            url: tailorRow.url,
-            tailored_resume: tailoredResumesRef.current.get(tailorRow.id) ?? null,
-          }}
+          application={{ title: tailorRow.title ?? "", company: tailorRow.company ?? "", url: tailorRow.url, tailored_resume: tailoredResumesRef.current.get(tailorRow.id) ?? null }}
           open={tailorOpen}
-          onOpenChange={(open) => {
-            setTailorOpen(open)
-            if (!open) {
-              setTailorRow(null)
-              setTailorApplicationId(null)
-            }
-          }}
+          onOpenChange={(open) => { setTailorOpen(open); if (!open) { setTailorRow(null); setTailorApplicationId(null) } }}
           onSave={handleTailorSave}
         />
       )}
 
       {coverLetterRow && (
         <CoverLetterModal
-          application={{
-            title: coverLetterRow.title ?? "",
-            company: coverLetterRow.company ?? "",
-            url: coverLetterRow.url,
-          }}
+          application={{ title: coverLetterRow.title ?? "", company: coverLetterRow.company ?? "", url: coverLetterRow.url }}
           open={coverLetterOpen}
-          onOpenChange={(open) => {
-            setCoverLetterOpen(open)
-            if (!open) setCoverLetterRow(null)
-          }}
+          onOpenChange={(open) => { setCoverLetterOpen(open); if (!open) setCoverLetterRow(null) }}
           onSave={handleCoverLetterSave}
         />
       )}
@@ -525,10 +680,7 @@ export default function SearchPage() {
         <ApplyFlow
           job={rowToJob(applyRow)}
           isOpen={applyOpen}
-          onClose={() => {
-            setApplyOpen(false)
-            setApplyRow(null)
-          }}
+          onClose={() => { setApplyOpen(false); setApplyRow(null) }}
           onApplied={handleApplied}
           tailoredResume={tailoredResumesRef.current.get(applyRow.id) ?? null}
           coverLetter={coverLettersRef.current.get(applyRow.id) ?? null}

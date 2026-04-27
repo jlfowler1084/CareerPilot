@@ -2927,6 +2927,30 @@
       "exports": ["default"],
       "patterns": ["handleTrack", "handleTailor", "handleCoverLetter", "handleApply", "handleTrackAndTailor", "TailorModal", "CoverLetterModal", "ApplyFlow"],
       "area": "search"
+    },
+    {
+      "ticket": "CAR-190",
+      "name": "Search profile chips multi-select + localStorage hide",
+      "file": "src/app/(main)/search/page.tsx",
+      "exports": ["default"],
+      "patterns": ["selectedProfileIds", "hiddenProfileIds", "HIDDEN_PROFILES_KEY", "handleToggleProfile", "handleHideProfile"],
+      "area": "search"
+    },
+    {
+      "ticket": "CAR-190",
+      "name": "Search client-side filter pipeline + sort",
+      "file": "src/app/(main)/search/page.tsx",
+      "exports": ["default"],
+      "patterns": ["displayRows", "applyFilters", "applyAdvancedFilters", "applyQueryFilter", "sortOrder", "jobToRow"],
+      "area": "search"
+    },
+    {
+      "ticket": "CAR-190",
+      "name": "Search auto-queue 80+ effect + scan metadata header",
+      "file": "src/app/(main)/search/page.tsx",
+      "exports": ["default"],
+      "patterns": ["autoQueueEnabled", "AUTO_QUEUE_KEY", "scanMetadata", "allRows"],
+      "area": "search"
     }
   ]
 }
