@@ -103,16 +103,19 @@ def _search_dice_direct(keyword: str, location: str, contract_only: bool = False
         logger.error("Dice MCP initialize failed", exc_info=True)
         return {}
 
+    # Session IDs are optional per the MCP Streamable HTTP spec. As of
+    # 2026-04-27, mcp.dice.com no longer assigns one — the initialize
+    # response is a stateless SSE event with the result inline, and
+    # subsequent tools/call requests work without a session header.
+    # Set the header only when the server did assign an ID (forward-compat
+    # if Dice re-enables stateful sessions later).
     session_id = init_resp.headers.get("mcp-session-id", "")
-    if not session_id:
-        logger.error("Dice MCP did not return a session ID")
-        return {}
-
     session_headers = {
         "Content-Type": "application/json",
         "Accept": "application/json, text/event-stream",
-        "mcp-session-id": session_id,
     }
+    if session_id:
+        session_headers["mcp-session-id"] = session_id
 
     # Step 2: Send initialized notification
     try:
