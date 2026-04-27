@@ -43,6 +43,7 @@ class _FakeTable:
         self._operation: Optional[str] = None
         self._payload: Any = None
         self._negate_next = False
+        self._on_conflict: Optional[str] = None
 
     def select(self, _cols: str = "*") -> "_FakeTable":
         self._operation = "select"
@@ -56,6 +57,12 @@ class _FakeTable:
     def update(self, data: Dict) -> "_FakeTable":
         self._operation = "update"
         self._payload = data
+        return self
+
+    def upsert(self, data: Dict, on_conflict: Optional[str] = None) -> "_FakeTable":
+        self._operation = "upsert"
+        self._payload = data
+        self._on_conflict = on_conflict
         return self
 
     @property
@@ -160,6 +167,37 @@ class _FakeTable:
             }
             self._rows.append(row)
             return SimpleNamespace(data=[row])
+
+        if self._operation == "upsert":
+            payload = dict(self._payload)
+            now_iso = datetime.now().isoformat()
+            if self._on_conflict:
+                # Resolve conflict key columns from the comma-separated string.
+                conflict_keys = [k.strip() for k in self._on_conflict.split(",")]
+                existing = None
+                for r in self._rows:
+                    if all(r.get(k) == payload.get(k) for k in conflict_keys):
+                        existing = r
+                        break
+                if existing is not None:
+                    # Update existing row in place.
+                    existing.update(payload)
+                    existing["updated_at"] = now_iso
+                    return SimpleNamespace(data=existing)
+            # No conflict match (or no on_conflict key) — insert as new.
+            row = {
+                "id": str(uuid.uuid4()),
+                "discovered_at": now_iso,
+                "last_seen_at": now_iso,
+                "last_enriched_at": None,
+                "status": "new",
+                "application_id": None,
+                "created_at": now_iso,
+                "updated_at": now_iso,
+                **payload,
+            }
+            self._rows.append(row)
+            return SimpleNamespace(data=row)
 
         matched = [r for r in self._rows if self._matches(r)]
 
