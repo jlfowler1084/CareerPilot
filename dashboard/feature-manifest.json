@@ -279,16 +279,16 @@
       "area": "search"
     },
     {
-      "ticket": "CAR-188",
+      "ticket": "CAR-190",
       "name": "Search Result Row Component",
       "file": "src/components/search/result-row.tsx",
       "exports": [
         "ResultRow"
       ],
       "patterns": [
-        "STATUS_BADGE",
-        "SOURCE_PILL",
-        "easy_apply"
+        "JobCard",
+        "rowToJob",
+        "fitScore"
       ],
       "area": "search"
     },
