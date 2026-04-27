@@ -186,4 +186,21 @@ describe('assembleSource', () => {
     };
     expect(assembleSource(intel, '')).not.toContain('## Questions to Ask Them');
   });
+
+  it('appends a ## Deep Research section when researchMarkdown is provided (CAR-186)', () => {
+    const result = assembleSource(fullIntel, 'focus', '# Research\n\nbody');
+    expect(result.endsWith('\n\n## Deep Research\n\n# Research\n\nbody\n')).toBe(true);
+  });
+
+  it('produces byte-identical output when researchMarkdown is undefined vs omitted (CAR-186 backwards-compat)', () => {
+    const omitted = assembleSource(fullIntel, 'focus');
+    const explicitlyUndefined = assembleSource(fullIntel, 'focus', undefined);
+    expect(explicitlyUndefined).toBe(omitted);
+    expect(omitted).not.toContain('## Deep Research');
+  });
+
+  it('omits the ## Deep Research section when researchMarkdown is an empty string (CAR-186)', () => {
+    const result = assembleSource(fullIntel, 'focus', '');
+    expect(result).not.toContain('## Deep Research');
+  });
 });

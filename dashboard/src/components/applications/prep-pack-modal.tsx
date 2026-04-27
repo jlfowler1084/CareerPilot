@@ -15,6 +15,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Switch } from '@/components/ui/switch';
 import { assembleSource } from '@/lib/prep-pack/assemble-source';
+import { useResearch } from '@/hooks/use-research';
 import type {
   IntelligenceSnapshot,
   WizardConfig,
@@ -61,10 +62,17 @@ export function PrepPackModal({
     return focus;
   }, [config.customFocus, config.mode]);
 
+  // Fetch research markdown lazily — only when the modal opens. The hook
+  // resolves to `{ found: true, markdown }` when an artifact exists, or
+  // `{ found: false }` (404) when no research has been generated yet.
+  const { data: researchData } = useResearch(intelligence.applicationId, open);
+  const researchMarkdown =
+    researchData?.found === true ? researchData.markdown : undefined;
+
   // Re-assembled fresh whenever Step 1 inputs change; user can override in Step 2.
   const assembledPreview = useMemo(
-    () => assembleSource(intelligence, effectiveCustomFocus),
-    [intelligence, effectiveCustomFocus],
+    () => assembleSource(intelligence, effectiveCustomFocus, researchMarkdown),
+    [intelligence, effectiveCustomFocus, researchMarkdown],
   );
 
   const goToPreview = () => {

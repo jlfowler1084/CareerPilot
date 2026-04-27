@@ -2842,6 +2842,22 @@
       "exports": ["POST"],
       "patterns": ["Invoke-SBAutobook", "spawn", "DiscordWebhookUrl"],
       "area": "api"
+    },
+    {
+      "ticket": "CAR-186",
+      "name": "Prep Pack Research Integration",
+      "file": "src/lib/prep-pack/assemble-source.ts",
+      "exports": ["assembleSource"],
+      "patterns": ["researchMarkdown", "## Deep Research"],
+      "area": "prep-pack"
+    },
+    {
+      "ticket": "CAR-186",
+      "name": "Prep Pack Research Wiring",
+      "file": "src/components/applications/prep-pack-modal.tsx",
+      "exports": ["PrepPackModal"],
+      "patterns": ["useResearch", "researchMarkdown"],
+      "area": "applications"
     }
   ]
 }
