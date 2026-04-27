@@ -16,6 +16,11 @@ Invert the architecture of CareerPilot's job-search features so the workstation 
 
 The plan covers eight implementation units, sequenced to land foundation (migrations, parsers) before engine (CLI command + manager + enrichment) before dashboard (badge + page repoint) before cutover (decommission + scheduled task).
 
+## Validation Log
+
+- **2026-04-27 — Indeed Firecrawl validation: FAILED.** Three Firecrawl scrape attempts against `indeed.com/jobs?q=…&l=…` (with and without `--wait-for 5000-8000`, `--country US`, `--only-main-content`, alternate URL formats) all returned 54-byte CAPTCHA placeholder bodies. Indeed bot-detection blocks Firecrawl from this account. **Outcome:** Outstanding Questions branch (b) triggered — Indeed scope punted to v2 ([CAR-189](https://jlfowler1084.atlassian.net/browse/CAR-189)). v1 ships **Dice-only**. R2's `JobSearcher.search_indeed` stays a stub; the parser sentinel still applies (now to Dice-only); SC2's screenshot-symptom criterion drops the Indeed clause; SC3's gate of "≥ 20 Dice rows" is the success bar. The Indeed parser planned in Unit 3 is no longer in v1 scope.
+- **2026-04-27 — Unit 1 landed.** Migrations applied; dashboard reconciled; tsc + vitest green. See PR #38.
+
 ## Problem Frame
 
 CareerPilot's exploratory search features today are simultaneously expensive (~$0.10-0.30/call to Anthropic) and low-quality (empty Indeed detail panels, no clickable apply links — see the user's screenshot). The user reports CareerPilot is genuinely most useful as a tracker for applications they already have leads on; exploratory search is poor enough that they avoid it. v1 fixes both the cost and rendering problems by inverting the architecture: workstation CLI does the work (Firecrawl + local Qwen), Supabase stores the artifacts, dashboard reads them.
