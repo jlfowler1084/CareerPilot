@@ -934,25 +934,48 @@ def roadmap(hours):
         console.print("[red]Failed to generate roadmap. Check logs.[/red]")
 
 
-@cli.command()
+@cli.group(invoke_without_command=True)
 @click.option("--profile", "profile_ids", multiple=True, help="Profile ID(s) to run. Omit for interactive selection.")
-def search(profile_ids):
-    """Run job search profiles across Indeed and Dice."""
+@click.pass_context
+def search(ctx, profile_ids):
+    """Run job search profiles across Indeed and Dice.
+
+    When called without a subcommand, runs the interactive legacy flow.
+    Use 'search run-profiles' for the scheduled/automated path.
+    """
+    # If a subcommand was invoked, let Click dispatch to it.
+    if ctx.invoked_subcommand is not None:
+        return
+
     import webbrowser
 
-    from config.search_profiles import SEARCH_PROFILES
+    from src.db.supabase_client import get_supabase_client
     from src.jobs.analyzer import JobAnalyzer
-    from src.jobs.searcher import JobSearcher
+    from src.jobs.searcher import JobSearcher, _search_dice_direct
+    from src.jobs.parsers.dice import parse_dice_listings
     from src.jobs.tracker import ApplicationTracker
 
-    profiles = SEARCH_PROFILES
+    # Load profiles from Supabase (canonical source as of CAR-188)
+    try:
+        _client = get_supabase_client()
+        _resp = _client.table("search_profiles").select("*").execute()
+        supabase_profiles = _resp.data or []
+    except Exception as _exc:
+        console.print(f"[red]Could not load search profiles from Supabase: {_exc}[/red]")
+        return
+
+    # Build a lookup dict by name for the legacy interactive flow.
+    profiles = {
+        str(p.get("name", p.get("id", ""))): p
+        for p in supabase_profiles
+    }
 
     # Interactive profile selection if none specified
     if not profile_ids:
         console.print("[bold]Available Search Profiles:[/bold]\n")
         profile_list = list(profiles.items())
         for i, (pid, p) in enumerate(profile_list, 1):
-            console.print(f"  [bold]{i}.[/bold] {p.get('label', pid)} [{p.get('sources', 'both')}]")
+            console.print(f"  [bold]{i}.[/bold] {p.get('label', p.get('name', pid))} [{p.get('source', 'dice')}]")
 
         console.print(f"\n  [bold]a.[/bold] Run all profiles")
         choice = console.input("\nSelect profiles (comma-separated numbers, or 'a' for all): ").strip().lower()
@@ -981,8 +1004,18 @@ def search(profile_ids):
         if not p:
             console.print(f"[red]Unknown profile: {pid}[/red]")
             continue
-        console.print(f"  [dim]Searching: {p.get('label', pid)}...[/dim]")
-        profile_results = searcher.run_profiles([pid])
+        label = p.get("label") or p.get("name", pid)
+        console.print(f"  [dim]Searching: {label}...[/dim]")
+        # Use the new Dice path directly (JobSearcher.run_profiles is deprecated)
+        raw = _search_dice_direct(
+            p.get("keyword", pid),
+            p.get("location", ""),
+            contract_only=bool(p.get("contract_only", False)),
+        )
+        profile_results = parse_dice_listings(raw)
+        # Attach source field for display compatibility
+        for r in profile_results:
+            r.setdefault("source", "dice")
         results.extend(profile_results)
         console.print(f"    [dim]{len(profile_results)} results[/dim]")
 
@@ -1079,6 +1112,119 @@ def search(profile_ids):
     tracker.close()
     applicant.close()
     console.print("\n[dim]Search complete.[/dim]")
+
+
+@search.command("run-profiles")
+@click.option(
+    "--profile",
+    "profile_ids",
+    multiple=True,
+    help="Profile ID or name to run (repeatable). Omit to run all profiles.",
+)
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    default=False,
+    help="Parse and count results without writing to Supabase.",
+)
+@click.option(
+    "--skip-stale-flip",
+    is_flag=True,
+    default=False,
+    help="Skip the stale-flip step for all profiles this run.",
+)
+@click.option(
+    "--no-discord",
+    is_flag=True,
+    default=False,
+    help="Skip Discord summary post (useful for ad-hoc / testing).",
+)
+def search_run_profiles(profile_ids, dry_run, skip_stale_flip, no_discord):
+    """Run Supabase-backed search profiles and persist results.
+
+    Reads profiles from the 'search_profiles' Supabase table, calls Dice MCP
+    for each, and upserts results into 'job_search_results'.  Indeed is deferred
+    to v2 (CAR-189).
+
+    Examples:
+
+      python -m cli search run-profiles --dry-run
+
+      python -m cli search run-profiles --profile sysadmin_local
+
+      python -m cli search run-profiles --profile sysadmin_local --profile devops_local
+    """
+    from src.jobs.search_engine import run_profiles
+
+    ids = list(profile_ids) if profile_ids else None
+
+    if dry_run:
+        console.print("[yellow][dry-run][/yellow] No Supabase writes — showing would-be counts.")
+
+    try:
+        summary = run_profiles(ids, dry_run=dry_run, skip_stale_flip=skip_stale_flip)
+    except Exception as exc:
+        console.print(f"[red]run-profiles failed: {exc}[/red]")
+        raise SystemExit(1) from exc
+
+    # --- Render summary table ---
+    table = Table(title="Job Search Run Summary", show_footer=True)
+    table.add_column("Profile", style="bold")
+    table.add_column("Count", justify="right")
+    table.add_column("New", justify="right", style="green", footer=str(summary.total_new))
+    table.add_column("Updated", justify="right", footer=str(summary.total_updated))
+    table.add_column("Degraded", justify="center")
+    table.add_column("Error")
+
+    for pr in summary.profiles.values():
+        degraded_cell = "[yellow]YES[/yellow]" if pr.degraded else "[dim]no[/dim]"
+        error_cell = f"[red]{pr.error[:50]}[/red]" if pr.error else ""
+        table.add_row(
+            pr.label,
+            str(pr.count),
+            str(pr.new),
+            str(pr.updated),
+            degraded_cell,
+            error_cell,
+        )
+
+    console.print(table)
+
+    elapsed = (
+        (summary.completed_at - summary.started_at).total_seconds()
+        if summary.completed_at
+        else 0.0
+    )
+    console.print(
+        f"\n[dim]Run complete in {elapsed:.1f}s — "
+        f"{summary.total_new} new, {summary.total_updated} updated, "
+        f"{summary.total_degraded_profiles} degraded profile(s).[/dim]"
+    )
+    if dry_run:
+        console.print("[yellow][dry-run] No data was written.[/yellow]")
+
+    # --- Discord daily summary ---
+    if dry_run:
+        console.print("[dim]Dry-run: skipping Discord post.[/dim]")
+    elif no_discord:
+        console.print("[dim]--no-discord: skipping Discord post.[/dim]")
+    else:
+        from src.jobs import discord_summary
+        from src.jobs.job_search_results import JobSearchResultsManager
+
+        try:
+            _discord_mgr = JobSearchResultsManager()
+            ok = discord_summary.post_summary(
+                summary, _discord_mgr, project_name="CareerPilot", dry_run=False
+            )
+            if ok:
+                console.print("[dim]Discord summary posted.[/dim]")
+            else:
+                console.print("[yellow]Discord summary post failed (non-fatal — check logs).[/yellow]")
+        except Exception as _discord_exc:
+            console.print(
+                f"[yellow]Discord summary post raised an exception (non-fatal): {_discord_exc}[/yellow]"
+            )
 
 
 def _apply_job_flow(job_data, applicant, con):

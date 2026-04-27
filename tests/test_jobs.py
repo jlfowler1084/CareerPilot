@@ -22,36 +22,9 @@ def _mock_dice_mcp_result(jobs):
     }
 
 
-# --- Search Profile Tests ---
-
-
-class TestSearchProfiles:
-    def test_profiles_load(self):
-        """All profiles load from config."""
-        from config.search_profiles import SEARCH_PROFILES
-
-        assert len(SEARCH_PROFILES) == 8
-        assert "sysadmin_local" in SEARCH_PROFILES
-        assert "ad_identity" in SEARCH_PROFILES
-
-    def test_profiles_have_required_fields(self):
-        """Each profile has keyword, location, and sources."""
-        from config.search_profiles import SEARCH_PROFILES
-
-        for pid, profile in SEARCH_PROFILES.items():
-            assert "keyword" in profile, f"{pid} missing keyword"
-            assert "location" in profile, f"{pid} missing location"
-            assert "sources" in profile, f"{pid} missing sources"
-            assert profile["sources"] in ("both", "indeed", "dice"), f"{pid} invalid sources"
-
-    def test_profile_labels(self):
-        """Each profile has a human-readable label."""
-        from config.search_profiles import SEARCH_PROFILES
-
-        for pid, profile in SEARCH_PROFILES.items():
-            assert "label" in profile, f"{pid} missing label"
-            assert len(profile["label"]) > 0
-
+# NOTE: TestSearchProfiles removed in CAR-188 — SEARCH_PROFILES dict was deleted
+# from config/search_profiles.py.  Profiles are now stored in the Supabase
+# search_profiles table; see tests/test_search_engine.py for engine-level coverage.
 
 # --- Indeed Search Tests ---
 
@@ -169,54 +142,21 @@ class TestIrrelevantFilter:
         assert _is_irrelevant("Construction Project Manager") is True
 
 
-# --- Run Profiles Tests ---
+# --- Run Profiles Tests (deprecated path) ---
 
 
 class TestRunProfiles:
-    def test_runs_selected_profiles(self):
-        """Runs only selected profiles."""
+    def test_deprecated_run_profiles_raises_not_implemented(self):
+        """JobSearcher.run_profiles() is deprecated in CAR-188 — raises NotImplementedError."""
         searcher = JobSearcher(anthropic_api_key="fake-key")
+        with pytest.raises(NotImplementedError, match="CAR-188"):
+            searcher.run_profiles(["sysadmin_local"])
 
-        dice_jobs = [
-            {"title": "SysAdmin", "companyName": "Corp",
-             "jobLocation": {"displayName": "Indy"},
-             "salary": "", "detailsPageUrl": "", "postedDate": "",
-             "employmentType": "", "easyApply": False, "isRemote": False},
-        ]
-
-        with patch("src.jobs.searcher._search_dice_direct", return_value=_mock_dice_mcp_result(dice_jobs)):
-            results = searcher.run_profiles(["sysadmin_local"])
-
-        assert len(results) >= 1
-        assert results[0]["profile_id"] == "sysadmin_local"
-
-    def test_unknown_profile_skipped(self):
-        """Unknown profiles are skipped."""
+    def test_deprecated_run_profiles_all_raises_not_implemented(self):
+        """Calling run_profiles() without args also raises NotImplementedError."""
         searcher = JobSearcher(anthropic_api_key="fake-key")
-        results = searcher.run_profiles(["nonexistent_profile"])
-        assert results == []
-
-    def test_filters_irrelevant_from_profiles(self):
-        """Irrelevant results are filtered during run_profiles."""
-        searcher = JobSearcher(anthropic_api_key="fake-key")
-
-        dice_jobs = [
-            {"title": "Systems Admin", "companyName": "Good Corp",
-             "jobLocation": {"displayName": "Indy"},
-             "salary": "", "detailsPageUrl": "", "postedDate": "",
-             "employmentType": "", "easyApply": False, "isRemote": False},
-            {"title": "HVAC Technician", "companyName": "Bad Corp",
-             "jobLocation": {"displayName": "Indy"},
-             "salary": "", "detailsPageUrl": "", "postedDate": "",
-             "employmentType": "", "easyApply": False, "isRemote": False},
-        ]
-
-        with patch("src.jobs.searcher._search_dice_direct", return_value=_mock_dice_mcp_result(dice_jobs)):
-            results = searcher.run_profiles(["sysadmin_local"])
-
-        titles = [r["title"] for r in results]
-        assert "Systems Admin" in titles
-        assert "HVAC Technician" not in titles
+        with pytest.raises(NotImplementedError):
+            searcher.run_profiles()
 
 
 # --- JSON Parsing Tests ---

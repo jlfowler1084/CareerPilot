@@ -128,14 +128,14 @@
       "area": "inbox"
     },
     {
-      "ticket": "CAR-58",
+      "ticket": "CAR-188",
       "name": "Job Search Page",
       "file": "src/app/(main)/search/page.tsx",
       "exports": [],
       "patterns": [
-        "SearchControls",
-        "SearchHistory",
-        "CustomSearchBar",
+        "useSearchResults",
+        "ResultRow",
+        "DetailPanel",
         "useSearchProfiles"
       ],
       "area": "search"
@@ -237,39 +237,102 @@
       "area": "search"
     },
     {
-      "ticket": "CAR-35",
-      "name": "Dice MCP Direct Client",
-      "file": "src/lib/mcp-client.ts",
+      "ticket": "CAR-188",
+      "name": "Search Results Hook",
+      "file": "src/hooks/use-search-results.ts",
       "exports": [
-        "searchDiceDirect"
+        "useSearchResults"
       ],
       "patterns": [
-        "mcp.dice.com"
+        "job_search_results",
+        "postgres_changes",
+        "applySearchResultFilters"
       ],
       "area": "search"
     },
     {
-      "ticket": "CAR-35",
-      "name": "Indeed Search API Route",
-      "file": "src/app/api/search-indeed/route.ts",
+      "ticket": "CAR-188",
+      "name": "Search Results Filter Helper",
+      "file": "src/lib/search-results/filters.ts",
       "exports": [
-        "POST"
+        "applySearchResultFilters"
       ],
       "patterns": [
-        "claude-haiku",
-        "web_search"
+        "ACTIVE_STATUSES",
+        "profileId",
+        "status"
       ],
       "area": "search"
     },
     {
-      "ticket": "CAR-35",
-      "name": "Dice Search API Route",
-      "file": "src/app/api/search-dice/route.ts",
+      "ticket": "CAR-188",
+      "name": "Search Result Track Input Mapper",
+      "file": "src/lib/search-results/track-input.ts",
       "exports": [
-        "POST"
+        "buildApplicationInput"
       ],
       "patterns": [
-        "searchDiceDirect"
+        "sourceLabel",
+        "salary_range",
+        "job_description"
+      ],
+      "area": "search"
+    },
+    {
+      "ticket": "CAR-188",
+      "name": "Search Result Row Component",
+      "file": "src/components/search/result-row.tsx",
+      "exports": [
+        "ResultRow"
+      ],
+      "patterns": [
+        "STATUS_BADGE",
+        "SOURCE_PILL",
+        "easy_apply"
+      ],
+      "area": "search"
+    },
+    {
+      "ticket": "CAR-188",
+      "name": "Search Detail Panel Component",
+      "file": "src/components/search/detail-panel.tsx",
+      "exports": [
+        "DetailPanel"
+      ],
+      "patterns": [
+        "Apply on",
+        "ExternalLink",
+        "asStringArray",
+        "TrackButton"
+      ],
+      "area": "search"
+    },
+    {
+      "ticket": "CAR-188",
+      "name": "Search Track Button",
+      "file": "src/components/search/track-button.tsx",
+      "exports": [
+        "TrackButton"
+      ],
+      "patterns": [
+        "buildApplicationInput",
+        "addApplication",
+        "navigateToResearch",
+        "application_id"
+      ],
+      "area": "search"
+    },
+    {
+      "ticket": "CAR-188",
+      "name": "Job Search Sidebar Badge",
+      "file": "src/components/layout/sidebar.tsx",
+      "exports": [
+        "Sidebar"
+      ],
+      "patterns": [
+        "useSearchResultsNewCount",
+        "job_search_results",
+        "sidebar-search-results-count"
       ],
       "area": "search"
     },
@@ -619,8 +682,7 @@
         "suggestionScores",
         "getSuggestionFitScore",
         "handleSuggestionQueue",
-        "isSuggestionInQueue",
-        "lastAutoQueuedSuggestionsRef"
+        "isSuggestionInQueue"
       ],
       "area": "search"
     },
@@ -2441,31 +2503,6 @@
         "findDomainMatch"
       ],
       "area": "inbox"
-    },
-    {
-      "ticket": "",
-      "name": "Indeed Results Parser",
-      "file": "src/lib/parsers/indeed.ts",
-      "exports": [
-        "parseIndeedResults"
-      ],
-      "patterns": [
-        "parseIndeedResults",
-        "ParsedJob"
-      ],
-      "area": "search"
-    },
-    {
-      "ticket": "",
-      "name": "Dice Results Parser",
-      "file": "src/lib/parsers/dice.ts",
-      "exports": [
-        "parseDiceResults"
-      ],
-      "patterns": [
-        "parseDiceResults"
-      ],
-      "area": "search"
     },
     {
       "ticket": "CAR-96",

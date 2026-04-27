@@ -16,8 +16,8 @@ CareerPilot is a Python CLI application for personal career management:
 **Repo:** jlfowler1084/CareerPilot (private), **Branch:** master
 
 ## Environment (Project-Specific)
-- **Python:** 3.8+ (Microsoft Store Python 3.8.10 — use `python -m pip install`)
-- **Python compat:** Use `from __future__ import annotations` in all modules with type hints — `list[str]` syntax requires 3.9+
+- **Python:** 3.12 — use `python -m pip install` (never bare `pip`)
+- **Python compat:** PEP 585 builtin generics (`list[str]`, `dict[str, int]`) and PEP 604 union syntax (`str | None`) work directly. `from __future__ import annotations` is no longer required for type-hint purposes; only add it when you specifically want to defer all annotation evaluation.
 - **Shell:** Claude Code uses bash syntax in this project
 
 ## Testing
@@ -110,7 +110,7 @@ Source of truth: ClaudeInfra `configs/mcp-server-registry.json` (INFRA-70).
 
 ## Project-Specific Mistakes to Avoid
 - Don't skip OAuth token refresh handling
-- Don't use `list[str]` syntax — use `List[str]` from typing or `from __future__ import annotations`
+- Don't reach for `from typing import List, Dict, Optional` — Python 3.12 supports `list[str]`, `dict[str, int]`, and `str | None` natively
 
 ## Current Priorities
 ### Phase 1 — Foundation (Current)

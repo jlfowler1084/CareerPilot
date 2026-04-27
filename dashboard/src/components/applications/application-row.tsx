@@ -5,7 +5,8 @@
 // still called unconditionally per React rules.
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, useRef } from "react"
+import { useSearchParams } from "next/navigation"
 import { toast } from "sonner"
 import { formatDistanceToNow } from "date-fns"
 import { StatusBadge } from "@/components/shared/status-badge"
@@ -81,6 +82,25 @@ export function ApplicationRow({
   const [isExpanded, setIsExpanded] = useState(false)
   const { hasData: hasIntelligence, brief, preps, loading: intelligenceLoading } =
     useIntelligence(application.id, isExpanded || prepPackOpen)
+
+  // CAR-188 Unit 7: when the page is opened with ?focus=<id>&tab=research,
+  // auto-expand the matching row and pre-select the tab. The Track flow on
+  // /search uses this so SC4 ("land on Research tab") holds without forcing
+  // a per-application route. handledFocusRef gates the scroll/expand to the
+  // first match — subsequent renders should not re-fight the user's clicks.
+  const searchParams = useSearchParams()
+  const focusedId = searchParams?.get("focus") ?? null
+  const focusedTab = searchParams?.get("tab") ?? null
+  const isFocused = focusedId === application.id
+  const initialTabValue = isFocused && focusedTab ? focusedTab : "details"
+  const handledFocusRef = useRef(false)
+  const rowRef = useRef<HTMLDivElement | null>(null)
+  useEffect(() => {
+    if (!isFocused || handledFocusRef.current) return
+    handledFocusRef.current = true
+    setIsExpanded(true)
+    rowRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
+  }, [isFocused])
 
   const prepPackSnapshot = useMemo(
     () => toIntelligenceSnapshot(application, { brief, preps }),
@@ -187,6 +207,7 @@ export function ApplicationRow({
 
   return (
     <div
+      ref={rowRef}
       className="bg-white rounded-xl border border-zinc-200 p-4 hover:shadow-md transition-shadow"
     >
       <div className="flex items-start justify-between gap-3">
@@ -392,7 +413,7 @@ export function ApplicationRow({
       {/* Tab navigation — only rendered when expanded */}
       {isExpanded && (
       <div className="mt-3 pt-3 border-t border-zinc-100" onClick={(e) => e.stopPropagation()}>
-        <Tabs defaultValue="details">
+        <Tabs defaultValue={initialTabValue}>
           <TabsList variant="line" className="w-full justify-start gap-0 h-7 mb-2">
             <TabsTrigger value="details" className="text-xs px-3 py-1 h-7">
               Details

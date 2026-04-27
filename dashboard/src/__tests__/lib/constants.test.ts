@@ -37,7 +37,7 @@ describe("DEFAULT_SEARCH_PROFILES", () => {
       expect(p.id).toBeTruthy()
       expect(p.keyword).toBeTruthy()
       expect(p.location).toBeTruthy()
-      expect(["both", "dice", "indeed", "dice_contract"]).toContain(p.source)
+      expect(["both", "dice", "indeed"]).toContain(p.source)
     }
   })
 

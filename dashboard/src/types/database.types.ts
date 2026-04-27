@@ -983,6 +983,102 @@ export type Database = {
         }
         Relationships: []
       }
+      job_search_results: {
+        Row: {
+          application_id: string | null
+          company: string | null
+          created_at: string
+          description: string | null
+          discovered_at: string
+          easy_apply: boolean
+          id: string
+          job_type: string | null
+          last_enriched_at: string | null
+          last_seen_at: string
+          location: string | null
+          nice_to_haves: Json | null
+          posted_date: string | null
+          profile_id: string | null
+          profile_label: string | null
+          requirements: Json | null
+          salary: string | null
+          source: string
+          source_id: string
+          status: string
+          title: string | null
+          updated_at: string
+          url: string
+          user_id: string
+        }
+        Insert: {
+          application_id?: string | null
+          company?: string | null
+          created_at?: string
+          description?: string | null
+          discovered_at?: string
+          easy_apply?: boolean
+          id?: string
+          job_type?: string | null
+          last_enriched_at?: string | null
+          last_seen_at?: string
+          location?: string | null
+          nice_to_haves?: Json | null
+          posted_date?: string | null
+          profile_id?: string | null
+          profile_label?: string | null
+          requirements?: Json | null
+          salary?: string | null
+          source: string
+          source_id: string
+          status?: string
+          title?: string | null
+          updated_at?: string
+          url: string
+          user_id: string
+        }
+        Update: {
+          application_id?: string | null
+          company?: string | null
+          created_at?: string
+          description?: string | null
+          discovered_at?: string
+          easy_apply?: boolean
+          id?: string
+          job_type?: string | null
+          last_enriched_at?: string | null
+          last_seen_at?: string
+          location?: string | null
+          nice_to_haves?: Json | null
+          posted_date?: string | null
+          profile_id?: string | null
+          profile_label?: string | null
+          requirements?: Json | null
+          salary?: string | null
+          source?: string
+          source_id?: string
+          status?: string
+          title?: string | null
+          updated_at?: string
+          url?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "job_search_results_application_id_fkey"
+            columns: ["application_id"]
+            isOneToOne: false
+            referencedRelation: "applications"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "job_search_results_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "search_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       scan_metadata: {
         Row: {
           auto_queued: number | null
@@ -1181,6 +1277,7 @@ export type Database = {
       }
       search_profiles: {
         Row: {
+          contract_only: boolean
           created_at: string
           icon: string
           id: string
@@ -1193,6 +1290,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          contract_only?: boolean
           created_at?: string
           icon?: string
           id?: string
@@ -1205,6 +1303,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          contract_only?: boolean
           created_at?: string
           icon?: string
           id?: string

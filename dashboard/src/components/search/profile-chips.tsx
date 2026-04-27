@@ -29,7 +29,6 @@ const SOURCE_OPTIONS = [
   { value: "both", label: "Both" },
   { value: "dice", label: "Dice" },
   { value: "indeed", label: "Indeed" },
-  { value: "dice_contract", label: "Dice (Contract)" },
 ] as const
 
 const ICON_OPTIONS = [

@@ -1,67 +1,12 @@
-"""Job search keyword/location profiles for Indeed, Dice, and LinkedIn searches."""
+"""Job search keyword/location profiles for LinkedIn searches.
 
-# sources: "dice" = Dice only (default for now)
-# Indeed MCP requires Claude.ai connector auth and is not yet supported via direct API.
-# Once Indeed auth is resolved, profiles can be changed back to "both" or "indeed".
-SEARCH_PROFILES = {
-    "sysadmin_local": {
-        "label": "Systems Administrator (Indianapolis)",
-        "keyword": "systems administrator",
-        "location": "Indianapolis, IN",
-        "remote": False,
-        "sources": "dice",
-    },
-    "syseng_local": {
-        "label": "Systems Engineer Windows (Indianapolis)",
-        "keyword": "systems engineer Windows",
-        "location": "Indianapolis, IN",
-        "remote": False,
-        "sources": "dice",
-    },
-    "devops_local": {
-        "label": "DevOps / Cloud Engineer Azure (Indianapolis)",
-        "keyword": "DevOps cloud engineer Azure",
-        "location": "Indianapolis, IN",
-        "remote": False,
-        "sources": "dice",
-    },
-    "powershell_remote": {
-        "label": "PowerShell Automation Engineer (Remote)",
-        "keyword": "PowerShell automation engineer",
-        "location": "remote",
-        "remote": True,
-        "sources": "dice",
-    },
-    "infra_remote": {
-        "label": "Windows Server VMware Infrastructure (Remote)",
-        "keyword": "Windows server VMware infrastructure",
-        "location": "remote",
-        "remote": True,
-        "sources": "dice",
-    },
-    "msp_local": {
-        "label": "Managed Services IT Engineer (Indianapolis)",
-        "keyword": "managed services IT engineer",
-        "location": "Indianapolis, IN",
-        "remote": False,
-        "sources": "dice",
-    },
-    "contract_infra": {
-        "label": "Windows Server VMware Infrastructure Contract (Indianapolis)",
-        "keyword": "Windows server VMware infrastructure",
-        "location": "Indianapolis, IN",
-        "remote": False,
-        "sources": "dice",
-        "contract_only": True,
-    },
-    "ad_identity": {
-        "label": "Active Directory / Identity Engineer (Remote)",
-        "keyword": "Active Directory engineer identity",
-        "location": "remote",
-        "remote": True,
-        "sources": "dice",
-    },
-}
+Note: The SEARCH_PROFILES dict (Dice/Indeed profiles) was removed in CAR-188.
+Profiles are now stored in Supabase's ``search_profiles`` table and managed
+via ``src.jobs.search_engine.run_profiles()``.  The legacy
+``JobSearcher.run_profiles()`` in ``src/jobs/searcher.py`` is deprecated.
+
+``LINKEDIN_SEARCH_PROFILES`` remains here for future v2 LinkedIn scope (CAR-189).
+"""
 
 # LinkedIn search profiles — used for browser-based job search and alert setup.
 # These use LinkedIn's geo_id system (not free-text location like Dice).

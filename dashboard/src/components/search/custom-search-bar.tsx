@@ -15,7 +15,8 @@ interface CustomSearchBarProps {
     name: string
     keyword: string
     location: string
-    source: "dice" | "indeed" | "both" | "dice_contract"
+    source: "dice" | "indeed" | "both"
+    contract_only: boolean
     icon: string
   }) => void
   disabled?: boolean
@@ -53,6 +54,7 @@ export function CustomSearchBar({
       keyword: keyword.trim(),
       location: location.trim() || "remote",
       source,
+      contract_only: false,
       icon: profileIcon,
     })
     setShowSaveForm(false)

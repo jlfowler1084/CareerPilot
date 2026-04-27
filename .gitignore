@@ -77,3 +77,6 @@ docs/research/*.md
 !docs/research/.gitkeep
 .research/
 
+# Firecrawl scrape cache + credentials (CAR-188) — never commit
+.firecrawl/
+

@@ -82,11 +82,42 @@ function useApprovedQueueCount() {
   return count
 }
 
+function useSearchResultsNewCount() {
+  const { user } = useAuth()
+  const [count, setCount] = useState<number | null>(null)
+  useEffect(() => {
+    if (!user) return
+    const supabase = createClient()
+    const fetchCount = async () => {
+      const { count: c } = await supabase
+        .from("job_search_results")
+        .select("*", { count: "exact", head: true })
+        .eq("user_id", user.id)
+        .eq("status", "new")
+      setCount(c ?? 0)
+    }
+    fetchCount()
+
+    const channel = supabase
+      .channel("sidebar-search-results-count")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "job_search_results" },
+        () => fetchCount()
+      )
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
+  }, [user])
+  return count
+}
+
 export function Sidebar() {
   const [open, setOpen] = useState(true)
   const pathname = usePathname()
   const activeCount = useActiveAppCount()
   const approvedQueueCount = useApprovedQueueCount()
+  const newSearchResultsCount = useSearchResultsNewCount()
 
   return (
     <aside
@@ -132,6 +163,11 @@ export function Sidebar() {
                   {item.id === "auto-apply" && approvedQueueCount !== null && approvedQueueCount > 0 && (
                     <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-500 text-white leading-none">
                       {approvedQueueCount}
+                    </span>
+                  )}
+                  {item.id === "search" && newSearchResultsCount !== null && newSearchResultsCount > 0 && (
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-blue-500 text-white leading-none">
+                      {newSearchResultsCount}
                     </span>
                   )}
                 </span>

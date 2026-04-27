@@ -11,7 +11,8 @@ export interface SearchProfile {
   name: string
   keyword: string
   location: string
-  source: "dice" | "indeed" | "both" | "dice_contract"
+  source: "dice" | "indeed" | "both"
+  contract_only: boolean
   icon: string
   is_default: boolean
   sort_order: number
@@ -42,6 +43,7 @@ export function useSearchProfiles() {
             keyword: p.keyword,
             location: p.location,
             source: p.source,
+            contract_only: p.contract_only,
             icon: p.icon,
             is_default: true,
             sort_order: i,
@@ -59,6 +61,7 @@ export function useSearchProfiles() {
           keyword: p.keyword,
           location: p.location,
           source: p.source,
+          contract_only: p.contract_only,
           icon: p.icon,
           is_default: true,
           sort_order: i,
