@@ -1730,10 +1730,8 @@ _IMPORT_STATUS_CHOICES = sorted({
 @click.option("--dry-run", is_flag=True, help="Extract and preview without saving.")
 def tracker_import_from_email(message_id, initial_status, dry_run):
     """Create an application from a Gmail message with a PDF/DOCX attachment."""
-    from config import settings
-
     from src.gmail.attachments import extract_job_description_from_email
-    from src.gmail.auth import get_gmail_service
+    from src.gmail.auth import get_default_gmail_service
     from src.jobs.tracker import ApplicationTracker
 
     t = ApplicationTracker()
@@ -1748,11 +1746,7 @@ def tracker_import_from_email(message_id, initial_status, dry_run):
             return
 
         try:
-            service = get_gmail_service(
-                credentials_file=settings.GOOGLE_CREDENTIALS_FILE,
-                token_path=settings.GMAIL_TOKEN_PATH,
-                scopes=settings.GMAIL_SCOPES,
-            )
+            service = get_default_gmail_service()
         except FileNotFoundError as exc:
             console.print(f"[red]{exc}[/red]")
             raise click.Abort()
@@ -2895,11 +2889,11 @@ def morning():
     # --- Inbox digest ---
     inbox_digest_text = ""
     try:
-        from src.gmail.auth import get_gmail_service
+        from src.gmail.auth import get_default_gmail_service
         from src.gmail.dashboard import EmailDashboard
         from src.gmail.thread_actions import ThreadActions
 
-        svc = get_gmail_service()
+        svc = get_default_gmail_service()
         dash = EmailDashboard(svc)
         thread_actions = ThreadActions(svc)
 
@@ -4775,13 +4769,13 @@ def filters_nuke():
 @cli.command()
 def inbox():
     """Threaded email dashboard with one-click actions."""
-    from src.gmail.auth import get_gmail_service
+    from src.gmail.auth import get_default_gmail_service
     from src.gmail.dashboard import EmailDashboard
     from src.gmail.thread_actions import ThreadActions
 
     # Authenticate
     try:
-        service = get_gmail_service()
+        service = get_default_gmail_service()
     except FileNotFoundError as e:
         console.print(f"[red]{e}[/red]")
         return

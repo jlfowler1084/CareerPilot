@@ -34,3 +34,20 @@ def get_gmail_service(
         token_path=token_path,
         scopes=scopes,
     )
+
+
+def get_default_gmail_service():
+    """Build a Gmail service using project defaults from ``config.settings``.
+
+    Thin wrapper around :func:`get_gmail_service` that reads
+    ``GOOGLE_CREDENTIALS_FILE``, ``GMAIL_TOKEN_PATH``, and ``GMAIL_SCOPES`` from
+    the shared settings module so CLI call sites don't each repeat the same
+    three-arg plumbing.
+    """
+    from config import settings
+
+    return get_gmail_service(
+        credentials_file=settings.GOOGLE_CREDENTIALS_FILE,
+        token_path=settings.GMAIL_TOKEN_PATH,
+        scopes=settings.GMAIL_SCOPES,
+    )
