@@ -541,6 +541,113 @@ class TestFinalize:
         conn.close()
         assert len(rows) == 1
 
+    # CAR-174 / CAR-175: finalize must refuse to DROP rows that aren't rewritten.
+
+    def test_raises_when_interactions_have_rows_without_contact_uuid_column(
+        self, tmp_path
+    ):
+        """Legacy interactions schema + existing rows = must not silently drop."""
+        db = _make_contacts_db(tmp_path, [{"name": "Alice"}])
+        conn = sqlite3.connect(str(db))
+        conn.execute(
+            "INSERT INTO contact_interactions (contact_id, interaction_type) "
+            "VALUES (1, 'call')"
+        )
+        conn.commit()
+        conn.close()
+
+        with pytest.raises(RuntimeError, match="contact_interactions.*contact_uuid"):
+            migrate_mod.finalize_sqlite_table(db)
+
+        conn = sqlite3.connect(str(db))
+        rows = conn.execute("SELECT * FROM contact_interactions").fetchall()
+        conn.close()
+        assert len(rows) == 1
+
+    def test_raises_when_interactions_partial_rewrite(self, tmp_path):
+        """Drifted schema with contact_uuid column but some NULL uuids = refuse DROP."""
+        contacts = [{"name": "Alice"}]
+        interactions = [
+            {"contact_id": 1, "interaction_type": "call", "contact_uuid": None},
+        ]
+        db = _make_interactions_db(tmp_path, contacts, interactions)
+
+        with pytest.raises(RuntimeError, match="rewrite_interaction_fks"):
+            migrate_mod.finalize_sqlite_table(db)
+
+        conn = sqlite3.connect(str(db))
+        rows = conn.execute("SELECT * FROM contact_interactions").fetchall()
+        conn.close()
+        assert len(rows) == 1
+
+    def test_raises_when_submitted_roles_have_rows_without_contact_uuid_column(
+        self, tmp_path
+    ):
+        db = _make_contacts_db(tmp_path, [{"name": "Alice"}])
+        conn = sqlite3.connect(str(db))
+        conn.execute(
+            "INSERT INTO submitted_roles (contact_id, company, role_title) "
+            "VALUES (1, 'Acme', 'SWE')"
+        )
+        conn.commit()
+        conn.close()
+
+        with pytest.raises(RuntimeError, match="submitted_roles.*contact_uuid"):
+            migrate_mod.finalize_sqlite_table(db)
+
+        conn = sqlite3.connect(str(db))
+        rows = conn.execute("SELECT * FROM submitted_roles").fetchall()
+        conn.close()
+        assert len(rows) == 1
+
+    def test_raises_when_submitted_roles_partial_rewrite(self, tmp_path):
+        db = _make_contacts_db(tmp_path, [{"name": "Alice"}])
+        conn = sqlite3.connect(str(db))
+        conn.execute("ALTER TABLE submitted_roles ADD COLUMN contact_uuid TEXT")
+        conn.execute(
+            "INSERT INTO submitted_roles (contact_id, company, role_title, contact_uuid) "
+            "VALUES (1, 'Acme', 'SWE', NULL)"
+        )
+        conn.commit()
+        conn.close()
+
+        with pytest.raises(RuntimeError, match="rewrite_submitted_role_fks"):
+            migrate_mod.finalize_sqlite_table(db)
+
+        conn = sqlite3.connect(str(db))
+        rows = conn.execute("SELECT * FROM submitted_roles").fetchall()
+        conn.close()
+        assert len(rows) == 1
+
+    def test_finalize_succeeds_after_full_rewrite(self, tmp_path):
+        """Drifted schema with every row's contact_uuid populated = rebuild proceeds."""
+        contacts = [{"name": "Alice"}]
+        interactions = [
+            {"contact_id": 1, "interaction_type": "call", "contact_uuid": "uuid-1"},
+        ]
+        db = _make_interactions_db(tmp_path, contacts, interactions)
+        conn = sqlite3.connect(str(db))
+        conn.execute("ALTER TABLE submitted_roles ADD COLUMN contact_uuid TEXT")
+        conn.execute(
+            "INSERT INTO submitted_roles (contact_id, company, role_title, contact_uuid) "
+            "VALUES (1, 'Acme', 'SWE', 'uuid-1')"
+        )
+        conn.commit()
+        conn.close()
+
+        migrate_mod.finalize_sqlite_table(db)
+
+        conn = sqlite3.connect(str(db))
+        try:
+            icols = {r[1] for r in conn.execute("PRAGMA table_info(contact_interactions)")}
+            assert "contact_uuid" in icols
+            assert "contact_id" not in icols
+            scols = {r[1] for r in conn.execute("PRAGMA table_info(submitted_roles)")}
+            assert "contact_uuid" in scols
+            assert "contact_id" not in scols
+        finally:
+            conn.close()
+
 
 # ---------------------------------------------------------------------------
 # TestMainCli
