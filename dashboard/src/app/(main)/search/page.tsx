@@ -366,7 +366,15 @@ export default function SearchPage() {
     )
     const newId = result?.data?.id ?? null
     if (newId) {
-      await updateRow(row.id, { status: "tracked", application_id: newId })
+      if (row.id.startsWith("adhoc-")) {
+        // Synthetic row: no Supabase row to update; drop it from the ad-hoc list
+        // so the user can't double-track (the application now lives in /applications).
+        setAdhocResults((prev) =>
+          prev.filter((j) => !(j.title === (row.title ?? "") && j.company === (row.company ?? "")))
+        )
+      } else {
+        await updateRow(row.id, { status: "tracked", application_id: newId })
+      }
       tailoredResumesRef.current.delete(row.id)
       coverLettersRef.current.delete(row.id)
     }
@@ -397,7 +405,15 @@ export default function SearchPage() {
     } else {
       const result = await addApplication({ ...buildApplicationInput(applyRow), status: "applied", date_applied: new Date().toISOString().slice(0, 10) }, "search")
       const newId = result?.data?.id
-      if (newId) await updateRow(applyRow.id, { status: "tracked", application_id: newId })
+      if (newId) {
+        if (applyRow.id.startsWith("adhoc-")) {
+          setAdhocResults((prev) =>
+            prev.filter((j) => !(j.title === (applyRow.title ?? "") && j.company === (applyRow.company ?? "")))
+          )
+        } else {
+          await updateRow(applyRow.id, { status: "tracked", application_id: newId })
+        }
+      }
     }
     void job
   }
@@ -411,7 +427,10 @@ export default function SearchPage() {
 
   function handleAddToQueue(row: JobSearchResultRow) {
     const job = rowToJob(row)
-    const fitScore = rowFitScores.get(row.id)
+    // Ad-hoc rows are not in rowFitScores (computed from allRows); score inline.
+    const fitScore = row.id.startsWith("adhoc-")
+      ? scoreJob(job, skills)
+      : rowFitScores.get(row.id)
     if (!fitScore) return
     addToQueue(job, fitScore)
   }

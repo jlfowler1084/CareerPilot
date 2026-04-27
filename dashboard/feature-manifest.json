@@ -2991,6 +2991,22 @@
       "exports": ["default"],
       "patterns": ["CustomSearchBar", "adhocResults", "handleQuickSearch", "Ad-hoc results"],
       "area": "search"
+    },
+    {
+      "ticket": "CAR-190",
+      "name": "Ad-hoc row removal on Track and Apply",
+      "file": "src/app/(main)/search/page.tsx",
+      "exports": ["default"],
+      "patterns": ["adhoc-", "startsWith", "setAdhocResults", "prev.filter"],
+      "area": "search"
+    },
+    {
+      "ticket": "CAR-190",
+      "name": "Ad-hoc inline fit scoring for Queue",
+      "file": "src/app/(main)/search/page.tsx",
+      "exports": ["default"],
+      "patterns": ["handleAddToQueue", "scoreJob", "rowFitScores", "adhoc-"],
+      "area": "search"
     }
   ]
 }
