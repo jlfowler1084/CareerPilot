@@ -1,14 +1,22 @@
 "use client"
 
 import { useEffect, useRef } from "react"
-import { ExternalLink, X, Briefcase, MapPin, Calendar, Zap } from "lucide-react"
+import { ExternalLink, X, Briefcase, MapPin, Calendar, Zap, Sparkles, FileText, ListPlus, Send } from "lucide-react"
 import { TrackButton } from "@/components/search/track-button"
 import type { JobSearchResultRow, JobSearchResultUpdate } from "@/types/supabase"
+import type { FitScore } from "@/types"
 
 interface DetailPanelProps {
   row: JobSearchResultRow | null
   onClose: () => void
   onUpdateRow: (id: string, updates: JobSearchResultUpdate) => Promise<{ error: unknown }>
+  onTailor?: (row: JobSearchResultRow) => void
+  onCoverLetter?: (row: JobSearchResultRow) => void
+  onApply?: (row: JobSearchResultRow) => void
+  onAddToQueue?: (row: JobSearchResultRow) => void
+  onTrackAndTailor?: (row: JobSearchResultRow) => void
+  fitScore?: FitScore
+  isInQueue?: boolean
 }
 
 /** JSONB columns can be string[], string, or null depending on what the LLM returned. */
@@ -18,7 +26,18 @@ function asStringArray(value: unknown): string[] {
   return []
 }
 
-export function DetailPanel({ row, onClose, onUpdateRow }: DetailPanelProps) {
+export function DetailPanel({
+  row,
+  onClose,
+  onUpdateRow,
+  onTailor,
+  onCoverLetter,
+  onApply,
+  onAddToQueue,
+  onTrackAndTailor,
+  fitScore: _fitScore,
+  isInQueue,
+}: DetailPanelProps) {
   const flippedRef = useRef<string | null>(null)
 
   // First-open status flip: new → viewed (per plan Test scenario "First-open status flip").
@@ -86,10 +105,8 @@ export function DetailPanel({ row, onClose, onUpdateRow }: DetailPanelProps) {
           </span>
         </div>
 
-        {/* THE screenshot fix: a clickable apply link, rendered as a primary
-            button with the external-link icon. Previously the Indeed detail
-            panel had no link at all. */}
-        <div className="flex items-center gap-2">
+        {/* Primary actions: external apply link + Track */}
+        <div className="flex flex-wrap items-center gap-2">
           <a
             href={row.url}
             target="_blank"
@@ -101,6 +118,70 @@ export function DetailPanel({ row, onClose, onUpdateRow }: DetailPanelProps) {
           </a>
           <TrackButton row={row} onUpdateRow={onUpdateRow} />
         </div>
+
+        {/* Secondary actions: Tailor / Cover Letter / Apply flow / Track+Tailor / Queue */}
+        {(onApply || onTailor || onCoverLetter || onTrackAndTailor || onAddToQueue) && (
+          <div className="flex flex-wrap items-center gap-2 pt-1">
+            {onApply && (
+              <button
+                type="button"
+                onClick={() => onApply(row)}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                  row.easy_apply
+                    ? "bg-green-50 text-green-700 hover:bg-green-100 border border-green-200"
+                    : "bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200"
+                }`}
+              >
+                {row.easy_apply ? <Zap size={12} /> : <Send size={12} />}
+                Apply Flow
+              </button>
+            )}
+            {onTailor && (
+              <button
+                type="button"
+                onClick={() => onTailor(row)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-violet-50 text-violet-700 hover:bg-violet-100 border border-violet-200 transition-colors"
+              >
+                <Sparkles size={12} /> Tailor Resume
+              </button>
+            )}
+            {onCoverLetter && (
+              <button
+                type="button"
+                onClick={() => onCoverLetter(row)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-sky-50 text-sky-700 hover:bg-sky-100 border border-sky-200 transition-colors"
+              >
+                <FileText size={12} /> Cover Letter
+              </button>
+            )}
+            {onTrackAndTailor && !row.application_id && (
+              <button
+                type="button"
+                onClick={() => onTrackAndTailor(row)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-200 transition-colors"
+              >
+                <Briefcase size={12} />
+                <Sparkles size={12} />
+                Track + Tailor
+              </button>
+            )}
+            {onAddToQueue && (
+              isInQueue ? (
+                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-50 text-blue-600 border border-blue-200">
+                  <ListPlus size={12} /> Queued
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => onAddToQueue(row)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-zinc-50 text-zinc-600 hover:bg-zinc-100 border border-zinc-200 transition-colors"
+                >
+                  <ListPlus size={12} /> Add to Queue
+                </button>
+              )
+            )}
+          </div>
+        )}
 
         {description ? (
           <section>
