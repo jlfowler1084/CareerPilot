@@ -510,3 +510,108 @@ class TestSentinelIntegration:
         )
 
         mock_manager.mark_stale_for_profile.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Unit 5: Enrichment integration
+# ---------------------------------------------------------------------------
+
+
+class TestEnrichmentIntegration:
+
+    def test_dice_with_summary_populates_description(self, fake_supabase):
+        """Happy path: Dice listing with summary → row's description is populated after run."""
+        _seed_search_profiles(fake_supabase, [
+            _make_search_profile(profile_id=_PROFILE_ID_1, name="enrich_p1"),
+        ])
+        manager = _make_manager(fake_supabase)
+        # _make_dice_mcp_result includes summary field in each listing
+        dice_fn = MagicMock(return_value=_make_dice_mcp_result(n=2, base_id="enrich"))
+
+        summary = run_profiles(
+            ["enrich_p1"],
+            manager=manager,
+            dice_search_fn=dice_fn,
+            skip_stale_flip=True,
+        )
+
+        # Both rows should have description populated from summary
+        rows = fake_supabase._tables.get("job_search_results", [])
+        assert len(rows) == 2
+        for row in rows:
+            assert row.get("description") is not None
+            assert row["description"].startswith("Great role")
+        # ProfileResult.enriched and RunSummary.total_enriched should reflect enrichments
+        pr = summary.profiles[_PROFILE_ID_1]
+        assert pr.enriched == 2
+        assert summary.total_enriched == 2
+
+    def test_dice_with_empty_summary_description_stays_null(self, fake_supabase):
+        """Edge: Dice listing with empty summary → description stays NULL; not counted in enriched."""
+        _seed_search_profiles(fake_supabase, [
+            _make_search_profile(profile_id=_PROFILE_ID_1, name="enrich_empty_p1"),
+        ])
+        manager = _make_manager(fake_supabase)
+        # Build a result with empty summary
+        raw = _make_dice_mcp_result(n=1, base_id="empty-sum")
+        raw["structuredContent"]["data"][0]["summary"] = ""
+        dice_fn = MagicMock(return_value=raw)
+
+        summary = run_profiles(
+            ["enrich_empty_p1"],
+            manager=manager,
+            dice_search_fn=dice_fn,
+            skip_stale_flip=True,
+        )
+
+        rows = fake_supabase._tables.get("job_search_results", [])
+        assert len(rows) == 1
+        # No description because summary was empty
+        assert rows[0].get("description") is None
+        # Enriched count should be 0
+        pr = summary.profiles[_PROFILE_ID_1]
+        assert pr.enriched == 0
+        assert summary.total_enriched == 0
+
+    def test_indeed_listing_description_stays_null(self, fake_supabase):
+        """Indeed listing → enrich_row returns False; description stays NULL; not counted."""
+        _seed_search_profiles(fake_supabase, [
+            _make_search_profile(
+                profile_id=_PROFILE_ID_INDEED,
+                name="indeed_enrich_profile",
+                source="indeed",
+            ),
+        ])
+        manager = _make_manager(fake_supabase)
+        dice_fn = MagicMock(return_value=_make_dice_mcp_result(n=2))
+
+        summary = run_profiles(
+            ["indeed_enrich_profile"],
+            manager=manager,
+            dice_search_fn=dice_fn,
+            skip_stale_flip=True,
+        )
+
+        # Indeed profile is skipped entirely (count=0, no rows written)
+        assert summary.total_new == 0
+        assert summary.total_enriched == 0
+
+    def test_enrichment_does_not_run_in_dry_run_mode(self, fake_supabase):
+        """dry_run=True: enrichment is NOT called (no writes at all)."""
+        _seed_search_profiles(fake_supabase, [
+            _make_search_profile(profile_id=_PROFILE_ID_1, name="dry_enrich_p1"),
+        ])
+        mock_manager = MagicMock(spec=JobSearchResultsManager)
+        mock_manager.list_recent_for_profile.return_value = []
+        dice_fn = MagicMock(return_value=_make_dice_mcp_result(n=3))
+
+        run_profiles(
+            ["dry_enrich_p1"],
+            dry_run=True,
+            manager=mock_manager,
+            dice_search_fn=dice_fn,
+        )
+
+        # In dry_run, upsert and update_enrichment are never called
+        mock_manager.upsert.assert_not_called()
+        mock_manager.update_enrichment.assert_not_called()

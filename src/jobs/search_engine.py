@@ -1,4 +1,4 @@
-"""Job search orchestrator — CAR-188 Unit 4c.
+"""Job search orchestrator — CAR-188 Unit 4c / Unit 5.
 
 Top-level ``run_profiles`` function that:
 1. Reads search profiles from Supabase (``search_profiles`` table).
@@ -6,8 +6,9 @@ Top-level ``run_profiles`` function that:
 3. Passes results through the Dice parser.
 4. Checks the sentinel for degraded runs.
 5. Upserts each parsed listing via ``JobSearchResultsManager``.
-6. Flips stale rows for healthy profiles.
-7. Returns a ``RunSummary`` dataclass with per-profile and aggregate stats.
+6. Enriches each successfully upserted listing via ``enrichment.enrich_row``.
+7. Flips stale rows for healthy profiles.
+8. Returns a ``RunSummary`` dataclass with per-profile and aggregate stats.
 
 Usage
 -----
@@ -25,6 +26,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional
 
+from src.jobs import enrichment
 from src.jobs.job_search_results import JobSearchResultsManager
 from src.jobs.parsers.dice import parse_dice_listings
 from src.jobs.parsers.sentinel import is_degraded
@@ -47,6 +49,7 @@ class ProfileResult:
     count: int = 0        # Total listings parsed (before dedup / upsert)
     new: int = 0          # Listings that were inserted (not already in DB)
     updated: int = 0      # Listings that already existed (last_seen_at bumped)
+    enriched: int = 0     # Listings whose description was populated (Unit 5)
     degraded: bool = False
     error: Optional[str] = None
 
@@ -60,6 +63,7 @@ class RunSummary:
     profiles: Dict[str, ProfileResult] = field(default_factory=dict)
     total_new: int = 0
     total_updated: int = 0
+    total_enriched: int = 0
     total_degraded_profiles: int = 0
 
 
@@ -260,6 +264,20 @@ def run_profiles(
                             profile_name, listing.get("source_id"), exc_info=True,
                         )
                         # Continue to next listing rather than aborting the profile.
+                        continue
+
+                    # --- Enrich (Unit 5): inject _row_id then call enrich_row ---
+                    try:
+                        listing_for_enrich: Dict[str, Any] = dict(listing_with_profile)
+                        listing_for_enrich["_row_id"] = _row_id
+                        if enrichment.enrich_row(listing_for_enrich, manager):
+                            prof_result.enriched += 1
+                    except Exception:
+                        logger.warning(
+                            "run_profiles: profile %r — enrichment failed for source_id=%r",
+                            profile_name, listing.get("source_id"), exc_info=True,
+                        )
+                        # Enrichment errors never fail the row or the profile.
             else:
                 # dry_run: treat all parsed as would-be new (conservative estimate)
                 prof_result.new = prof_result.count
@@ -287,14 +305,16 @@ def run_profiles(
     for pr in summary.profiles.values():
         summary.total_new += pr.new
         summary.total_updated += pr.updated
+        summary.total_enriched += pr.enriched
 
     summary.completed_at = datetime.utcnow()
 
     logger.info(
-        "run_profiles: completed — %d profile(s), %d new, %d updated, %d degraded",
+        "run_profiles: completed — %d profile(s), %d new, %d updated, %d enriched, %d degraded",
         len(summary.profiles),
         summary.total_new,
         summary.total_updated,
+        summary.total_enriched,
         summary.total_degraded_profiles,
     )
     return summary
