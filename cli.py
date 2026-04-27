@@ -1133,7 +1133,13 @@ def search(ctx, profile_ids):
     default=False,
     help="Skip the stale-flip step for all profiles this run.",
 )
-def search_run_profiles(profile_ids, dry_run, skip_stale_flip):
+@click.option(
+    "--no-discord",
+    is_flag=True,
+    default=False,
+    help="Skip Discord summary post (useful for ad-hoc / testing).",
+)
+def search_run_profiles(profile_ids, dry_run, skip_stale_flip, no_discord):
     """Run Supabase-backed search profiles and persist results.
 
     Reads profiles from the 'search_profiles' Supabase table, calls Dice MCP
@@ -1196,6 +1202,29 @@ def search_run_profiles(profile_ids, dry_run, skip_stale_flip):
     )
     if dry_run:
         console.print("[yellow][dry-run] No data was written.[/yellow]")
+
+    # --- Discord daily summary ---
+    if dry_run:
+        console.print("[dim]Dry-run: skipping Discord post.[/dim]")
+    elif no_discord:
+        console.print("[dim]--no-discord: skipping Discord post.[/dim]")
+    else:
+        from src.jobs import discord_summary
+        from src.jobs.job_search_results import JobSearchResultsManager
+
+        try:
+            _discord_mgr = JobSearchResultsManager()
+            ok = discord_summary.post_summary(
+                summary, _discord_mgr, project_name="CareerPilot", dry_run=False
+            )
+            if ok:
+                console.print("[dim]Discord summary posted.[/dim]")
+            else:
+                console.print("[yellow]Discord summary post failed (non-fatal — check logs).[/yellow]")
+        except Exception as _discord_exc:
+            console.print(
+                f"[yellow]Discord summary post raised an exception (non-fatal): {_discord_exc}[/yellow]"
+            )
 
 
 def _apply_job_flow(job_data, applicant, con):
