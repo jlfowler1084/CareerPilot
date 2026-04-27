@@ -17,6 +17,7 @@ export interface SearchProfileInput {
   keyword: string
   location: string
   source: string
+  contract_only?: boolean
   icon: string
   label?: string
   name?: string
@@ -49,7 +50,8 @@ async function callSearchApi(
   keyword: string,
   location: string,
   source: string,
-  profileLabel: string
+  profileLabel: string,
+  contractOnly = false
 ): Promise<{ jobs: Job[]; warnings: SearchError[]; indeedInfo?: string }> {
   const results: Job[] = []
   const warnings: SearchError[] = []
@@ -59,8 +61,7 @@ async function callSearchApi(
   const callIndeed =
     source === "both" || source === "indeed"
   const callDice =
-    source === "both" || source === "dice" || source === "dice_contract"
-  const contractOnly = source === "dice_contract"
+    source === "both" || source === "dice"
 
   if (callIndeed) {
     try {
@@ -243,7 +244,8 @@ export function useSearch(options: UseSearchOptions = {}) {
           profile.keyword,
           profile.location,
           profile.source,
-          getProfileLabel(profile)
+          getProfileLabel(profile),
+          profile.contract_only === true
         )
         allResults = [...allResults, ...jobs]
         searchErrors.push(...apiWarnings)

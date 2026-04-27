@@ -510,6 +510,7 @@ export default function SearchPage() {
       keyword,
       location,
       source,
+      contract_only: false,
       icon: "\uD83D\uDD0D",
     }
     // Add temp profile to selected set and trigger search
@@ -521,8 +522,8 @@ export default function SearchPage() {
       const allJobs: Job[] = []
       for (const p of profiles) {
         const callIndeed = p.source === "both" || p.source === "indeed"
-        const callDice = p.source === "both" || p.source === "dice" || p.source === "dice_contract"
-        const contractOnly = p.source === "dice_contract"
+        const callDice = p.source === "both" || p.source === "dice"
+        const contractOnly = p.contract_only === true
 
         if (callIndeed) {
           try {
@@ -565,7 +566,8 @@ export default function SearchPage() {
     name: string
     keyword: string
     location: string
-    source: "dice" | "indeed" | "both" | "dice_contract"
+    source: "dice" | "indeed" | "both"
+    contract_only: boolean
     icon: string
   }) {
     createProfile(profile)
@@ -591,6 +593,7 @@ export default function SearchPage() {
       keyword: profile.keyword,
       location: profile.location,
       source: profile.source,
+      contract_only: profile.contract_only,
       icon: profile.icon,
     })
   }
