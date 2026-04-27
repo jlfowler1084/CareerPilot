@@ -228,7 +228,12 @@ def _sample_contact(**overrides):
 
 class TestConstruction:
     def test_requires_user_id_from_env(self, monkeypatch):
-        monkeypatch.delenv("CAREERPILOT_USER_ID", raising=False)
+        # setenv("") rather than delenv: importing config.settings (triggered
+        # by the setattr below if it's the first test to do so) re-runs
+        # load_dotenv() and re-populates os.environ from .env. An explicit
+        # empty value beats that re-population.
+        monkeypatch.setenv("CAREERPILOT_USER_ID", "")
+        monkeypatch.setattr("config.settings.CAREERPILOT_USER_ID", None)
         with pytest.raises(ContactManagerNotConfiguredError):
             ContactManager(client=FakeSupabaseClient())
 
@@ -242,7 +247,8 @@ class TestConstruction:
         assert m._user_id == _TEST_USER_ID
 
     def test_error_message_is_informative(self, monkeypatch):
-        monkeypatch.delenv("CAREERPILOT_USER_ID", raising=False)
+        monkeypatch.setenv("CAREERPILOT_USER_ID", "")
+        monkeypatch.setattr("config.settings.CAREERPILOT_USER_ID", None)
         with pytest.raises(ContactManagerNotConfiguredError) as exc:
             ContactManager(client=FakeSupabaseClient())
         assert "user_id" in str(exc.value).lower() or "CAREERPILOT_USER_ID" in str(exc.value)

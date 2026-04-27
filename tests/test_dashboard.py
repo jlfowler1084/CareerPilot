@@ -65,11 +65,12 @@ class TestMorningScan:
     def test_morning_handles_gmail_failure(self):
         """Morning scan continues when Gmail auth fails."""
         with patch("src.gmail.scanner.GmailScanner.authenticate", side_effect=Exception("no auth")):
-            with patch("src.jobs.searcher.JobSearcher.run_profiles", side_effect=Exception("no MCP")):
-                with patch("src.db.models.get_connection") as mock_conn_fn:
-                    mock_conn = MagicMock()
-                    mock_conn_fn.return_value = mock_conn
-                    result = _run_cli(["morning"])
+            with patch("src.gmail.auth.get_default_gmail_service", side_effect=Exception("no auth")):
+                with patch("src.jobs.searcher.JobSearcher.run_profiles", side_effect=Exception("no MCP")):
+                    with patch("src.db.models.get_connection") as mock_conn_fn:
+                        mock_conn = MagicMock()
+                        mock_conn_fn.return_value = mock_conn
+                        result = _run_cli(["morning"])
 
         assert result.exit_code == 0
         assert "Gmail scan skipped" in result.output
@@ -77,11 +78,12 @@ class TestMorningScan:
     def test_morning_handles_mcp_failure(self):
         """Morning scan continues when MCP search fails."""
         with patch("src.gmail.scanner.GmailScanner.authenticate", side_effect=Exception("no auth")):
-            with patch("src.jobs.searcher.JobSearcher.run_profiles", side_effect=Exception("no MCP")):
-                with patch("src.db.models.get_connection") as mock_conn_fn:
-                    mock_conn = MagicMock()
-                    mock_conn_fn.return_value = mock_conn
-                    result = _run_cli(["morning"])
+            with patch("src.gmail.auth.get_default_gmail_service", side_effect=Exception("no auth")):
+                with patch("src.jobs.searcher.JobSearcher.run_profiles", side_effect=Exception("no MCP")):
+                    with patch("src.db.models.get_connection") as mock_conn_fn:
+                        mock_conn = MagicMock()
+                        mock_conn_fn.return_value = mock_conn
+                        result = _run_cli(["morning"])
 
         assert result.exit_code == 0
         assert "Job search skipped" in result.output
