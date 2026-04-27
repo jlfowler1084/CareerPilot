@@ -2951,6 +2951,46 @@
       "exports": ["default"],
       "patterns": ["autoQueueEnabled", "AUTO_QUEUE_KEY", "scanMetadata", "allRows"],
       "area": "search"
+    },
+    {
+      "ticket": "CAR-190",
+      "name": "Auto-queue decision pure helper",
+      "file": "src/lib/search-results/auto-queue.ts",
+      "exports": ["rowsToAutoQueue"],
+      "patterns": ["rowsToAutoQueue", "easy_apply", "fitScore.total"],
+      "area": "search"
+    },
+    {
+      "ticket": "CAR-190",
+      "name": "Dice MCP client",
+      "file": "src/lib/mcp-client.ts",
+      "exports": ["searchDiceDirect"],
+      "patterns": ["searchDiceDirect", "StreamableHTTPClientTransport", "search_jobs"],
+      "area": "search"
+    },
+    {
+      "ticket": "CAR-190",
+      "name": "Dice results parser",
+      "file": "src/lib/parsers/dice.ts",
+      "exports": ["parseDiceResults"],
+      "patterns": ["parseDiceResults", "detailsPageUrl", "companyName"],
+      "area": "search"
+    },
+    {
+      "ticket": "CAR-190",
+      "name": "Ad-hoc search API route",
+      "file": "src/app/api/search-adhoc/route.ts",
+      "exports": ["POST", "isRateLimitError"],
+      "patterns": ["search-adhoc", "searchDiceDirect", "parseDiceResults", "rate limit"],
+      "area": "search"
+    },
+    {
+      "ticket": "CAR-190",
+      "name": "CustomSearchBar wired to ad-hoc route",
+      "file": "src/app/(main)/search/page.tsx",
+      "exports": ["default"],
+      "patterns": ["CustomSearchBar", "adhocResults", "handleQuickSearch", "Ad-hoc results"],
+      "area": "search"
     }
   ]
 }

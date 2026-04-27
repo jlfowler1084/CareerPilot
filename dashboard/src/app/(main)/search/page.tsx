@@ -10,6 +10,7 @@ import { useSkillsInventory } from "@/hooks/use-skills-inventory"
 import { useApplications } from "@/hooks/use-applications"
 import { ResultRow } from "@/components/search/result-row"
 import { DetailPanel } from "@/components/search/detail-panel"
+import { CustomSearchBar } from "@/components/search/custom-search-bar"
 import { ProfileChips } from "@/components/search/profile-chips"
 import { SearchFiltersBar, DEFAULT_FILTERS } from "@/components/search/search-filters"
 import { AdvancedFiltersPanel } from "@/components/search/advanced-filters"
@@ -23,11 +24,12 @@ import { EmptyState } from "@/components/shared/empty-state"
 import { scoreJob } from "@/lib/fit-scoring"
 import { rowToJob } from "@/lib/search-results/to-job"
 import { buildApplicationInput } from "@/lib/search-results/track-input"
+import { rowsToAutoQueue } from "@/lib/search-results/auto-queue"
 import { applyFilters } from "@/lib/search-filter-utils"
 import { applyAdvancedFilters, DEFAULT_ADVANCED_FILTERS } from "@/lib/search-filter-utils"
 import { applyQueryFilter, parseQuery } from "@/lib/query-parser"
 import { parseSalary } from "@/lib/search-filter-utils"
-import { Mail, ListChecks, SearchX, ListFilter } from "lucide-react"
+import { Mail, ListChecks, SearchX, ListFilter, X } from "lucide-react"
 import type { JobSearchResultRow } from "@/types/supabase"
 import type { Job, FitScore } from "@/types"
 import type { SearchFilters } from "@/lib/search-filter-utils"
@@ -99,6 +101,10 @@ export default function SearchPage() {
   const [applyOpen, setApplyOpen] = useState(false)
   const tailoredResumesRef = useRef<Map<string, string>>(new Map())
   const coverLettersRef = useRef<Map<string, string>>(new Map())
+
+  // ── C2: Ad-hoc search state ───────────────────────────────────────────────
+  const [adhocResults, setAdhocResults] = useState<Job[]>([])
+  const [adhocLoading, setAdhocLoading] = useState(false)
 
   // ── Data hooks ────────────────────────────────────────────────────────────
   // Only status-filter at Supabase level; profile + quick + advanced filters run client-side.
@@ -210,13 +216,8 @@ export default function SearchPage() {
   // ── B3: Auto-queue 80+ effect ─────────────────────────────────────────────
   useEffect(() => {
     if (!autoQueueEnabled) return
-    for (const row of displayRows) {
-      if (!row.easy_apply) continue
-      const fitScore = rowFitScores.get(row.id)
-      if (fitScore && fitScore.total >= 80) {
-        const job = rowToJob(row)
-        if (!isInQueue(job)) addToQueue(job, fitScore)
-      }
+    for (const row of rowsToAutoQueue(displayRows, rowFitScores, isInQueue)) {
+      addToQueue(rowToJob(row), rowFitScores.get(row.id)!)
     }
     // Only re-run when toggle turns on or displayed rows change meaningfully.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -326,6 +327,32 @@ export default function SearchPage() {
     }
     return selectedProfileIds
   }, [selectedProfileIds, profiles, hiddenProfileIds])
+
+  // ── C2: Ad-hoc search handler ─────────────────────────────────────────────
+  async function handleQuickSearch(keyword: string, location: string, source: string) {
+    setAdhocLoading(true)
+    setAdhocResults([])
+    try {
+      const resp = await fetch("/api/search-adhoc", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ keyword, location, source, contractOnly: false }),
+      })
+      if (resp.status === 503) {
+        const json = await resp.json()
+        console.warn("[search-adhoc] rate limit:", json.error)
+        return
+      }
+      if (!resp.ok) {
+        console.error("[search-adhoc] error:", resp.status)
+        return
+      }
+      const json = await resp.json()
+      setAdhocResults((json.jobs as Job[]) ?? [])
+    } finally {
+      setAdhocLoading(false)
+    }
+  }
 
   // ── Per-row handlers (Phase A) ────────────────────────────────────────────
   async function handleTrack(row: JobSearchResultRow): Promise<string | null> {
@@ -512,6 +539,95 @@ export default function SearchPage() {
 
       {activeTab === "search" && (
         <div className="space-y-4">
+          {/* C2: Custom (ad-hoc) search bar */}
+          <CustomSearchBar
+            onQuickSearch={handleQuickSearch}
+            onSaveProfile={(p) =>
+              createProfile({
+                name: p.name,
+                keyword: p.keyword,
+                location: p.location,
+                source: p.source === "both" ? "dice" : p.source,
+                contract_only: p.contract_only,
+                icon: p.icon,
+              })
+            }
+            disabled={adhocLoading}
+          />
+
+          {/* C2: Ad-hoc results section */}
+          {(adhocLoading || adhocResults.length > 0) && (
+            <div className="rounded-xl border border-amber-200 dark:border-amber-700 bg-amber-50/50 dark:bg-amber-950/20 p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-amber-700 dark:text-amber-400">
+                  Ad-hoc results {adhocResults.length > 0 && `(${adhocResults.length})`}
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setAdhocResults([])}
+                  aria-label="Clear ad-hoc results"
+                  className="p-1 rounded text-amber-500 hover:text-amber-700 dark:hover:text-amber-300"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+              {adhocLoading && (
+                <p className="text-xs text-zinc-500 dark:text-zinc-400">Searching Dice…</p>
+              )}
+              {!adhocLoading && adhocResults.length === 0 && (
+                <p className="text-xs text-zinc-500 dark:text-zinc-400">No results found.</p>
+              )}
+              {adhocResults.length > 0 && (
+                <div className="space-y-2">
+                  {adhocResults.map((job, i) => {
+                    // Ad-hoc results use Job shape — synthesize a minimal row for ResultRow
+                    const syntheticRow: JobSearchResultRow = {
+                      id: `adhoc-${i}-${job.title}-${job.company}`.replace(/\s+/g, "-").toLowerCase(),
+                      user_id: "",
+                      source: job.source.toLowerCase() as "dice" | "indeed",
+                      source_id: "",
+                      url: job.url,
+                      title: job.title,
+                      company: job.company,
+                      location: job.location,
+                      salary: job.salary === "Not listed" ? null : job.salary,
+                      job_type: job.type || null,
+                      posted_date: job.posted || null,
+                      easy_apply: job.easyApply ?? false,
+                      profile_id: null,
+                      profile_label: null,
+                      description: null,
+                      requirements: null,
+                      nice_to_haves: null,
+                      discovered_at: new Date().toISOString(),
+                      last_seen_at: new Date().toISOString(),
+                      last_enriched_at: null,
+                      status: "new",
+                      application_id: null,
+                      created_at: new Date().toISOString(),
+                      updated_at: new Date().toISOString(),
+                    }
+                    return (
+                      <ResultRow
+                        key={syntheticRow.id}
+                        row={syntheticRow}
+                        selected={selectedRow?.id === syntheticRow.id}
+                        onSelect={setSelectedRow}
+                        onTrack={(r) => { void handleTrack(r) }}
+                        onApply={handleApply}
+                        onTailor={handleTailor}
+                        onCoverLetter={handleCoverLetter}
+                        onTrackAndTailor={(r) => { void handleTrackAndTailor(r) }}
+                        onAddToQueue={handleAddToQueue}
+                        isInQueue={isRowInQueue}
+                      />
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* B1: Profile chips */}
           {profiles.length > 0 && (
             <div className="rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4">
