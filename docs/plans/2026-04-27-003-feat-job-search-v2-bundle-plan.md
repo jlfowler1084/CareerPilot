@@ -21,9 +21,9 @@ parallelization-shape: pre-spawn-freeze-then-3-streams
 - [x] Plan written.
 - [x] Plan reviewed (document-review pass 1 complete; correctness fixes applied 2026-04-27 23:00).
 
-**Phase 0b — freeze PR (Unit 0): NOT STARTED.** Coordinator owns; non-worktree feature branch `feature/CAR-189-source-union-freeze`. Sequence in §Merge gate.
+**Phase 0b — freeze PR (Unit 0): COMPLETE.** PR #39 merged 2026-04-28. Migration applied to production; both CHECK constraints verified to include `'linkedin'`. Local `feature/dashboard-v2` pulled to `42e89ad`.
 
-**Phase 1 — streams: BLOCKED on Phase 0b completion.**
+**Phase 1 — streams: UNBLOCKED. Ready to spawn Units 1 (CAR-191), 2 (CAR-192), 3 (LinkedIn pipeline) in parallel.**
 
 When picking up this plan in a future session, advance the checkboxes above and proceed from the first un-checked item.
 
@@ -299,7 +299,7 @@ For each unit:
 
 ## Implementation Units
 
-### - [ ] **Unit 0: Source-type union freeze + JobCard 3-arm rewrite (coordinator pre-spawn)**
+### - [x] **Unit 0: Source-type union freeze + JobCard 3-arm rewrite (coordinator pre-spawn)**
 
 **Goal.** Widen the `'indeed' | 'dice'` source-type union to `'indeed' | 'dice' | 'linkedin'` across all sites enumerated in the Parallelization Map's Unit 0 row, regenerate `database.types.ts`, rewrite the JobCard ternary to a 3-arm conditional with LinkedIn slate-gray (`#475569`), and merge before any subagent spawns. **Unit 0 is the precondition for Units 1, 2, 3** — they cannot spawn until this PR is merged and Vercel-deployed.
 
