@@ -1,5 +1,10 @@
 """Tests for LinkedIn email parser — validated against real inbox data."""
 
+import base64
+from unittest.mock import MagicMock, patch
+
+import pytest
+
 from src.jobs.linkedin_parser import (
     parse_job_alert_email,
     parse_career_insights_email,
@@ -7,6 +12,7 @@ from src.jobs.linkedin_parser import (
     extract_linkedin_job_id,
     clean_linkedin_url,
     deduplicate_jobs,
+    scan_emails,
     build_linkedin_search_url,
     LINKEDIN_SEARCH_PROFILES,
 )
@@ -175,3 +181,107 @@ def test_remote_search_url():
     profile = LINKEDIN_SEARCH_PROFILES["infra_remote"]
     url = build_linkedin_search_url(profile)
     assert "f_WT=2" in url  # remote filter
+
+
+# ── scan_emails helper tests ──────────────────────────────────────────
+
+def _make_gmail_message(subject: str, from_addr: str, date: str, body_text: str) -> dict:
+    """Build a minimal Gmail API message dict with a base64-encoded text/plain body."""
+    encoded = base64.urlsafe_b64encode(body_text.encode("utf-8")).decode("ascii")
+    return {
+        "id": "msg001",
+        "payload": {
+            "headers": [
+                {"name": "From", "value": from_addr},
+                {"name": "Date", "value": date},
+                {"name": "Subject", "value": subject},
+            ],
+            "mimeType": "text/plain",
+            "body": {"data": encoded},
+            "parts": [],
+        },
+    }
+
+
+def _make_fake_gmail_service(messages: list[dict]) -> MagicMock:
+    """Return a mock Gmail service that yields *messages* on list+get."""
+    svc = MagicMock()
+    msg_list_resp = MagicMock()
+    msg_list_resp.execute.return_value = {"messages": [{"id": m["id"]} for m in messages]}
+
+    def _get_message(userId, id, format):  # noqa: A002
+        mock_get = MagicMock()
+        match = next((m for m in messages if m["id"] == id), messages[0])
+        mock_get.execute.return_value = match
+        return mock_get
+
+    svc.users.return_value.messages.return_value.list.return_value = msg_list_resp
+    svc.users.return_value.messages.return_value.get.side_effect = _get_message
+    return svc
+
+
+def test_scan_emails_raises_when_service_is_none():
+    """scan_emails must raise RuntimeError when gmail_service is None."""
+    with pytest.raises(RuntimeError, match="gmail_service"):
+        scan_emails(None, days=7)
+
+
+def test_scan_emails_empty_gmail_result():
+    """scan_emails returns [] when Gmail returns no messages."""
+    svc = MagicMock()
+    svc.users.return_value.messages.return_value.list.return_value.execute.return_value = {
+        "messages": []
+    }
+    result = scan_emails(svc, days=7)
+    assert result == []
+
+
+def test_scan_emails_returns_normalised_job_dicts():
+    """scan_emails with a single job-alert email returns expected shape."""
+    msg = _make_gmail_message(
+        subject="Job alert: IT Specialist",
+        from_addr="jobalerts-noreply@linkedin.com",
+        date="Mon, 14 Dec 2025 10:00:00 +0000",
+        body_text=JOB_ALERT_BODY,
+    )
+    svc = _make_fake_gmail_service([msg])
+    result = scan_emails(svc, days=7)
+
+    assert len(result) == 3
+
+    job = result[0]
+    assert job["title"] == "IT Specialist"
+    assert job["company"] == "Gregory & Appel"
+    assert job["source"] == "LinkedIn"
+    assert job["linkedin_job_id"] == "4343466437"
+    assert "linkedin.com/jobs/view/4343466437" in job["url"]
+
+
+def test_scan_emails_deduplicates_across_pages():
+    """Identical jobs from two 'pages' are deduplicated."""
+    msg = _make_gmail_message(
+        subject="Job alert: IT Specialist",
+        from_addr="jobalerts-noreply@linkedin.com",
+        date="Mon, 14 Dec 2025 10:00:00 +0000",
+        body_text=JOB_ALERT_BODY,
+    )
+    # Simulate two list calls — first returns a nextPageToken, second returns the
+    # same messages (triggering deduplication).
+    svc = MagicMock()
+    page1 = MagicMock()
+    page1.execute.return_value = {
+        "messages": [{"id": msg["id"]}],
+        "nextPageToken": "tok123",
+    }
+    page2 = MagicMock()
+    page2.execute.return_value = {"messages": [{"id": msg["id"]}]}
+
+    svc.users.return_value.messages.return_value.list.side_effect = [page1, page2]
+
+    get_mock = MagicMock()
+    get_mock.execute.return_value = msg
+    svc.users.return_value.messages.return_value.get.return_value = get_mock
+
+    result = scan_emails(svc, days=7)
+    # Same 3 jobs from both pages but deduplicated — still 3
+    assert len(result) == 3
