@@ -183,60 +183,6 @@
       "area": "search"
     },
     {
-      "ticket": "CAR-58",
-      "name": "Search Hook",
-      "file": "src/hooks/use-search.ts",
-      "exports": [
-        "useSearch"
-      ],
-      "patterns": [
-        "search_cache",
-        "search-indeed",
-        "search-dice"
-      ],
-      "area": "search"
-    },
-    {
-      "ticket": "CAR-58",
-      "name": "Search Utilities",
-      "file": "src/lib/search-utils.ts",
-      "exports": [
-        "deduplicateJobs"
-      ],
-      "patterns": [
-        "deduplicateJobs",
-        "filterIrrelevant"
-      ],
-      "area": "search"
-    },
-    {
-      "ticket": "CAR-46",
-      "name": "Search History Panel",
-      "file": "src/components/search/search-history.tsx",
-      "exports": [
-        "SearchHistory"
-      ],
-      "patterns": [
-        "runs",
-        "scans"
-      ],
-      "area": "search"
-    },
-    {
-      "ticket": "CAR-46",
-      "name": "Search History Hook",
-      "file": "src/hooks/use-search-history.ts",
-      "exports": [
-        "useSearchHistory"
-      ],
-      "patterns": [
-        "search_runs",
-        "loadRunResults",
-        "createRun"
-      ],
-      "area": "search"
-    },
-    {
       "ticket": "CAR-188",
       "name": "Search Results Hook",
       "file": "src/hooks/use-search-results.ts",
@@ -2241,19 +2187,6 @@
       ],
       "patterns": [
         "ApplyFlow"
-      ],
-      "area": "search"
-    },
-    {
-      "ticket": "",
-      "name": "Job Detail Pane",
-      "file": "src/components/search/job-detail-pane.tsx",
-      "exports": [
-        "JobDetailPane"
-      ],
-      "patterns": [
-        "JobDetailPane",
-        "description"
       ],
       "area": "search"
     },
