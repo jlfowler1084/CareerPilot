@@ -16,15 +16,19 @@ Coverage:
 from __future__ import annotations
 
 import uuid
+from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 from typing import Dict, List
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import AsyncMock, MagicMock, patch, call
 
 import pytest
+
+from mcp.types import CallToolResult
 
 from tests.conftest import TEST_USER_ID, FakeSupabaseClient
 from src.jobs.job_search_results import JobSearchResultsManager
 from src.jobs.search_engine import run_profiles, RunSummary, ProfileResult
+from src.jobs.searcher import JobSearcher
 
 
 # ---------------------------------------------------------------------------
@@ -615,3 +619,61 @@ class TestEnrichmentIntegration:
         # In dry_run, upsert and update_enrichment are never called
         mock_manager.upsert.assert_not_called()
         mock_manager.update_enrichment.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# CAR-192: MCP SDK transport integration (SDK boundary test)
+# ---------------------------------------------------------------------------
+
+
+class TestDiceSdkTransportIntegration:
+    """Verify that JobSearcher.search_dice returns the same normalized shape
+    after the CAR-192 transport migration to the official MCP Python SDK.
+
+    Patches src.jobs.mcp_client.streamable_http_client at the SDK boundary
+    (not the old hand-rolled requests calls) and confirms the result
+    normalization in search_dice is unchanged.
+    """
+
+    def _make_session_mock(self, structured_content: dict) -> MagicMock:
+        call_result = CallToolResult(
+            content=[],
+            structuredContent=structured_content,
+            isError=False,
+        )
+        session = MagicMock()
+        session.__aenter__ = AsyncMock(return_value=session)
+        session.__aexit__ = AsyncMock(return_value=False)
+        session.initialize = AsyncMock(return_value=None)
+        session.call_tool = AsyncMock(return_value=call_result)
+        return session
+
+    def test_search_dice_normalized_output_matches_fixture(self):
+        """JobSearcher.search_dice with 3 SDK-returned listings → 3 normalized job dicts."""
+        # The fixture shape has `structuredContent.data` which is what the old transport
+        # exposed. After CAR-192, call_mcp_tool_sync returns structuredContent directly,
+        # so the SDK boundary mock yields {"data": jobs} (NOT {"structuredContent": ...}).
+        sdk_result = _make_dice_mcp_result(n=3, base_id="sdk-test")
+        # Extract just the structuredContent portion (what call_mcp_tool_sync now returns)
+        structured = sdk_result["structuredContent"]
+
+        session_mock = self._make_session_mock(structured)
+
+        @asynccontextmanager
+        async def _fake_transport(url, *, http_client=None, **kwargs):
+            yield (MagicMock(), MagicMock(), MagicMock(return_value=None))
+
+        with patch("src.jobs.mcp_client.streamable_http_client", _fake_transport):
+            with patch("src.jobs.mcp_client.ClientSession", return_value=session_mock):
+                searcher = JobSearcher(anthropic_api_key="test-key")
+                results = searcher.search_dice("systems administrator", "Indianapolis, IN")
+
+        assert len(results) == 3
+        for i, job in enumerate(results):
+            assert job["title"] == f"SysAdmin {i}"
+            assert job["company"] == f"Corp {i}"
+            assert job["location"] == "Indianapolis, IN"
+            assert job["source"] == "dice"
+            assert job["easy_apply"] is True
+            assert job["salary"] == "$80k"
+            assert job["url"] == f"https://www.dice.com/job-detail/sdk-test-{i}"

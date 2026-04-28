@@ -11,14 +11,15 @@ from src.jobs.searcher import JobSearcher, _is_irrelevant, _parse_json_response
 
 
 def _mock_dice_mcp_result(jobs):
-    """Create a mock Dice MCP result dict matching the direct HTTP response shape."""
+    """Create a mock Dice MCP result dict matching the SDK return shape (CAR-192).
+
+    call_mcp_tool_sync returns structuredContent directly (i.e. the unwrapped
+    dict), so the shape is {"data": [...]} rather than the old hand-rolled
+    {"structuredContent": {"data": [...]}, "content": [...], "isError": False}.
+    """
     return {
-        "structuredContent": {
-            "data": jobs,
-            "meta": {"currentPage": 1, "pageCount": 1, "pageSize": 10, "totalResults": len(jobs)},
-        },
-        "content": [{"type": "text", "text": json.dumps({"data": jobs})}],
-        "isError": False,
+        "data": jobs,
+        "meta": {"currentPage": 1, "pageCount": 1, "pageSize": 10, "totalResults": len(jobs)},
     }
 
 
