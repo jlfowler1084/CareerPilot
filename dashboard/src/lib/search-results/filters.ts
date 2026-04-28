@@ -5,7 +5,7 @@ export type SearchResultStatus = "new" | "viewed" | "tracked" | "dismissed" | "s
 export interface SearchResultFilters {
   profileId?: string | null
   status?: SearchResultStatus | "all"
-  source?: "indeed" | "dice" | "all"
+  source?: "indeed" | "dice" | "linkedin" | "all"
 }
 
 const ACTIVE_STATUSES: SearchResultStatus[] = ["new", "viewed", "tracked"]

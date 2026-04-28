@@ -18,7 +18,7 @@ interface JobCardProps {
 }
 
 export function JobCard({ job, onTrack, onApply, onTailor, onCoverLetter, onTrackAndTailor, onViewDetails, onAddToQueue, tracked, isNew, fitScore, inQueue }: JobCardProps) {
-  const sourceColor = job.source === "Indeed" ? "#2557a7" : "#0c7ff2"
+  const sourceColor = job.source === "Indeed" ? "#2557a7" : job.source === "Linkedin" ? "#475569" : "#0c7ff2"
 
   return (
     <div
