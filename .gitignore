@@ -20,6 +20,9 @@ data/*.db
 data/gmail_token.json
 data/calendar_token.json
 
+# OAuth tokens (CAR-192 / spike + S2/S3 — Indeed and any future OAuth-protected MCPs)
+data/oauth_tokens/
+
 # Google credentials (downloaded from Cloud Console)
 config/google_credentials.json
 
