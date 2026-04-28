@@ -114,6 +114,27 @@ try {
         throw "python.exe not on PATH for user '$env:USERNAME'. Scheduled-task contexts often have a stripped PATH; resolve via 'py -3.12' or hardcode the launcher path."
     }
 
+    # --- Preflight: pull latest code and sync dependencies ---
+    # We run git pull and pip install on every scheduled execution so that
+    # the task tracks HEAD automatically after merges. This does expand the
+    # supply-chain surface (daily pip resolution against PyPI), but the
+    # alternative — stale code running unattended — is the larger risk.
+    # Both commands use explicit exit-code checks because PowerShell 7.0-7.3
+    # does NOT propagate native exit codes via $ErrorActionPreference = 'Stop'.
+    "[{0}] Running git pull --ff-only" -f (Get-Date -Format 'o') |
+        Tee-Object -FilePath $LogFile -Append | Out-Null
+    git pull --ff-only
+    if ($LASTEXITCODE -ne 0) {
+        throw "git pull --ff-only failed (exit $LASTEXITCODE) — resolve uncommitted changes or branch tracking before next run"
+    }
+
+    "[{0}] Running pip install -r requirements.txt" -f (Get-Date -Format 'o') |
+        Tee-Object -FilePath $LogFile -Append | Out-Null
+    & $pythonExe -m pip install -r requirements.txt --quiet
+    if ($LASTEXITCODE -ne 0) {
+        throw "pip install failed (exit $LASTEXITCODE)"
+    }
+
     "[{0}] Starting python -m cli search run-profiles ({1})" -f (Get-Date -Format 'o'), $pythonExe |
         Tee-Object -FilePath $LogFile -Append | Out-Null
 

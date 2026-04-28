@@ -11,9 +11,8 @@ import logging
 import re
 from typing import Dict, List, Optional
 
-import requests
-
 from config import settings
+from src.jobs.mcp_client import McpToolError, call_mcp_tool_sync
 # SEARCH_PROFILES import removed in CAR-188 — profiles now live in Supabase.
 # The legacy JobSearcher.run_profiles() below is deprecated; use
 # src.jobs.search_engine.run_profiles() instead.
@@ -65,7 +64,12 @@ def _is_irrelevant(title: str) -> bool:
 
 def _search_dice_direct(keyword: str, location: str, contract_only: bool = False,
                          jobs_per_page: int = 15) -> dict:
-    """Call Dice MCP directly via Streamable HTTP — no Claude API cost.
+    """Call Dice MCP via the official MCP Python SDK — no Claude API cost.
+
+    Replaces the hand-rolled SSE transport (CAR-192). The SDK handles
+    Streamable HTTP session negotiation, SSE parsing, and protocol framing.
+    McpToolError is re-raised so the caller's try/except can handle it
+    uniformly alongside httpx transport errors.
 
     Args:
         keyword: Job title or search keywords.
@@ -74,102 +78,14 @@ def _search_dice_direct(keyword: str, location: str, contract_only: bool = False
         jobs_per_page: Number of results to return.
 
     Returns:
-        Raw JSON-RPC result dict from Dice MCP, or empty dict on failure.
+        Raw result dict from the MCP SDK (structuredContent or content list),
+        or empty dict on failure.
     """
-    headers_init = {
-        "Content-Type": "application/json",
-        "Accept": "application/json, text/event-stream",
-    }
-
-    # Step 1: Initialize the MCP session
-    try:
-        init_resp = requests.post(
-            DICE_MCP_URL,
-            headers=headers_init,
-            json={
-                "jsonrpc": "2.0",
-                "id": 1,
-                "method": "initialize",
-                "params": {
-                    "protocolVersion": "2025-03-26",
-                    "capabilities": {},
-                    "clientInfo": {"name": "careerpilot-cli", "version": "1.0.0"},
-                },
-            },
-            timeout=15,
-        )
-        init_resp.raise_for_status()
-    except Exception:
-        logger.error("Dice MCP initialize failed", exc_info=True)
-        return {}
-
-    # Session IDs are optional per the MCP Streamable HTTP spec. As of
-    # 2026-04-27, mcp.dice.com no longer assigns one — the initialize
-    # response is a stateless SSE event with the result inline, and
-    # subsequent tools/call requests work without a session header.
-    # Set the header only when the server did assign an ID (forward-compat
-    # if Dice re-enables stateful sessions later).
-    session_id = init_resp.headers.get("mcp-session-id", "")
-    session_headers = {
-        "Content-Type": "application/json",
-        "Accept": "application/json, text/event-stream",
-    }
-    if session_id:
-        session_headers["mcp-session-id"] = session_id
-
-    # Step 2: Send initialized notification
-    try:
-        requests.post(
-            DICE_MCP_URL,
-            headers=session_headers,
-            json={"jsonrpc": "2.0", "method": "notifications/initialized"},
-            timeout=5,
-        )
-    except Exception:
-        logger.warning("Dice MCP initialized notification failed", exc_info=True)
-
-    # Step 3: Call search_jobs tool
-    tool_args = {"keyword": keyword, "location": location, "jobs_per_page": jobs_per_page}
+    tool_args: dict = {"keyword": keyword, "location": location, "jobs_per_page": jobs_per_page}
     if contract_only:
         tool_args["employment_types"] = ["CONTRACTS"]
 
-    try:
-        result_resp = requests.post(
-            DICE_MCP_URL,
-            headers=session_headers,
-            json={
-                "jsonrpc": "2.0",
-                "id": 2,
-                "method": "tools/call",
-                "params": {
-                    "name": "search_jobs",
-                    "arguments": tool_args,
-                },
-            },
-            timeout=30,
-        )
-        result_resp.raise_for_status()
-
-        # Handle SSE response format
-        content_type = result_resp.headers.get("content-type", "")
-        if "text/event-stream" in content_type:
-            # Parse SSE events to extract the JSON-RPC result
-            for line in result_resp.text.splitlines():
-                if line.startswith("data: "):
-                    try:
-                        event_data = json.loads(line[6:])
-                        if "result" in event_data:
-                            return event_data["result"]
-                    except json.JSONDecodeError:
-                        continue
-            return {}
-        else:
-            data = result_resp.json()
-            return data.get("result", data)
-
-    except Exception:
-        logger.error("Dice MCP tools/call failed", exc_info=True)
-        return {}
+    return call_mcp_tool_sync(DICE_MCP_URL, "search_jobs", tool_args)
 
 
 class JobSearcher:
@@ -219,11 +135,12 @@ class JobSearcher:
                 keyword, location, contract_only=contract_only, jobs_per_page=15,
             )
 
-            # Extract job data from MCP result
-            # The result contains content[].text with JSON, or structuredContent
+            # Extract job data from SDK result.
+            # call_mcp_tool_sync returns structuredContent directly (e.g. {"data": [...]})
+            # or {"content": [{"type": "text", "text": "..."}]} for text-only responses.
             jobs_data = []
-            if "structuredContent" in raw and raw["structuredContent"]:
-                jobs_data = raw["structuredContent"].get("data", []) or []
+            if "data" in raw:
+                jobs_data = raw.get("data", []) or []
             elif "content" in raw:
                 # Parse text content blocks
                 for block in (raw.get("content") or []):
