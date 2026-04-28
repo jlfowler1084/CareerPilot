@@ -12,8 +12,9 @@ Each returns jobs in the unified CareerPilot format:
 
 from __future__ import annotations
 
+import base64
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from config.search_profiles import LINKEDIN_SEARCH_PROFILES
 
@@ -264,3 +265,93 @@ def build_linkedin_alert_url(profile: dict) -> str:
     """Build a URL to create a LinkedIn job alert for this search."""
     # Same as search URL — user can click "Set alert" on the page
     return build_linkedin_search_url(profile)
+
+
+# ── Gmail scanning helper ─────────────────────────────────────────────
+
+
+def _extract_body_from_payload(payload: dict) -> str:
+    """Extract plain text body from a Gmail message payload dict."""
+    if payload.get("mimeType") == "text/plain" and payload.get("body", {}).get("data"):
+        return base64.urlsafe_b64decode(payload["body"]["data"]).decode("utf-8", errors="replace")
+
+    for part in payload.get("parts", []):
+        if part.get("mimeType") == "text/plain" and part.get("body", {}).get("data"):
+            return base64.urlsafe_b64decode(part["body"]["data"]).decode("utf-8", errors="replace")
+        # Nested multipart
+        if part.get("parts"):
+            result = _extract_body_from_payload(part)
+            if result:
+                return result
+
+    return ""
+
+
+def scan_emails(gmail_service, days: int) -> list[dict]:
+    """Pure helper: scans Gmail for LinkedIn job alert emails and returns deduped job dicts.
+
+    Raises RuntimeError if gmail_service is None/unavailable.
+    No stdout output — suitable for scheduled/non-interactive use.
+
+    Parameters
+    ----------
+    gmail_service:
+        An authenticated Gmail API service object.
+    days:
+        How many days back to search.
+
+    Returns
+    -------
+    list[dict]
+        Deduplicated job dicts, each with keys:
+        title, company, location, salary, url, posted, source, linkedin_job_id, type.
+
+    Raises
+    ------
+    RuntimeError
+        If gmail_service is None.
+    """
+    if gmail_service is None:
+        raise RuntimeError("gmail_service is required for scan_emails")
+
+    after_date = (datetime.now() - timedelta(days=days)).strftime("%Y/%m/%d")
+    query = (
+        f"from:linkedin.com after:{after_date} "
+        "(subject:job OR subject:hiring OR subject:engineer OR subject:specialist OR subject:alert)"
+    )
+
+    all_jobs: list[dict] = []
+    page_token = None
+
+    while True:
+        kwargs: dict = {"userId": "me", "q": query, "maxResults": 50}
+        if page_token:
+            kwargs["pageToken"] = page_token
+
+        results = gmail_service.users().messages().list(**kwargs).execute()
+        messages = results.get("messages", [])
+
+        if not messages:
+            break
+
+        for msg_meta in messages:
+            msg = gmail_service.users().messages().get(
+                userId="me", id=msg_meta["id"], format="full"
+            ).execute()
+
+            headers = {h["name"]: h["value"] for h in msg["payload"]["headers"]}
+            from_addr = headers.get("From", "")
+            date_str = headers.get("Date", "")
+
+            body = _extract_body_from_payload(msg["payload"])
+            if not body:
+                continue
+
+            jobs = parse_linkedin_email(body, from_address=from_addr, email_date=date_str[:16])
+            all_jobs.extend(jobs)
+
+        page_token = results.get("nextPageToken")
+        if not page_token:
+            break
+
+    return deduplicate_jobs(all_jobs)

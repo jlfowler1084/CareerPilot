@@ -49,6 +49,7 @@ const SOURCE_OPTIONS: ChipOption<SearchFilters["source"]>[] = [
   { label: "All", value: "all" },
   { label: "Dice", value: "Dice" },
   { label: "Indeed", value: "Indeed" },
+  { label: "LinkedIn", value: "Linkedin" },
 ]
 
 const JOB_TYPE_OPTIONS: ChipOption<SearchFilters["jobType"]>[] = [

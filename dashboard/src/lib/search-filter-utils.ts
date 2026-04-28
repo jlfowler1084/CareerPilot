@@ -1,7 +1,7 @@
 import type { Job } from "@/types"
 
 export interface SearchFilters {
-  source: "all" | "Dice" | "Indeed"
+  source: "all" | "Dice" | "Indeed" | "Linkedin"
   jobType: "all" | "Full-time" | "Contract" | "Part-time"
   location: "all" | "remote" | "onsite"
   hasSalary: boolean

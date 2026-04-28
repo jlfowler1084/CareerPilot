@@ -78,6 +78,27 @@ def _get_supabase_client() -> Any:
     return get_supabase_client()
 
 
+def _get_gmail_service() -> Any:
+    """Return an authenticated Gmail API service, or None if unavailable."""
+    try:
+        from config import settings
+        from src.gmail.auth import get_gmail_service
+        return get_gmail_service(
+            credentials_file=settings.GOOGLE_CREDENTIALS_FILE,
+            token_path=settings.GMAIL_TOKEN_PATH,
+            scopes=settings.GMAIL_SCOPES,
+        )
+    except Exception:
+        logger.warning("run_profiles: Gmail service unavailable — LinkedIn profiles will yield 0 results")
+        return None
+
+
+def _get_user_id() -> str:
+    """Return the configured CareerPilot user ID."""
+    from config import settings
+    return settings.CAREERPILOT_USER_ID
+
+
 def _fetch_profiles(client: Any, profile_ids: Optional[List[str]]) -> List[Dict]:
     """Read all or selected profiles from Supabase ``search_profiles`` table.
 
@@ -129,6 +150,7 @@ def run_profiles(
     skip_stale_flip: bool = False,
     manager: Optional[JobSearchResultsManager] = None,
     dice_search_fn: Optional[Callable] = None,
+    _linkedin_fn: Optional[Callable] = None,
 ) -> RunSummary:
     """Run job search profiles and persist results to Supabase.
 
@@ -150,6 +172,9 @@ def run_profiles(
     dice_search_fn:
         Callable matching ``_search_dice_direct(keyword, location, ...) -> dict``.
         Injected in tests to avoid live Dice MCP calls.
+    _linkedin_fn:
+        Callable matching ``search_linkedin(gmail_service, days=2) -> list[dict]``.
+        Injected in tests to avoid live Gmail calls.
 
     Returns
     -------
@@ -172,6 +197,11 @@ def run_profiles(
 
     # Resolve Dice search function.
     _dice_fn = dice_search_fn if dice_search_fn is not None else _search_dice_direct
+
+    # Resolve LinkedIn search function.
+    if _linkedin_fn is None:
+        from src.jobs.linkedin_search import search_linkedin
+        _linkedin_fn = search_linkedin
 
     # Read profiles from Supabase — whole-run failure if this raises.
     client = _get_supabase_client()
@@ -202,6 +232,56 @@ def run_profiles(
 
         try:
             # --- Source routing ---
+            if source == "linkedin":
+                logger.info(
+                    "run_profiles: profile %r — LinkedIn email-parser pipeline (CAR-189)",
+                    profile_name,
+                )
+                # Resolve Gmail service lazily — only when a LinkedIn profile is encountered.
+                gmail_service = _get_gmail_service()
+                parsed_listings = _linkedin_fn(gmail_service, days=2)
+                prof_result.count = len(parsed_listings)
+                logger.info(
+                    "run_profiles: profile %r — parsed %d listing(s) from LinkedIn",
+                    profile_name, prof_result.count,
+                )
+
+                if not dry_run:
+                    for listing in parsed_listings:
+                        listing_with_profile: Dict[str, Any] = dict(listing)
+                        if profile_id:
+                            listing_with_profile["profile_id"] = profile_id
+                        listing_with_profile["profile_label"] = profile_name
+                        listing_with_profile["user_id"] = _get_user_id()
+
+                        try:
+                            _row_id, is_new = manager.upsert(listing_with_profile)
+                            if is_new:
+                                prof_result.new += 1
+                            else:
+                                prof_result.updated += 1
+                        except Exception:
+                            logger.warning(
+                                "run_profiles: profile %r — upsert failed for source_id=%r",
+                                profile_name, listing.get("source_id"), exc_info=True,
+                            )
+                            continue
+
+                        try:
+                            listing_for_enrich: Dict[str, Any] = dict(listing_with_profile)
+                            listing_for_enrich["_row_id"] = _row_id
+                            if enrichment.enrich_row(listing_for_enrich, manager):
+                                prof_result.enriched += 1
+                        except Exception:
+                            logger.warning(
+                                "run_profiles: profile %r — enrichment failed for source_id=%r",
+                                profile_name, listing.get("source_id"), exc_info=True,
+                            )
+                else:
+                    prof_result.new = prof_result.count
+
+                continue
+
             if source == "indeed":
                 logger.info(
                     "run_profiles: profile %r — Indeed deferred to v2 (CAR-189), skipping.",
