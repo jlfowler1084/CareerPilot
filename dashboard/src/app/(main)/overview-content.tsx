@@ -252,13 +252,16 @@ export default function OverviewContent({
     }
     fetchEvents()
 
-    // Count new search_cache entries from last 24h not already tracked
+    // Count new job_search_results entries from last 24h scoped to authenticated user
     const fetchNewMatches = async () => {
       const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
       const { count } = await supabase
-        .from("search_cache")
+        .from("job_search_results")
         .select("*", { count: "exact", head: true })
-        .gte("searched_at", since)
+        .eq("user_id", user.id)
+        .gte("created_at", since)
       setNewMatchCount(count || 0)
     }
     fetchNewMatches()

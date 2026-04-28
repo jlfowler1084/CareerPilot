@@ -27,9 +27,10 @@ export default async function OverviewPage() {
       .order("created_at", { ascending: false })
       .limit(10),
     supabase
-      .from("search_cache")
+      .from("job_search_results")
       .select("*", { count: "exact", head: true })
-      .gte("searched_at", new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()),
+      .eq("user_id", user.id)
+      .gte("created_at", new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()),
   ])
 
   return (
