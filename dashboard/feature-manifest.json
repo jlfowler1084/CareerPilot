@@ -1956,7 +1956,7 @@
     },
     {
       "ticket": "CAR-160",
-      "name": "Application Add Form — More Details",
+      "name": "Application Add Form \u00e2\u20ac\u201d More Details",
       "file": "src/components/applications/add-form.tsx",
       "exports": [
         "AddForm"
@@ -2793,152 +2793,300 @@
       "ticket": "CAR-182",
       "name": "Prep Pack Modal",
       "file": "src/components/applications/prep-pack-modal.tsx",
-      "exports": ["PrepPackModal"],
-      "patterns": ["Custom Focus", "Render", "Voice", "Depth", "Mode"],
+      "exports": [
+        "PrepPackModal"
+      ],
+      "patterns": [
+        "Custom Focus",
+        "Render",
+        "Voice",
+        "Depth",
+        "Mode"
+      ],
       "area": "applications"
     },
     {
       "ticket": "CAR-182",
       "name": "Prep Pack Source Assembler",
       "file": "src/lib/prep-pack/assemble-source.ts",
-      "exports": ["assembleSource"],
-      "patterns": ["### Instructions", "Career Narrative Angle", "Tech Stack"],
+      "exports": [
+        "assembleSource"
+      ],
+      "patterns": [
+        "### Instructions",
+        "Career Narrative Angle",
+        "Tech Stack"
+      ],
       "area": "prep-pack"
     },
     {
       "ticket": "CAR-182",
       "name": "Prep Pack API Route",
       "file": "src/app/api/prep-pack/route.ts",
-      "exports": ["POST"],
-      "patterns": ["Invoke-SBAutobook", "spawn", "DiscordWebhookUrl"],
+      "exports": [
+        "POST"
+      ],
+      "patterns": [
+        "Invoke-SBAutobook",
+        "spawn",
+        "DiscordWebhookUrl"
+      ],
       "area": "api"
     },
     {
       "ticket": "CAR-186",
       "name": "Prep Pack Research Integration",
       "file": "src/lib/prep-pack/assemble-source.ts",
-      "exports": ["assembleSource"],
-      "patterns": ["researchMarkdown", "## Deep Research"],
+      "exports": [
+        "assembleSource"
+      ],
+      "patterns": [
+        "researchMarkdown",
+        "## Deep Research"
+      ],
       "area": "prep-pack"
     },
     {
       "ticket": "CAR-186",
       "name": "Prep Pack Research Wiring",
       "file": "src/components/applications/prep-pack-modal.tsx",
-      "exports": ["PrepPackModal"],
-      "patterns": ["useResearch", "researchMarkdown"],
+      "exports": [
+        "PrepPackModal"
+      ],
+      "patterns": [
+        "useResearch",
+        "researchMarkdown"
+      ],
       "area": "applications"
     },
     {
       "ticket": "CAR-190",
       "name": "rowToJob adapter",
       "file": "src/lib/search-results/to-job.ts",
-      "exports": ["rowToJob"],
-      "patterns": ["JobSearchResultRow", "Job", "Not listed"],
+      "exports": [
+        "rowToJob"
+      ],
+      "patterns": [
+        "JobSearchResultRow",
+        "Job",
+        "Not listed"
+      ],
       "area": "search"
     },
     {
       "ticket": "CAR-190",
       "name": "ResultRow with per-row actions",
       "file": "src/components/search/result-row.tsx",
-      "exports": ["ResultRow"],
-      "patterns": ["JobCard", "rowToJob", "onTrack", "onTailor", "fitScore"],
+      "exports": [
+        "ResultRow"
+      ],
+      "patterns": [
+        "JobCard",
+        "rowToJob",
+        "onTrack",
+        "onTailor",
+        "fitScore"
+      ],
       "area": "search"
     },
     {
       "ticket": "CAR-190",
       "name": "DetailPanel action strip",
       "file": "src/components/search/detail-panel.tsx",
-      "exports": ["DetailPanel"],
-      "patterns": ["onTailor", "onCoverLetter", "onApply", "onAddToQueue", "Tailor Resume", "Cover Letter"],
+      "exports": [
+        "DetailPanel"
+      ],
+      "patterns": [
+        "onTailor",
+        "onCoverLetter",
+        "onApply",
+        "onAddToQueue",
+        "Tailor Resume",
+        "Cover Letter"
+      ],
       "area": "search"
     },
     {
       "ticket": "CAR-190",
       "name": "Search page per-row handler wiring",
       "file": "src/app/(main)/search/page.tsx",
-      "exports": ["default"],
-      "patterns": ["handleTrack", "handleTailor", "handleCoverLetter", "handleApply", "handleTrackAndTailor", "TailorModal", "CoverLetterModal", "ApplyFlow"],
+      "exports": [
+        "default"
+      ],
+      "patterns": [
+        "handleTrack",
+        "handleTailor",
+        "handleCoverLetter",
+        "handleApply",
+        "handleTrackAndTailor",
+        "TailorModal",
+        "CoverLetterModal",
+        "ApplyFlow"
+      ],
       "area": "search"
     },
     {
       "ticket": "CAR-190",
       "name": "Search profile chips multi-select + localStorage hide",
       "file": "src/app/(main)/search/page.tsx",
-      "exports": ["default"],
-      "patterns": ["selectedProfileIds", "hiddenProfileIds", "HIDDEN_PROFILES_KEY", "handleToggleProfile", "handleHideProfile"],
+      "exports": [
+        "default"
+      ],
+      "patterns": [
+        "selectedProfileIds",
+        "hiddenProfileIds",
+        "HIDDEN_PROFILES_KEY",
+        "handleToggleProfile",
+        "handleHideProfile"
+      ],
       "area": "search"
     },
     {
       "ticket": "CAR-190",
       "name": "Search client-side filter pipeline + sort",
       "file": "src/app/(main)/search/page.tsx",
-      "exports": ["default"],
-      "patterns": ["displayRows", "applyFilters", "applyAdvancedFilters", "applyQueryFilter", "sortOrder", "jobToRow"],
+      "exports": [
+        "default"
+      ],
+      "patterns": [
+        "displayRows",
+        "applyFilters",
+        "applyAdvancedFilters",
+        "applyQueryFilter",
+        "sortOrder",
+        "jobToRow"
+      ],
       "area": "search"
     },
     {
       "ticket": "CAR-190",
       "name": "Search auto-queue 80+ effect + scan metadata header",
       "file": "src/app/(main)/search/page.tsx",
-      "exports": ["default"],
-      "patterns": ["autoQueueEnabled", "AUTO_QUEUE_KEY", "scanMetadata", "allRows"],
+      "exports": [
+        "default"
+      ],
+      "patterns": [
+        "autoQueueEnabled",
+        "AUTO_QUEUE_KEY",
+        "scanMetadata",
+        "allRows"
+      ],
       "area": "search"
     },
     {
       "ticket": "CAR-190",
       "name": "Auto-queue decision pure helper",
       "file": "src/lib/search-results/auto-queue.ts",
-      "exports": ["rowsToAutoQueue"],
-      "patterns": ["rowsToAutoQueue", "easy_apply", "fitScore.total"],
+      "exports": [
+        "rowsToAutoQueue"
+      ],
+      "patterns": [
+        "rowsToAutoQueue",
+        "easy_apply",
+        "fitScore.total"
+      ],
       "area": "search"
     },
     {
       "ticket": "CAR-190",
       "name": "Dice MCP client",
       "file": "src/lib/mcp-client.ts",
-      "exports": ["searchDiceDirect"],
-      "patterns": ["searchDiceDirect", "StreamableHTTPClientTransport", "search_jobs"],
+      "exports": [
+        "searchDiceDirect"
+      ],
+      "patterns": [
+        "searchDiceDirect",
+        "StreamableHTTPClientTransport",
+        "search_jobs"
+      ],
       "area": "search"
     },
     {
       "ticket": "CAR-190",
       "name": "Dice results parser",
       "file": "src/lib/parsers/dice.ts",
-      "exports": ["parseDiceResults"],
-      "patterns": ["parseDiceResults", "detailsPageUrl", "companyName"],
+      "exports": [
+        "parseDiceResults"
+      ],
+      "patterns": [
+        "parseDiceResults",
+        "detailsPageUrl",
+        "companyName"
+      ],
       "area": "search"
     },
     {
       "ticket": "CAR-190",
       "name": "Ad-hoc search API route",
       "file": "src/app/api/search-adhoc/route.ts",
-      "exports": ["POST", "isRateLimitError"],
-      "patterns": ["search-adhoc", "searchDiceDirect", "parseDiceResults", "rate limit"],
+      "exports": [
+        "POST",
+        "isRateLimitError"
+      ],
+      "patterns": [
+        "search-adhoc",
+        "searchDiceDirect",
+        "parseDiceResults",
+        "rate limit"
+      ],
       "area": "search"
     },
     {
       "ticket": "CAR-190",
       "name": "CustomSearchBar wired to ad-hoc route",
       "file": "src/app/(main)/search/page.tsx",
-      "exports": ["default"],
-      "patterns": ["CustomSearchBar", "adhocResults", "handleQuickSearch", "Ad-hoc results"],
+      "exports": [
+        "default"
+      ],
+      "patterns": [
+        "CustomSearchBar",
+        "adhocResults",
+        "handleQuickSearch",
+        "Ad-hoc results"
+      ],
       "area": "search"
     },
     {
       "ticket": "CAR-190",
       "name": "Ad-hoc row removal on Track and Apply",
       "file": "src/app/(main)/search/page.tsx",
-      "exports": ["default"],
-      "patterns": ["adhoc-", "startsWith", "setAdhocResults", "prev.filter"],
+      "exports": [
+        "default"
+      ],
+      "patterns": [
+        "adhoc-",
+        "startsWith",
+        "setAdhocResults",
+        "prev.filter"
+      ],
       "area": "search"
     },
     {
       "ticket": "CAR-190",
       "name": "Ad-hoc inline fit scoring for Queue",
       "file": "src/app/(main)/search/page.tsx",
-      "exports": ["default"],
-      "patterns": ["handleAddToQueue", "scoreJob", "rowFitScores", "adhoc-"],
+      "exports": [
+        "default"
+      ],
+      "patterns": [
+        "handleAddToQueue",
+        "scoreJob",
+        "rowFitScores",
+        "adhoc-"
+      ],
+      "area": "search"
+    },
+    {
+      "ticket": "CAR-189",
+      "name": "LinkedIn filter chip in search filters",
+      "file": "src/components/search/search-filters.tsx",
+      "exports": [
+        "SearchFilters"
+      ],
+      "patterns": [
+        "Linkedin",
+        "SOURCE_OPTIONS"
+      ],
       "area": "search"
     }
   ]
