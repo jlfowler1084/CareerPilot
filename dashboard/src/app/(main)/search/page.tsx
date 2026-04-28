@@ -603,7 +603,7 @@ export default function SearchPage() {
                     const syntheticRow: JobSearchResultRow = {
                       id: `adhoc-${i}-${job.title}-${job.company}`.replace(/\s+/g, "-").toLowerCase(),
                       user_id: "",
-                      source: job.source.toLowerCase() as "dice" | "indeed",
+                      source: job.source.toLowerCase() as "dice" | "indeed" | "linkedin",
                       source_id: "",
                       url: job.url,
                       title: job.title,

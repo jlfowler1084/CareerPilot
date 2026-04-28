@@ -6,7 +6,7 @@ export interface Job {
   url: string
   posted: string
   type: string
-  source: "Indeed" | "Dice"
+  source: "Indeed" | "Dice" | "Linkedin"
   easyApply?: boolean
   profileId: string
   profileLabel: string
@@ -330,7 +330,7 @@ export interface ScanResult {
   location: string | null
   salary: string | null
   job_url: string | null
-  source: "indeed" | "dice"
+  source: "indeed" | "dice" | "linkedin"
   job_type: string | null
   posted_date: string | null
   easy_apply: boolean

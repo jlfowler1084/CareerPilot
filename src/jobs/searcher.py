@@ -34,7 +34,7 @@ SEARCH_SYSTEM_PROMPT = (
     "You are a job search assistant. Search for the requested jobs and return results "
     "as a JSON array. Each result must have these fields:\n"
     '  title, company, location, salary (string or ""), url, posted_date (string or ""), '
-    '  job_type (string or ""), source ("indeed" or "dice"), easy_apply (boolean)\n\n'
+    '  job_type (string or ""), source ("indeed", "dice", or "linkedin"), easy_apply (boolean)\n\n'
     "Return ONLY valid JSON array, no markdown fences, no commentary. "
     "If no results found, return []."
 )

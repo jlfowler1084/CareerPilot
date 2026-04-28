@@ -11,7 +11,7 @@ export interface SearchProfile {
   name: string
   keyword: string
   location: string
-  source: "dice" | "indeed" | "both"
+  source: "dice" | "indeed" | "linkedin" | "both"
   contract_only: boolean
   icon: string
   is_default: boolean

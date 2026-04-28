@@ -15,7 +15,7 @@ interface CustomSearchBarProps {
     name: string
     keyword: string
     location: string
-    source: "dice" | "indeed" | "both"
+    source: "dice" | "indeed" | "linkedin" | "both"
     contract_only: boolean
     icon: string
   }) => void
@@ -29,7 +29,7 @@ export function CustomSearchBar({
 }: CustomSearchBarProps) {
   const [keyword, setKeyword] = useState("")
   const [location, setLocation] = useState("")
-  const [source, setSource] = useState<"dice" | "indeed" | "both">("both")
+  const [source, setSource] = useState<"dice" | "indeed" | "linkedin" | "both">("both")
   const [showSaveForm, setShowSaveForm] = useState(false)
   const [profileName, setProfileName] = useState("")
   const [profileIcon, setProfileIcon] = useState("\uD83D\uDD0D")
