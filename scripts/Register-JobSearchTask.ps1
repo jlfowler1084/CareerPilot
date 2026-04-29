@@ -7,8 +7,9 @@
     Windows scheduled task under \CareerPilot\.
 .DESCRIPTION
     Creates the task \CareerPilot\CareerPilot-JobSearch which runs daily at
-    06:30 (30 minutes before the existing CareerPilot-MorningScan). The task
-    invokes Run-JobSearch.ps1 (sibling to this script).
+    06:30. The task invokes Run-JobSearch.ps1 (sibling to this script). This
+    is now the canonical scheduled-search path; the legacy
+    CareerPilot-MorningScan PowerShell task was retired 2026-04-28.
 
     Configuration follows the powershell-windows skill conventions:
       * TaskPath '\CareerPilot\' (matches existing folder convention)

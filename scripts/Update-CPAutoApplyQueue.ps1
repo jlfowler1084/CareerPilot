@@ -5,7 +5,12 @@
     as "pending" for the 8 AM dashboard review.
 
 .DESCRIPTION
-    Run after Invoke-CPJobScan completes (or standalone for backfill).
+    Reads from the legacy scan_results table. Note: the upstream populator
+    (Invoke-CPJobScan.ps1) was deprecated 2026-04-28 in favor of the Python
+    pipeline, which writes to job_search_results. This script is therefore
+    operating on a frozen-in-place table; consider migrating it to read
+    from job_search_results, or retiring the CareerPilot-SBAutoQueue task.
+
     Qualifying: fit_score >= MinScore, easy_apply = true (unless -IncludeAllSources),
     not already queued or applied.
 
