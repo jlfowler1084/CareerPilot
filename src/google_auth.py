@@ -67,7 +67,7 @@ def get_google_service(
     if not creds or not creds.valid:
         logger.info("Starting OAuth flow for %s — a browser window will open", api_name)
         flow = InstalledAppFlow.from_client_secrets_file(str(credentials_file), scopes)
-        creds = flow.run_local_server(port=8080)
+        creds = flow.run_local_server(port=0)
         logger.info("OAuth authorization completed for %s", api_name)
 
         token_path.parent.mkdir(parents=True, exist_ok=True)
