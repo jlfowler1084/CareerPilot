@@ -13,6 +13,14 @@
 
 $ErrorActionPreference = 'Continue'
 
+# --- HTTP defaults ───────────────────────────────────────────────────────────
+# PowerShell's Invoke-RestMethod sends a Mozilla-style User-Agent by default.
+# Supabase's new sb_secret_* keys reject Mozilla-prefixed UAs as "browser
+# usage" with a misleading "Delete this secret API key immediately!" hint.
+# Set a non-browser default UA for every cmdlet in this script.
+$PSDefaultParameterValues['Invoke-RestMethod:UserAgent'] = 'CareerPilot-Scanner/1.0'
+$PSDefaultParameterValues['Invoke-WebRequest:UserAgent'] = 'CareerPilot-Scanner/1.0'
+
 # --- Load Environment ────────────────────────────────────────────────────────
 
 $ProjectRoot = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
