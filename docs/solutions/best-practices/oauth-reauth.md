@@ -211,7 +211,7 @@ CAR-194's two fixes harden this in different ways:
 - **Production publishing** turns the *normal* failure mode (7-day token expiry) from a recurring weekly outage into a never-happens.
 - **`port=0`** turns the *recovery procedure* from a coin-flip (worked if port 8080 happened to be free) into a deterministic operation (always works).
 
-A residual gap remains: the token can still die from external events (manual revoke, Google security action, scope change, credential rotation). CAR-194 AC4 (deferred to a separate ticket) adds a token-mtime monitor that pings Discord when `data/gmail_token.json` is stale, so the next incident surfaces in hours instead of a week.
+A residual gap remains: the token can still die from external events (manual revoke, Google security action, scope change, credential rotation). [CAR-196](https://jlfowler1084.atlassian.net/browse/CAR-196) (originally deferred from CAR-194 AC4) adds a daily token-health monitor — `tools/check_oauth_token.py`, scheduled by `scripts/Register-OAuthMonitorTask.ps1` — that pings Discord (`careerpilot-updates`) when `data/gmail_token.json` is stale or fails its live `users.getProfile()` ping, so the next incident surfaces in hours instead of a week.
 
 ## When to apply
 
@@ -232,6 +232,6 @@ A residual gap remains: the token can still die from external events (manual rev
 ## Related
 
 - Jira: [CAR-194](https://jlfowler1084.atlassian.net/browse/CAR-194) — the parent ticket and incident retro
-- CAR-194 AC4 (deferred): token-expiry mtime monitor with Discord alerting
+- [CAR-196](https://jlfowler1084.atlassian.net/browse/CAR-196): token-expiry monitor with Discord alerting (implements the originally-deferred CAR-194 AC4)
 - Auto memory: `gmail-oauth-fowlerlab-domain.md` — the Workspace-account distinction
 - Cloud Console: https://console.cloud.google.com/auth/overview?project=careerpilot-491202 — Google Auth Platform for the CareerPilot project

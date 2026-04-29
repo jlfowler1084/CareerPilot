@@ -62,6 +62,15 @@ GMAIL_TOKEN_PATH = PROJECT_ROOT / "data" / "gmail_token.json"
 GMAIL_FILTER_TOKEN_PATH = PROJECT_ROOT / "data" / "gmail_filter_token.json"
 CALENDAR_TOKEN_PATH = PROJECT_ROOT / "data" / "calendar_token.json"
 
+# --- OAuth Token Monitor (CAR-196) ---
+# Daily watchdog that alerts Discord when GMAIL_TOKEN_PATH goes stale or dies.
+# 7-day default mirrors the pre-CAR-194 Testing-mode refresh expiry: anything
+# older than that is unusual even with Production publishing in place.
+OAUTH_MONITOR_STALE_DAYS = int(os.getenv("OAUTH_MONITOR_STALE_DAYS", "7"))
+OAUTH_MONITOR_SUPPRESS_HOURS = int(os.getenv("OAUTH_MONITOR_SUPPRESS_HOURS", "24"))
+OAUTH_MONITOR_CHANNEL = os.getenv("OAUTH_MONITOR_CHANNEL", "careerpilot-updates")
+OAUTH_MONITOR_STATE_PATH = PROJECT_ROOT / "data" / "oauth_monitor_state.json"
+
 # --- Data Directories ---
 DATA_DIR = PROJECT_ROOT / "data"
 JOURNAL_DIR = DATA_DIR / "journal"
