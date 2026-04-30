@@ -105,7 +105,7 @@ Source of truth: ClaudeInfra `configs/mcp-server-registry.json` (INFRA-70).
 ## Privacy & Safety
 - **Draft-only mode:** Gmail responder saves drafts only — nothing sends without explicit approval
 - **Data location:** Split today (SQLite local + Supabase cloud). Post-CAR-163 consolidation, application and contact rows live in Supabase under your authenticated `user_id`; local SQLite only retains tables where "stay local" was an explicit choice (see `## Data Layer`).
-- **OAuth tokens:** Stored locally in `data/`, never committed
+- **OAuth tokens:** Stored locally in `data/gmail_token.json`. Both CLI and dashboard read from this same file (unified by CAR-198). CLI re-auth (`python -m cli auth gmail` or the one-liner in `docs/solutions/best-practices/oauth-reauth.md`) is the single source of truth — no env-var duplication, no manual sync, no dev-server restart needed.
 - **API keys:** In `.env`, never committed
 
 ## Project-Specific Mistakes to Avoid
