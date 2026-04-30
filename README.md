@@ -240,3 +240,35 @@ tests/                          pytest suite
 - **Local LLM fallback.** Set the local endpoint variables in `.env` to keep bulk embedding or chat calls on your own hardware.
 
 <!-- Screenshots: TODO -->
+
+## Credential rotation
+
+Credential rotation is managed by `Invoke-CredentialRotation` from the [ClaudeInfra](https://github.com/jlfowler1084/ClaudeInfra) repository. The manifest at `config/credentials.manifest.json` declares every credential, its Bitwarden source, and the env-file targets it writes.
+
+```powershell
+# Rotate all credentials (interactive — reads from Bitwarden)
+pwsh F:\Projects\ClaudeInfra\tools\credential-vault\Invoke-CredentialRotation.ps1 -Project CareerPilot
+
+# Supabase keys only (skip Anthropic)
+pwsh ... -Project CareerPilot -Item 'SUPABASE_*'
+
+# Anthropic key only
+pwsh ... -Project CareerPilot -Item ANTHROPIC_API_KEY
+
+# Dry-run preview
+pwsh ... -Project CareerPilot -WhatIf
+```
+
+The cmdlet: stops the dashboard dev server (port 3000), backs up all target env files, writes the new values from Bitwarden, runs a Supabase connectivity smoke test, and prints restart instructions. See ClaudeInfra `configs/credentials.manifest.schema.md` for the full schema.
+
+<!-- HISTORICAL
+  scripts/Update-CPSecrets.ps1 was the original manual rotation script for CareerPilot.
+  It prompted interactively for sb_secret_ and sb_publishable_ key values, optionally
+  rotated the Anthropic API key, and wrote to .env, config/scan.env, and
+  dashboard/.env.local. The Anthropic rotation was [y/N]-gated (opt-in).
+
+  Superseded by Invoke-CredentialRotation (ClaudeInfra INFRA-52, 2026-04-29), which
+  reads all values directly from Bitwarden rather than prompting for manual paste.
+  The deprecated script is preserved at scripts/Update-CPSecrets.ps1.deprecated for
+  git history continuity. Do not invoke it; it will not receive further updates.
+-->
