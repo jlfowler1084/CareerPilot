@@ -229,7 +229,7 @@ CAR-194's two fixes harden this in different ways:
 
 A residual gap remains: the token can still die from external events (manual revoke, Google security action, scope change, credential rotation). [CAR-196](https://jlfowler1084.atlassian.net/browse/CAR-196) (originally deferred from CAR-194 AC4) adds a daily token-health monitor — `tools/check_oauth_token.py`, scheduled by `scripts/Register-OAuthMonitorTask.ps1` — that pings Discord (`careerpilot-updates`) when `data/gmail_token.json` is stale or fails its live `users.getProfile()` ping, so the next incident surfaces in hours instead of a week.
 
-A second residual gap surfaced 2026-04-30 ([CAR-197](https://jlfowler1084.atlassian.net/browse/CAR-197)): the CAR-196 monitor probed only `data/gmail_token.json`, but the dashboard previously read its refresh token from `dashboard/.env.local::GMAIL_REFRESH_TOKEN` — a different store. CAR-194's CLI re-auth never propagated to the dashboard env, so the dashboard inbox went silently 9 days stale while the CLI side stayed green. **CAR-198 (shipped 2026-04-30)** eliminated the divergence: the dashboard now reads `data/gmail_token.json` directly, so a CLI re-auth is visible to the dashboard on the next request. The sync script (`scripts/car_197_sync_dashboard_token.py`) was deleted as dead code. [CAR-199](https://jlfowler1084.atlassian.net/browse/CAR-199) remains open to extend the CAR-196 monitor to also probe the dashboard read path.
+A second residual gap surfaced 2026-04-30 ([CAR-197](https://jlfowler1084.atlassian.net/browse/CAR-197)): the CAR-196 monitor probed only `data/gmail_token.json`, but the dashboard previously read its refresh token from `dashboard/.env.local::GMAIL_REFRESH_TOKEN` — a different store. CAR-194's CLI re-auth never propagated to the dashboard env, so the dashboard inbox went silently 9 days stale while the CLI side stayed green. **CAR-198 (shipped 2026-04-30)** eliminated the divergence: the dashboard now reads `data/gmail_token.json` directly, so a CLI re-auth is visible to the dashboard on the next request. The sync script (`scripts/car_197_sync_dashboard_token.py`) was deleted as dead code. The sibling [CAR-199](https://jlfowler1084.atlassian.net/browse/CAR-199) (extend the monitor to probe a separate dashboard env path) was closed as obsoleted by CAR-198 — the unified file is the only token store, so the existing CAR-196 probe covers both surfaces.
 
 ## When to apply
 
@@ -245,7 +245,7 @@ A second residual gap surfaced 2026-04-30 ([CAR-197](https://jlfowler1084.atlass
 - [src/google_auth.py:41-47](../../../src/google_auth.py#L41-L47) — credentials-file existence check (FileNotFoundError raise site)
 - [src/gmail/auth.py:39-53](../../../src/gmail/auth.py#L39-L53) — `get_default_gmail_service()` — the entry point used in the procedure's one-liner
 - [config/settings.py:25-37](../../../config/settings.py#L25-L37) — `GOOGLE_CREDENTIALS_FILE`, `GMAIL_TOKEN_PATH`, scopes
-- [tools/generate_gmail_token.py](../../../tools/generate_gmail_token.py) — the dashboard's separate token generator (for `dashboard/.env.local`, not for CLI use)
+- [tools/generate_gmail_token.py](../../../tools/generate_gmail_token.py) — legacy env-var generator. Pre-CAR-198 it produced `GMAIL_REFRESH_TOKEN` for `dashboard/.env.local`. Post-CAR-198 the dashboard reads `data/gmail_token.json` directly, so this script's Gmail output is unused; it still emits a `GOOGLE_REFRESH_TOKEN` value that the calendar-sync route consumes (separate concern, not yet unified).
 
 ## Related
 
@@ -253,7 +253,7 @@ A second residual gap surfaced 2026-04-30 ([CAR-197](https://jlfowler1084.atlass
 - [CAR-196](https://jlfowler1084.atlassian.net/browse/CAR-196): token-expiry monitor with Discord alerting (implements the originally-deferred CAR-194 AC4)
 - [CAR-197](https://jlfowler1084.atlassian.net/browse/CAR-197): inbox token divergence and silent-fail resilience — proves this runbook is incomplete without step 7. Full postmortem at [`docs/solutions/integration-issues/dashboard-inbox-stale-gmail-refresh-token-expired-2026-04-30.md`](../integration-issues/dashboard-inbox-stale-gmail-refresh-token-expired-2026-04-30.md).
 - [CAR-198](https://jlfowler1084.atlassian.net/browse/CAR-198): shipped 2026-04-30 — unified CLI + dashboard Gmail token storage; dashboard now reads `data/gmail_token.json` directly so re-auth propagates automatically.
-- [CAR-199](https://jlfowler1084.atlassian.net/browse/CAR-199): planned — extend the CAR-196 OAuth monitor to also probe the dashboard read path.
+- [CAR-199](https://jlfowler1084.atlassian.net/browse/CAR-199): closed as obsoleted by CAR-198 — the unification collapsed the two read paths into one, so the CAR-196 probe of `data/gmail_token.json` now covers the dashboard too.
 - Auto memory: `gmail-oauth-fowlerlab-domain.md` — the Workspace-account distinction
 - Auto memory: `dashboard-cli-gmail-token-divergence.md` — remove; CAR-198 eliminated the divergence
 - Cloud Console: https://console.cloud.google.com/auth/overview?project=careerpilot-491202 — Google Auth Platform for the CareerPilot project
