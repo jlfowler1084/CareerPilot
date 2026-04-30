@@ -1,27 +1,11 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createServerSupabaseClient } from "@/lib/supabase/server"
-import { google } from "googleapis"
-import { config } from "dotenv"
-import path from "path"
-
-// dotenv.config() silently does nothing if the file doesn't exist,
-// so this is safe on both local dev (.env.local present) and Vercel (env vars injected).
-config({ path: path.resolve(process.cwd(), ".env.local") })
+import { getCalendarClient } from "@/lib/calendar/auth"
 
 type CalendarAction = "follow_up" | "phone_screen" | "interview" | "offer_deadline"
+type CalendarClient = ReturnType<typeof getCalendarClient>
 
 const TZ = "America/Indiana/Indianapolis"
-
-function getCalendar() {
-  const oauth2Client = new google.auth.OAuth2(
-    process.env.GOOGLE_CLIENT_ID,
-    process.env.GOOGLE_CLIENT_SECRET
-  )
-  oauth2Client.setCredentials({
-    refresh_token: process.env.GOOGLE_REFRESH_TOKEN,
-  })
-  return google.calendar({ version: "v3", auth: oauth2Client })
-}
 
 function addBusinessDays(from: Date, days: number): Date {
   const result = new Date(from)
@@ -43,7 +27,7 @@ function addMinutes(date: Date, minutes: number): Date {
 }
 
 async function createEvent(
-  calendar: ReturnType<typeof google.calendar>,
+  calendar: CalendarClient,
   summary: string,
   start: Date,
   durationMinutes: number,
@@ -64,7 +48,7 @@ async function createEvent(
 }
 
 async function handleFollowUp(
-  calendar: ReturnType<typeof google.calendar>,
+  calendar: CalendarClient,
   title: string,
   company: string,
   notes?: string
@@ -83,7 +67,7 @@ async function handleFollowUp(
 }
 
 async function handlePhoneScreen(
-  calendar: ReturnType<typeof google.calendar>,
+  calendar: CalendarClient,
   title: string,
   company: string,
   dateTime: string,
@@ -121,7 +105,7 @@ async function handlePhoneScreen(
 }
 
 async function handleInterview(
-  calendar: ReturnType<typeof google.calendar>,
+  calendar: CalendarClient,
   title: string,
   company: string,
   dateTime: string,
@@ -161,7 +145,7 @@ async function handleInterview(
 }
 
 async function handleOfferDeadline(
-  calendar: ReturnType<typeof google.calendar>,
+  calendar: CalendarClient,
   title: string,
   company: string,
   dateTime: string,
@@ -217,14 +201,10 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET || !process.env.GOOGLE_REFRESH_TOKEN) {
-      return NextResponse.json(
-        { error: "Google Calendar credentials not configured" },
-        { status: 500 }
-      )
-    }
-
-    const calendar = getCalendar()
+    // CAR-206: Calendar OAuth now reads data/calendar_token.json (same file as the CLI).
+    // getCalendarClient() throws a clear error if the token file is missing or malformed;
+    // the catch block below surfaces that to the client with a 500.
+    const calendar = getCalendarClient()
 
     let result
     switch (action as CalendarAction) {
