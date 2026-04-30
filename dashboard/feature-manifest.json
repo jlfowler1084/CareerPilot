@@ -3088,6 +3088,77 @@
         "SOURCE_OPTIONS"
       ],
       "area": "search"
+    },
+    {
+      "ticket": "CAR-197",
+      "name": "Inbox cursor advance helper (no-ratchet on empty/failed scan)",
+      "file": "src/lib/inbox-cursor.ts",
+      "exports": [
+        "shouldAdvanceCursor"
+      ],
+      "patterns": [
+        "shouldAdvanceCursor",
+        "scanSucceeded",
+        "newInsertedCount"
+      ],
+      "area": "inbox"
+    },
+    {
+      "ticket": "CAR-197",
+      "name": "Inbox scan error surfacing in header",
+      "file": "src/app/(main)/inbox/page.tsx",
+      "exports": [
+        "default"
+      ],
+      "patterns": [
+        "scanState.lastError",
+        "Scan failed",
+        "statusToneClass",
+        "text-red-600"
+      ],
+      "area": "inbox"
+    },
+    {
+      "ticket": "CAR-197",
+      "name": "Inbox 'Backfill 30d' force-backfill button",
+      "file": "src/app/(main)/inbox/page.tsx",
+      "exports": [
+        "default"
+      ],
+      "patterns": [
+        "handleForceBackfill",
+        "forceBackfill",
+        "Backfill 30d"
+      ],
+      "area": "inbox"
+    },
+    {
+      "ticket": "CAR-197",
+      "name": "Inbox 'Last scanned' includes date so stale cannot look fresh",
+      "file": "src/app/(main)/inbox/page.tsx",
+      "exports": [
+        "default"
+      ],
+      "patterns": [
+        "lastScanLabel",
+        "Last scanned",
+        "month: \"short\""
+      ],
+      "area": "inbox"
+    },
+    {
+      "ticket": "CAR-197",
+      "name": "useEmails hook surfaces lastError and forceBackfill",
+      "file": "src/hooks/use-emails.ts",
+      "exports": [
+        "useEmails"
+      ],
+      "patterns": [
+        "lastError",
+        "forceBackfill",
+        "shouldAdvanceCursor"
+      ],
+      "area": "inbox"
     }
   ]
 }

@@ -42,8 +42,14 @@ function savePref(key: string, value: unknown) {
 export default function InboxPage() {
   const {
     emails, links, applications, loading, scanState,
-    linkEmail, unlinkEmail, dismissEmail, undismissEmail, dismissMany, linkMany, markRead, markReplied, refresh, backfillAutoTrack,
+    linkEmail, unlinkEmail, dismissEmail, undismissEmail, dismissMany, linkMany, markRead, markReplied, refresh, forceBackfill, backfillAutoTrack,
   } = useEmails()
+
+  // CAR-197: recovery affordance — walks Gmail back 30 days, ignoring stuck cursor.
+  const handleForceBackfill = useCallback(() => {
+    const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
+    forceBackfill(since)
+  }, [forceBackfill])
 
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set())
@@ -216,13 +222,29 @@ export default function InboxPage() {
     )
   }
 
+  // CAR-197: include the date in "Last scanned" so a stale timestamp can't
+  // masquerade as fresh, and surface scan errors so silent OAuth failures
+  // (the original 9-day inbox staleness) cannot recur invisibly.
+  const lastScanLabel = scanState.lastScan
+    ? new Date(scanState.lastScan).toLocaleString(undefined, {
+        month: "short",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+      })
+    : null
   const statusText = scanState.classifying
     ? `Classifying ${scanState.classified} of ${scanState.total} emails...`
     : scanState.scanning
     ? "Scanning Gmail..."
-    : scanState.lastScan
-    ? `Last scanned ${new Date(scanState.lastScan).toLocaleTimeString()}`
+    : scanState.lastError
+    ? `Scan failed — ${scanState.lastError}`
+    : lastScanLabel
+    ? `Last scanned ${lastScanLabel}`
     : "Not yet scanned"
+  const statusToneClass = scanState.lastError
+    ? "text-red-600 dark:text-red-400"
+    : "text-zinc-400 dark:text-zinc-500"
 
   if (emails.length === 0 && !scanState.scanning && !scanState.classifying) {
     return (
@@ -255,7 +277,7 @@ export default function InboxPage() {
         <div className="flex items-center justify-between mb-3">
           <div>
             <h1 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">Inbox</h1>
-            <p className="text-xs text-zinc-400 dark:text-zinc-500 font-mono flex items-center gap-2">
+            <p className={`text-xs ${statusToneClass} font-mono flex items-center gap-2`}>
               {(scanState.scanning || scanState.classifying) && (
                 <span className="inline-block w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
               )}
@@ -272,6 +294,15 @@ export default function InboxPage() {
               />
               Show dismissed
             </label>
+            <button
+              type="button"
+              onClick={handleForceBackfill}
+              disabled={scanState.scanning || scanState.classifying}
+              title="Walk Gmail back 30 days, ignoring the stored cursor. Use to recover from a stuck or stale scan state."
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md border border-zinc-300 dark:border-zinc-600 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-50 transition-colors"
+            >
+              Backfill 30d
+            </button>
             <button
               onClick={refresh}
               disabled={scanState.scanning || scanState.classifying}
