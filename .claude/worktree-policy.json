@@ -1,7 +1,8 @@
 {
   "version": 1,
   "protected_branches": [
-    "main"
+    "main",
+    "feature/dashboard-v2"
   ],
   "worktree_pattern": "worktree/<TICKET>-<slug>",
   "worktree_root": ".worktrees/",
