@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client"
 import { extractDomain, extractPreview } from "@/lib/gmail/parse"
 import { findDomainMatch } from "@/lib/gmail/suggestions"
 import { shouldAutoCreateContact } from "@/lib/contacts/auto-create-gate"
+import { shouldAdvanceCursor } from "@/lib/inbox-cursor"
 import type { Email, EmailApplicationLink, ClassificationResult, Application, ApplicationStatus } from "@/types"
 import { useAuth } from "@/contexts/auth-context"
 
@@ -41,6 +42,7 @@ interface ScanState {
   classified: number
   total: number
   lastScan: string | null
+  lastError: string | null
 }
 
 export function useEmails() {
@@ -54,6 +56,7 @@ export function useEmails() {
     classified: 0,
     total: 0,
     lastScan: null,
+    lastError: null,
   })
   const classifyAttemptsRef = useRef<Record<string, number>>({})
   const hasAutoScanned = useRef(false)
@@ -153,12 +156,13 @@ export function useEmails() {
   const runScan = useCallback(async (forceSince?: string) => {
     if (!user) return
 
-    setScanState((prev) => ({ ...prev, scanning: true }))
+    setScanState((prev) => ({ ...prev, scanning: true, lastError: null }))
 
     const since = forceSince || scanState.lastScan || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
     let pageToken: string | null = null
     const allNewEmails: Email[] = []
     let scanSucceeded = false
+    let scanError: string | null = null
 
     try {
       // Paginated fetch
@@ -170,7 +174,13 @@ export function useEmails() {
         })
         const data: any = await resp.json()
 
-        if (data.error && !data.emails?.length) break
+        if (data.error && !data.emails?.length) {
+          // CAR-197: capture and surface the failure instead of swallowing it.
+          scanError = resp.status === 502
+            ? `Gmail unavailable: ${data.error}`
+            : `Scan failed (${resp.status}): ${data.error}`
+          break
+        }
 
         // Dedup against existing emails
         const existingGmailIds = new Set(emails.map((e) => e.gmail_id))
@@ -208,15 +218,19 @@ export function useEmails() {
         pageToken = data.next_page_token
       } while (pageToken)
 
-      // Update scan timestamp only if at least one page was fetched successfully
-      if (scanSucceeded) {
+      // CAR-197: only advance the persisted cursor when the scan actually
+      // ingested at least one new email. An empty or failing scan must not
+      // ratchet `last_email_scan` forward — that's how the inbox went silently
+      // stale for 9 days under the prior unconditional advance.
+      if (shouldAdvanceCursor({ scanSucceeded, newInsertedCount: allNewEmails.length })) {
+        const nowIso = new Date().toISOString()
         await supabase.from("user_settings").upsert(
-          { user_id: user.id, last_email_scan: new Date().toISOString() },
+          { user_id: user.id, last_email_scan: nowIso },
           { onConflict: "user_id" }
         )
-        setScanState((prev) => ({ ...prev, scanning: false, lastScan: new Date().toISOString() }))
+        setScanState((prev) => ({ ...prev, scanning: false, lastScan: nowIso, lastError: null }))
       } else {
-        setScanState((prev) => ({ ...prev, scanning: false }))
+        setScanState((prev) => ({ ...prev, scanning: false, lastError: scanError }))
       }
 
       // Classify new emails
@@ -225,7 +239,8 @@ export function useEmails() {
       }
     } catch (error) {
       console.error("Scan error:", error)
-      setScanState((prev) => ({ ...prev, scanning: false }))
+      const message = error instanceof Error ? error.message : "Scan failed"
+      setScanState((prev) => ({ ...prev, scanning: false, lastError: message }))
     }
   }, [emails, scanState.lastScan, user])
 
@@ -773,6 +788,14 @@ export function useEmails() {
   // ── Manual refresh ─────────────────────────────────────────────
   const refresh = useCallback(() => runScan(), [runScan])
 
+  // CAR-197: explicit recovery path when the persisted cursor is stuck
+  // (e.g. because the Gmail OAuth token expired and every refresh has been
+  // 502-ing silently). Walks Gmail back N days regardless of `last_email_scan`.
+  const forceBackfill = useCallback(
+    (sinceISO: string) => runScan(sinceISO),
+    [runScan],
+  )
+
   return {
     emails,
     links,
@@ -788,6 +811,7 @@ export function useEmails() {
     markRead,
     markReplied,
     refresh,
+    forceBackfill,
     backfillAutoTrack,
   }
 }
