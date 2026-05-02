@@ -18,12 +18,24 @@ The `fake_supabase` fixture below provides that. Any test that requests
 
 from __future__ import annotations
 
+import os as _os
+import sys as _sys
 import uuid
 from datetime import datetime
 from types import SimpleNamespace
 from typing import Any, Dict, List, Optional
 
 import pytest
+
+# INFRA-244 Phase 3: ensure ClaudeInfra/routing is importable.
+# The editable pip install of claudeinfra-routing has an empty MAPPING in its
+# meta path finder (pyproject.toml where=["."] issue), so direct path injection
+# is used as a workaround until the ClaudeInfra pyproject.toml is corrected.
+_CLAUDEINFRA_ROOT = _os.path.normpath(
+    _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "..", "..", "ClaudeInfra")
+)
+if _CLAUDEINFRA_ROOT not in _sys.path:
+    _sys.path.insert(0, _CLAUDEINFRA_ROOT)
 
 
 TEST_USER_ID = "00000000-0000-0000-0000-000000000001"
