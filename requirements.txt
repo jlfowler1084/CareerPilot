@@ -16,3 +16,8 @@ openai>=1.40.0,<2.0.0
 supabase>=2.28.0,<3.0.0
 mcp>=1.27,<2.0
 pytest-asyncio
+# INFRA-244 Phase 3: ClaudeInfra routing package (editable install from sibling repo)
+# Install via: python -m pip install -e ../ClaudeInfra/routing
+# Note: pip install does not auto-install from relative editable paths in requirements.txt;
+# the line below documents the intent. Run the above command to activate the dependency.
+# -e ../ClaudeInfra/routing

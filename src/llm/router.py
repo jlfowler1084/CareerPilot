@@ -10,7 +10,7 @@ from typing import Dict, List, Optional, Union
 
 from config import settings
 from src.db.models import get_connection
-from src.llm.failure import (
+from routing.failure import (
     INFRA_COUNTABLE_REASONS,
     FallbackBudget,
     FallbackBudgetExhausted,
@@ -20,9 +20,9 @@ from src.llm.failure import (
     prompt_for_pii_fallback,
 )
 from src.llm.logging import log_llm_call
-from src.llm.providers.base import ProviderResponse
-from src.llm.providers.claude import ClaudeProvider
-from src.llm.providers.local import LocalProvider
+from routing.providers.base import ProviderResponse
+from routing.providers.claude import ClaudeProvider
+from routing.providers.local import LocalProvider
 
 _logger = _logging.getLogger(__name__)
 
