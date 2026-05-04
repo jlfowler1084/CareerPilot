@@ -5,6 +5,8 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import { useAuth } from "@/contexts/auth-context"
+import { useSidebar } from "@/contexts/sidebar-context"
+import { Sheet, SheetContent } from "@/components/ui/sheet"
 import { LayoutDashboard, Search, Briefcase, BarChart3, ChevronRight, Mail, MessageSquare, Settings, Rocket, GraduationCap, Users } from "lucide-react"
 
 const NAV_ITEMS = [
@@ -112,23 +114,25 @@ function useSearchResultsNewCount() {
   return count
 }
 
-export function Sidebar() {
-  const [open, setOpen] = useState(true)
+interface SidebarBodyProps {
+  collapsed: boolean
+  onNavigate?: () => void
+}
+
+function SidebarBody({ collapsed, onNavigate }: SidebarBodyProps) {
   const pathname = usePathname()
   const activeCount = useActiveAppCount()
   const approvedQueueCount = useApprovedQueueCount()
   const newSearchResultsCount = useSearchResultsNewCount()
 
   return (
-    <aside
-      className={`${open ? "w-56" : "w-16"} flex-shrink-0 bg-zinc-900 text-white transition-all duration-300 flex flex-col`}
-    >
+    <>
       <div className="p-4 border-b border-zinc-800">
         <div className="flex items-center gap-2.5">
           <div className="w-8 h-8 rounded-lg bg-amber-500 flex items-center justify-center font-bold text-sm text-zinc-900 flex-shrink-0">
             CP
           </div>
-          {open && (
+          {!collapsed && (
             <div>
               <div className="font-bold text-sm leading-tight">Career Pilot</div>
               <div className="text-[10px] text-zinc-500 font-mono">v2.0</div>
@@ -145,6 +149,7 @@ export function Sidebar() {
             <Link
               key={item.id}
               href={item.href}
+              onClick={onNavigate}
               className={`w-full flex items-center gap-3 px-4 py-3 text-sm transition-all min-h-[44px] ${
                 active
                   ? "bg-zinc-800 text-amber-400 font-bold border-r-2 border-amber-400"
@@ -152,7 +157,7 @@ export function Sidebar() {
               }`}
             >
               <Icon size={18} className="flex-shrink-0" />
-              {open && (
+              {!collapsed && (
                 <span className="flex-1 flex items-center justify-between">
                   {item.label}
                   {item.id === "applications" && activeCount !== null && activeCount > 0 && (
@@ -177,22 +182,12 @@ export function Sidebar() {
         })}
       </nav>
 
-      <button
-        onClick={() => setOpen(!open)}
-        className="p-3 border-t border-zinc-800 text-zinc-500 hover:text-zinc-300 transition-colors flex items-center justify-center min-h-[44px]"
-      >
-        <ChevronRight
-          size={16}
-          className={`transition-transform ${open ? "rotate-180" : ""}`}
-        />
-      </button>
-
       <div className="p-4 border-t border-zinc-800">
         <div className="flex items-center gap-2.5">
           <div className="w-8 h-8 rounded-full bg-zinc-700 flex items-center justify-center text-xs font-bold text-zinc-300 flex-shrink-0">
             JF
           </div>
-          {open && (
+          {!collapsed && (
             <div className="min-w-0">
               <div className="text-xs font-semibold text-zinc-200 truncate">
                 Joseph Fowler
@@ -204,6 +199,60 @@ export function Sidebar() {
           )}
         </div>
       </div>
+    </>
+  )
+}
+
+function DesktopSidebar() {
+  const [collapsed, setCollapsed] = useState(false)
+
+  return (
+    <aside
+      className={`${collapsed ? "w-16" : "w-56"} hidden md:flex flex-shrink-0 bg-zinc-900 text-white transition-all duration-300 flex-col`}
+    >
+      <SidebarBody collapsed={collapsed} />
+      <button
+        onClick={() => setCollapsed(!collapsed)}
+        className="p-3 border-t border-zinc-800 text-zinc-500 hover:text-zinc-300 transition-colors flex items-center justify-center min-h-[44px]"
+        aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+      >
+        <ChevronRight
+          size={16}
+          className={`transition-transform ${!collapsed ? "rotate-180" : ""}`}
+        />
+      </button>
     </aside>
+  )
+}
+
+function MobileSidebarDrawer() {
+  const { drawerOpen, setDrawerOpen } = useSidebar()
+  const pathname = usePathname()
+
+  // Close the drawer whenever the route changes — backstop for browser back/forward
+  // and any nav we don't catch via onClick (e.g., programmatic router pushes).
+  useEffect(() => {
+    setDrawerOpen(false)
+  }, [pathname, setDrawerOpen])
+
+  return (
+    <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
+      <SheetContent
+        side="left"
+        showCloseButton={false}
+        className="w-56 max-w-[80vw] bg-zinc-900 text-white border-r border-zinc-800 ring-0 p-0"
+      >
+        <SidebarBody collapsed={false} onNavigate={() => setDrawerOpen(false)} />
+      </SheetContent>
+    </Sheet>
+  )
+}
+
+export function Sidebar() {
+  return (
+    <>
+      <DesktopSidebar />
+      <MobileSidebarDrawer />
+    </>
   )
 }
