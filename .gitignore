@@ -83,3 +83,10 @@ docs/research/*.md
 # Firecrawl scrape cache + credentials (CAR-188) — never commit
 .firecrawl/
 
+# Runtime / per-machine artifacts
+.claude/scheduled_tasks.lock
+data/attempted-jobs.jsonl
+data/backups/
+data/*.db.pre-*
+jscpd-report/
+
