@@ -91,6 +91,14 @@ cd dashboard
 npm install
 ```
 
+**If you are working in a git worktree** (any branch under `.worktrees/`), skip step 2.2 and run the bootstrap script instead — it pulls the production env vars automatically so you do not have to copy values by hand:
+
+```bash
+bash tools/worktree-bootstrap-env.sh
+```
+
+Requires `VERCEL_TOKEN` to be set in your shell (configured per CAR-212). See `dashboard/CLAUDE.md → Worktree env bootstrap` for details.
+
 ### 2.2 Create Environment File
 
 Create `dashboard/.env.local` (this file is gitignored — never committed):
