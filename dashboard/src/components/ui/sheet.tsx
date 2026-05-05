@@ -36,9 +36,25 @@ function SheetOverlay({
 }
 
 type SheetContentProps = DialogPrimitive.Popup.Props & {
-  side?: "left" | "right"
+  side?: "right" | "left" | "top" | "bottom"
   showCloseButton?: boolean
 }
+
+// Per-side layout + animation classes. Animation mirrors the data-[side=*] pattern
+// from dropdown-menu.tsx line 44 so both primitives stay consistent.
+const SIDE_CLASSES: Record<NonNullable<SheetContentProps["side"]>, string> = {
+  right:
+    "top-0 bottom-0 right-0 max-w-[500px] data-[side=right]:slide-in-from-right data-[side=right]:slide-out-to-right",
+  left:
+    "top-0 bottom-0 left-0 max-w-[500px] data-[side=left]:slide-in-from-left data-[side=left]:slide-out-to-left",
+  top:
+    "top-0 left-0 right-0 max-h-[80vh] data-[side=top]:slide-in-from-top data-[side=top]:slide-out-to-top",
+  bottom:
+    "bottom-0 left-0 right-0 max-h-[80vh] rounded-t-xl data-[side=bottom]:slide-in-from-bottom data-[side=bottom]:slide-out-to-bottom",
+}
+
+// Base classes shared by all sides. Vertical sides keep h-full; horizontal sides keep w-full.
+const BASE_HORIZONTAL = "fixed z-50 flex flex-col bg-popover text-popover-foreground ring-1 ring-foreground/10 duration-200 ease-out outline-none data-open:animate-in data-closed:animate-out"
 
 function SheetContent({
   className,
@@ -47,18 +63,17 @@ function SheetContent({
   showCloseButton = true,
   ...props
 }: SheetContentProps) {
-  const sideClasses =
-    side === "left"
-      ? "left-0 data-open:slide-in-from-left data-closed:slide-out-to-left"
-      : "right-0 data-open:slide-in-from-right data-closed:slide-out-to-right"
+  const isVertical = side === "right" || side === "left"
   return (
     <DialogPrimitive.Portal>
       <SheetOverlay />
       <DialogPrimitive.Popup
         data-slot="sheet-content"
+        data-side={side}
         className={cn(
-          "fixed inset-y-0 z-50 flex h-full w-full max-w-[500px] flex-col bg-popover text-popover-foreground ring-1 ring-foreground/10 duration-200 ease-out outline-none data-open:animate-in data-closed:animate-out",
-          sideClasses,
+          BASE_HORIZONTAL,
+          isVertical ? "h-full w-full" : "w-full h-auto",
+          SIDE_CLASSES[side],
           className
         )}
         {...props}
