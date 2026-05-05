@@ -122,6 +122,16 @@ Each will be revisited during Phase 1b planning.
 
 ---
 
+## Promotions (executed)
+
+Tasks that have been promoted from Claude to local (or demoted back). Each row records the decision as executed in `config/settings.py` via `careerpilot llm promote`.
+
+| Date | Task | From | To | Pass Rate | Sample Size | Notes |
+|------|------|------|-----|-----------|-------------|-------|
+| <!-- FILL: first promotion --> | | | | | | |
+
+---
+
 ## Phase 1b Promotion Candidates
 
 Tasks to evaluate for local promotion based on Phase 1a review data:
