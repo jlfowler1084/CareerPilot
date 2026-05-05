@@ -22,12 +22,18 @@ import { ScheduleModal } from "@/components/applications/schedule-modal"
 import { PrepPackModal } from "@/components/applications/prep-pack-modal"
 import { toIntelligenceSnapshot } from "@/lib/prep-pack/adapter"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { useIntelligence } from "@/hooks/use-intelligence"
 import { useApplicationEvents } from "@/hooks/use-application-events"
 import { STATUSES } from "@/lib/constants"
 import { RelativeTime } from "@/components/ui/relative-time"
-import { ExternalLink, Trash2, Save, Mail, Phone, Sparkles, FileCheck, CalendarDays, CalendarCheck, FileText, BrainCircuit, ChevronDown, ChevronRight, Download, Loader2, FileSearch, Headphones } from "lucide-react"
+import { ExternalLink, Trash2, Save, Mail, Phone, Sparkles, FileCheck, CalendarDays, CalendarCheck, FileText, BrainCircuit, ChevronDown, ChevronRight, Download, Loader2, FileSearch, Headphones, MoreHorizontal } from "lucide-react"
 import type { Application, ApplicationStatus, ApplicationEvent } from "@/types"
 
 const EVENT_ICONS: Record<string, string> = {
@@ -210,7 +216,7 @@ export function ApplicationRow({
       ref={rowRef}
       className="bg-white rounded-xl border border-zinc-200 p-4 hover:shadow-md transition-shadow"
     >
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
         <div
           className="flex-1 min-w-0 cursor-pointer"
           onClick={() => setIsExpanded(!isExpanded)}
@@ -269,13 +275,13 @@ export function ApplicationRow({
           </div>
         </div>
 
-        <div className="flex flex-col items-end gap-2 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
-          {/* Status dropdown */}
+        <div className="flex flex-col gap-2 md:items-end md:flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+          {/* Status dropdown — full width on mobile for tap accuracy, dense on desktop */}
           <select
             value={application.status}
             onChange={handleStatusChange}
             disabled={statusUpdating}
-            className="text-[11px] px-2 py-1.5 rounded-md border border-zinc-200 bg-white text-zinc-700 cursor-pointer focus:outline-none focus:ring-1 focus:ring-amber-300 disabled:opacity-50 min-h-[28px]"
+            className="text-sm md:text-[11px] px-3 md:px-2 py-2.5 md:py-1.5 rounded-md border border-zinc-200 bg-white text-zinc-700 cursor-pointer focus:outline-none focus:ring-1 focus:ring-amber-300 disabled:opacity-50 min-h-[44px] md:min-h-[28px] w-full md:w-auto"
           >
             {STATUSES.map((s) => (
               <option key={s.id} value={s.id}>
@@ -284,97 +290,193 @@ export function ApplicationRow({
             ))}
           </select>
 
-          {/* Tailor Resume */}
-          {application.url && application.tailored_resume ? (
-            <div className="flex items-center gap-1">
+          {/*
+            Mobile-only action bar (below md:). Schedule + Delete stay primary
+            visible actions; Tailor / Cover Letter / Prep Pack collapse into a
+            "More" overflow dropdown so the row footprint stays tight at 375px.
+          */}
+          <div className="flex md:hidden flex-wrap items-center gap-2">
+            {SCHEDULABLE_STATUSES.includes(application.status) && (
               <button
-                onClick={() => {
-                  setTailorViewMode(true)
-                  setTailorOpen(true)
-                }}
-                className="text-[10px] font-semibold px-2 py-1 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200 transition-colors flex items-center gap-1 hover:bg-emerald-100"
-                title="View saved tailored resume"
+                onClick={() => setScheduleOpen(true)}
+                className={`text-sm font-semibold px-3 py-2 rounded-md transition-colors flex items-center gap-1.5 min-h-[44px] ${
+                  application.calendar_event_id
+                    ? "bg-blue-50 text-blue-700 border border-blue-200"
+                    : "border border-zinc-200 text-zinc-700 hover:text-blue-600"
+                }`}
+                title={application.calendar_event_id ? "Calendar events exist — click to add more" : "Schedule calendar events"}
               >
-                <FileCheck size={10} />
-                Tailored
+                {application.calendar_event_id ? <CalendarCheck size={14} /> : <CalendarDays size={14} />}
+                {application.calendar_event_id ? "Scheduled" : "Schedule"}
               </button>
+            )}
+
+            <button
+              type="button"
+              onClick={handleDelete}
+              className={`text-sm font-semibold px-3 py-2 rounded-md transition-colors flex items-center gap-1.5 min-h-[44px] ${
+                confirmDelete
+                  ? "bg-red-100 text-red-700 border border-red-300"
+                  : "border border-zinc-200 text-zinc-700 hover:text-red-500"
+              }`}
+            >
+              <Trash2 size={14} />
+              {confirmDelete ? "Confirm?" : "Delete"}
+            </button>
+
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                className="text-sm font-semibold px-3 py-2 rounded-md border border-zinc-200 text-zinc-700 hover:text-zinc-900 transition-colors flex items-center gap-1.5 min-h-[44px]"
+                aria-label="More actions"
+              >
+                <MoreHorizontal size={14} />
+                More
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-44">
+                {application.url && application.tailored_resume && (
+                  <>
+                    <DropdownMenuItem
+                      onClick={() => {
+                        setTailorViewMode(true)
+                        setTailorOpen(true)
+                      }}
+                    >
+                      <FileCheck size={14} className="mr-2 text-emerald-600" />
+                      View tailored resume
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => {
+                        setTailorViewMode(false)
+                        setTailorOpen(true)
+                      }}
+                    >
+                      <Sparkles size={14} className="mr-2 text-amber-600" />
+                      Generate new tailor
+                    </DropdownMenuItem>
+                  </>
+                )}
+                {application.url && !application.tailored_resume && (
+                  <DropdownMenuItem
+                    onClick={() => {
+                      setTailorViewMode(false)
+                      setTailorOpen(true)
+                    }}
+                  >
+                    <Sparkles size={14} className="mr-2 text-amber-600" />
+                    Tailor resume
+                  </DropdownMenuItem>
+                )}
+                {application.url && (
+                  <DropdownMenuItem onClick={() => setCoverLetterOpen(true)}>
+                    <FileText size={14} className="mr-2 text-blue-600" />
+                    Cover letter
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuItem
+                  onClick={() => setPrepPackOpen(true)}
+                  disabled={prepPackDisabled}
+                >
+                  <Headphones size={14} className="mr-2 text-violet-600" />
+                  Prep pack
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+
+          {/* Desktop button stack (md: and up) — unchanged behavior */}
+          <div className="hidden md:flex md:flex-col md:items-end md:gap-2">
+            {/* Tailor Resume */}
+            {application.url && application.tailored_resume ? (
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => {
+                    setTailorViewMode(true)
+                    setTailorOpen(true)
+                  }}
+                  className="text-[10px] font-semibold px-2 py-1 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200 transition-colors flex items-center gap-1 hover:bg-emerald-100"
+                  title="View saved tailored resume"
+                >
+                  <FileCheck size={10} />
+                  Tailored
+                </button>
+                <button
+                  onClick={() => {
+                    setTailorViewMode(false)
+                    setTailorOpen(true)
+                  }}
+                  className="text-[10px] font-semibold px-2 py-1 rounded-md text-zinc-400 hover:text-amber-600 transition-colors flex items-center gap-1"
+                  title="Generate a new tailored resume"
+                >
+                  <Sparkles size={10} />
+                </button>
+              </div>
+            ) : application.url ? (
               <button
                 onClick={() => {
                   setTailorViewMode(false)
                   setTailorOpen(true)
                 }}
                 className="text-[10px] font-semibold px-2 py-1 rounded-md text-zinc-400 hover:text-amber-600 transition-colors flex items-center gap-1"
-                title="Generate a new tailored resume"
+                title="Tailor resume for this job"
               >
                 <Sparkles size={10} />
+                Tailor
               </button>
-            </div>
-          ) : application.url ? (
+            ) : null}
+
+            {/* Cover Letter */}
+            {application.url && (
+              <button
+                onClick={() => setCoverLetterOpen(true)}
+                className="text-[10px] font-semibold px-2 py-1 rounded-md text-zinc-400 hover:text-blue-600 transition-colors flex items-center gap-1"
+                title="Generate cover letter for this job"
+              >
+                <FileText size={10} />
+                Cover Letter
+              </button>
+            )}
+
+            {/* Prep Pack */}
             <button
-              onClick={() => {
-                setTailorViewMode(false)
-                setTailorOpen(true)
-              }}
-              className="text-[10px] font-semibold px-2 py-1 rounded-md text-zinc-400 hover:text-amber-600 transition-colors flex items-center gap-1"
-              title="Tailor resume for this job"
+              onClick={() => setPrepPackOpen(true)}
+              disabled={prepPackDisabled}
+              className="text-[10px] font-semibold px-2 py-1 rounded-md text-zinc-400 hover:text-violet-600 transition-colors flex items-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed"
+              title={prepPackDisabled ? "Fill in Company Research or Interview Prep first" : "Generate audiobook + Kindle ebook"}
             >
-              <Sparkles size={10} />
-              Tailor
+              <Headphones size={10} />
+              Prep Pack
             </button>
-          ) : null}
 
-          {/* Cover Letter */}
-          {application.url && (
+            {/* Schedule */}
+            {SCHEDULABLE_STATUSES.includes(application.status) && (
+              <button
+                onClick={() => setScheduleOpen(true)}
+                className={`text-[10px] font-semibold px-2 py-1 rounded-md transition-colors flex items-center gap-1 ${
+                  application.calendar_event_id
+                    ? "bg-blue-50 text-blue-700 border border-blue-200"
+                    : "text-zinc-400 hover:text-blue-600"
+                }`}
+                title={application.calendar_event_id ? "Calendar events exist — click to add more" : "Schedule calendar events"}
+              >
+                {application.calendar_event_id ? <CalendarCheck size={10} /> : <CalendarDays size={10} />}
+                {application.calendar_event_id ? "Scheduled" : "Schedule"}
+              </button>
+            )}
+
+            {/* Delete */}
             <button
-              onClick={() => setCoverLetterOpen(true)}
-              className="text-[10px] font-semibold px-2 py-1 rounded-md text-zinc-400 hover:text-blue-600 transition-colors flex items-center gap-1"
-              title="Generate cover letter for this job"
-            >
-              <FileText size={10} />
-              Cover Letter
-            </button>
-          )}
-
-          {/* Prep Pack */}
-          <button
-            onClick={() => setPrepPackOpen(true)}
-            disabled={prepPackDisabled}
-            className="text-[10px] font-semibold px-2 py-1 rounded-md text-zinc-400 hover:text-violet-600 transition-colors flex items-center gap-1 disabled:opacity-40 disabled:cursor-not-allowed"
-            title={prepPackDisabled ? "Fill in Company Research or Interview Prep first" : "Generate audiobook + Kindle ebook"}
-          >
-            <Headphones size={10} />
-            Prep Pack
-          </button>
-
-          {/* Schedule */}
-          {SCHEDULABLE_STATUSES.includes(application.status) && (
-            <button
-              onClick={() => setScheduleOpen(true)}
-              className={`text-[10px] font-semibold px-2 py-1 rounded-md transition-colors flex items-center gap-1 ${
-                application.calendar_event_id
-                  ? "bg-blue-50 text-blue-700 border border-blue-200"
-                  : "text-zinc-400 hover:text-blue-600"
+              type="button"
+              onClick={handleDelete}
+              className={`text-[10px] font-semibold px-2.5 py-1.5 rounded-md transition-colors flex items-center gap-1 min-h-[28px] ${
+                confirmDelete
+                  ? "bg-red-100 text-red-700 border border-red-300"
+                  : "text-zinc-400 hover:text-red-500"
               }`}
-              title={application.calendar_event_id ? "Calendar events exist — click to add more" : "Schedule calendar events"}
             >
-              {application.calendar_event_id ? <CalendarCheck size={10} /> : <CalendarDays size={10} />}
-              {application.calendar_event_id ? "Scheduled" : "Schedule"}
+              <Trash2 size={10} />
+              {confirmDelete ? "Confirm?" : "Delete"}
             </button>
-          )}
-
-          {/* Delete */}
-          <button
-            type="button"
-            onClick={handleDelete}
-            className={`text-[10px] font-semibold px-2.5 py-1.5 rounded-md transition-colors flex items-center gap-1 min-h-[28px] ${
-              confirmDelete
-                ? "bg-red-100 text-red-700 border border-red-300"
-                : "text-zinc-400 hover:text-red-500"
-            }`}
-          >
-            <Trash2 size={10} />
-            {confirmDelete ? "Confirm?" : "Delete"}
-          </button>
+          </div>
         </div>
       </div>
 
@@ -414,18 +516,18 @@ export function ApplicationRow({
       {isExpanded && (
       <div className="mt-3 pt-3 border-t border-zinc-100" onClick={(e) => e.stopPropagation()}>
         <Tabs defaultValue={initialTabValue}>
-          <TabsList variant="line" className="w-full justify-start gap-0 h-7 mb-2">
-            <TabsTrigger value="details" className="text-xs px-3 py-1 h-7">
+          <TabsList variant="line" className="w-full justify-start gap-0 h-11 md:h-7 mb-2">
+            <TabsTrigger value="details" className="text-xs px-3 py-1 h-11 md:h-7">
               Details
             </TabsTrigger>
-            <TabsTrigger value="intelligence" className="text-xs px-3 py-1 h-7 flex items-center gap-1.5">
+            <TabsTrigger value="intelligence" className="text-xs px-3 py-1 h-11 md:h-7 flex items-center gap-1.5">
               <BrainCircuit size={12} />
               Intelligence
               {hasIntelligence && (
                 <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
               )}
             </TabsTrigger>
-            <TabsTrigger value="research" className="text-xs px-3 py-1 h-7 flex items-center gap-1.5">
+            <TabsTrigger value="research" className="text-xs px-3 py-1 h-11 md:h-7 flex items-center gap-1.5">
               <FileSearch size={12} />
               Research
             </TabsTrigger>
