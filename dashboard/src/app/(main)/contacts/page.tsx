@@ -150,7 +150,7 @@ export default function ContactsPage() {
   return (
     <div className="p-6 space-y-6">
       {/* Page header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h2 className="text-lg font-bold">Contacts</h2>
           {!loading && (
