@@ -274,7 +274,7 @@ export default function InboxPage() {
     <div className="flex flex-col h-full">
       {/* Top bar */}
       <div className="px-6 py-4 border-b border-zinc-200 dark:border-zinc-800">
-        <div className="flex items-center justify-between mb-3">
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
           <div>
             <h1 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">Inbox</h1>
             <p className={`text-xs ${statusToneClass} font-mono flex items-center gap-2`}>
