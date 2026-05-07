@@ -1,3 +1,5 @@
+@.claude/preflight.md
+
 # CLAUDE.md — CareerPilot Project Context
 <!-- This file contains CareerPilot-specific rules only.
      Shared conventions are inherited from ~/.claude/CLAUDE.md -->

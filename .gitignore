@@ -85,6 +85,8 @@ docs/research/*.md
 
 # Runtime / per-machine artifacts
 .claude/scheduled_tasks.lock
+.claude/preflight.md
+.claude/preflight.tmp.md
 data/attempted-jobs.jsonl
 data/backups/
 data/*.db.pre-*
