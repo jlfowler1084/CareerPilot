@@ -19,6 +19,10 @@
     "worktree-management",
     "subagent-coordinator",
     "web-research",
-    "nextjs-supabase"
+    "nextjs-supabase",
+    "superpowers:using-superpowers",
+    "compound-engineering:ce-compound",
+    "compound-engineering:ce-compound-refresh",
+    "generate-deployment-prompt"
   ]
 }
