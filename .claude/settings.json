@@ -1,0 +1,12 @@
+{
+  "enabledPlugins": {
+    "huggingface-skills@claude-plugins-official": false,
+    "vercel@claude-plugins-official": false,
+    "chrome-devtools-mcp@claude-plugins-official": false,
+    "microsoft-docs@claude-plugins-official": false,
+    "claude-md-management@claude-plugins-official": false,
+    "skill-creator@claude-plugins-official": false,
+    "frontend-design@claude-plugins-official": false,
+    "firecrawl@claude-plugins-official": false
+  }
+}
