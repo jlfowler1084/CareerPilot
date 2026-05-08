@@ -23,6 +23,8 @@
     "superpowers:using-superpowers",
     "compound-engineering:ce-compound",
     "compound-engineering:ce-compound-refresh",
-    "generate-deployment-prompt"
+    "generate-deployment-prompt",
+    "cross-project",
+    "git-branching"
   ]
 }
