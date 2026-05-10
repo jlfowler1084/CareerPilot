@@ -1,4 +1,133 @@
 {
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pwsh -NoProfile -ExecutionPolicy Bypass -File \"F:\\Projects\\ClaudeInfra\\tools\\Invoke-SessionContextLoader.ps1\"",
+            "timeout": 10,
+            "statusMessage": "Loading prior session context..."
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pwsh -NoProfile -ExecutionPolicy Bypass -File \"F:\\Projects\\ClaudeInfra\\tools\\Invoke-SessionDistiller.ps1\"",
+            "timeout": 60,
+            "statusMessage": "Qwen distilling session..."
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pwsh -NoProfile -ExecutionPolicy Bypass -File \"F:\\Projects\\ClaudeInfra\\tools\\Invoke-SessionMemoryWriter.ps1\"",
+            "timeout": 15,
+            "statusMessage": "Writing session facts to memory..."
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Read|Bash|Grep|Glob|WebFetch",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pwsh -NoProfile -ExecutionPolicy Bypass -File \"F:\\Projects\\ClaudeInfra\\tools\\Invoke-ToolOutputCompressor.ps1\"",
+            "timeout": 90,
+            "statusMessage": "Qwen compressing large output..."
+          }
+        ]
+      },
+      {
+        "matcher": "Read",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pwsh -NoProfile -ExecutionPolicy Bypass -File \"F:\\Projects\\ClaudeInfra\\tools\\Invoke-SemanticSectionExtractor.ps1\"",
+            "timeout": 60,
+            "statusMessage": "Qwen extracting relevant sections..."
+          }
+        ]
+      },
+      {
+        "matcher": "Read",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pwsh -NoProfile -ExecutionPolicy Bypass -File \"F:\\Projects\\ClaudeInfra\\tools\\Invoke-SolutionsPropagator.ps1\"",
+            "timeout": 45,
+            "statusMessage": "Qwen finding related solutions..."
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pwsh -NoProfile -ExecutionPolicy Bypass -File \"F:\\Projects\\ClaudeInfra\\tools\\Invoke-AutoTestSuggester.ps1\"",
+            "timeout": 45,
+            "statusMessage": "Qwen suggesting test coverage..."
+          }
+        ]
+      },
+      {
+        "matcher": "Grep",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pwsh -NoProfile -ExecutionPolicy Bypass -File \"F:\\Projects\\ClaudeInfra\\tools\\Invoke-GrepResultRanker.ps1\"",
+            "timeout": 45,
+            "statusMessage": "Qwen ranking grep results..."
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pwsh -NoProfile -ExecutionPolicy Bypass -File \"F:\\Projects\\ClaudeInfra\\tools\\Invoke-BashOutputParser.ps1\"",
+            "timeout": 45,
+            "statusMessage": "Qwen parsing bash output..."
+          }
+        ]
+      },
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pwsh -NoProfile -ExecutionPolicy Bypass -File \"F:\\Projects\\ClaudeInfra\\tools\\Invoke-TokenBudgetSentinel.ps1\"",
+            "timeout": 10,
+            "statusMessage": "Tracking token budget..."
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "pwsh -NoProfile -ExecutionPolicy Bypass -File \"F:\\Projects\\ClaudeInfra\\tools\\Invoke-PreCommitReviewer.ps1\"",
+            "timeout": 45,
+            "statusMessage": "Qwen reviewing staged changes..."
+          }
+        ]
+      }
+    ]
+  },
+  "skillListingBudgetFraction": 0.03,
   "enabledPlugins": {
     "huggingface-skills@claude-plugins-official": false,
     "vercel@claude-plugins-official": false,
@@ -26,5 +155,72 @@
     "generate-deployment-prompt",
     "cross-project",
     "git-branching"
-  ]
+  ],
+  "skillOverrides": {
+    "hyperv": "off",
+    "compound-engineering:ce-work": "off",
+    "compound-engineering:ce-optimize": "off",
+    "firecrawl": "off",
+    "atlassian:capture-tasks-from-meeting-notes": "off",
+    "compound-engineering:git-commit": "off",
+    "hetzner-management": "off",
+    "compound-engineering:document-review": "off",
+    "compound-engineering:todo-triage": "off",
+    "compound-engineering:ce-ideate": "off",
+    "firecrawl-build-search": "off",
+    "discord-webhook": "off",
+    "compound-engineering:todo-create": "off",
+    "compound-engineering:todo-resolve": "off",
+    "firecrawl-download": "off",
+    "compound-engineering:every-style-editor": "off",
+    "compound-engineering:agent-native-audit": "off",
+    "compound-engineering:dhh-rails-style": "off",
+    "atlassian:triage-issue": "off",
+    "compound-engineering:changelog": "off",
+    "compound-engineering:andrew-kane-gem-writer": "off",
+    "compound-engineering:ce-work-beta": "off",
+    "atlassian:search-company-knowledge": "off",
+    "firecrawl-build-scrape": "off",
+    "compound-engineering:git-clean-gone-branches": "off",
+    "discord:configure": "off",
+    "elements-of-style:writing-clearly-and-concisely": "off",
+    "compound-engineering:test-browser": "off",
+    "atlassian:generate-status-report": "off",
+    "firecrawl-scrape": "off",
+    "compound-engineering:git-worktree": "off",
+    "compound-engineering:ce-demo-reel": "off",
+    "compound-engineering:gemini-imagegen": "off",
+    "compound-engineering:ce-review": "off",
+    "vyos": "off",
+    "firecrawl-crawl": "off",
+    "compound-engineering:ce-slack-research": "off",
+    "firecrawl-search": "off",
+    "compound-engineering:ce-sessions": "off",
+    "atlassian:spec-to-backlog": "off",
+    "firecrawl-agent": "off",
+    "compound-engineering:lfg": "off",
+    "compound-engineering:ce-update": "off",
+    "firecrawl-build-onboarding": "off",
+    "compound-engineering:git-commit-push-pr": "off",
+    "compound-engineering:ce-brainstorm": "off",
+    "llm-routing": "off",
+    "discord:access": "off",
+    "compound-engineering:frontend-design": "off",
+    "compound-engineering:ce-plan": "off",
+    "firecrawl-interact": "off",
+    "compound-engineering:resolve-pr-feedback": "off",
+    "compound-engineering:deploy-docs": "off",
+    "powershell-windows": "off",
+    "compound-engineering:report-bug-ce": "off",
+    "compound-engineering:proof": "off",
+    "compound-engineering:claude-permissions-optimizer": "off",
+    "compound-engineering:ce-debug": "off",
+    "firecrawl-build-interact": "off",
+    "compound-engineering:test-xcode": "off",
+    "compound-engineering:dspy-ruby": "off",
+    "firecrawl-map": "off",
+    "compound-engineering:onboarding": "off",
+    "compound-engineering:agent-native-architecture": "off",
+    "compound-engineering:ce-setup": "off"
+  }
 }
