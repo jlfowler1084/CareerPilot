@@ -83,7 +83,7 @@ CareerPilot/
 ├── .env                   # API keys (never committed)
 ├── prompts/               # Session handoff prompts
 ├── docs/plans/            # CE implementation plans (archive)
-├── docs/solutions/        # Knowledge compounding (solved problems)
+├── docs/solutions/        # Solved problems and best practices, organized by category with YAML frontmatter (module, tags, problem_type)
 ├── .mcp.json              # MCP server configuration
 └── requirements.txt
 ```
