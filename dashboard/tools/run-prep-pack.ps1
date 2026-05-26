@@ -217,10 +217,12 @@ Full log: $logPath
                 title  = $title
                 body   = $body
                 status = if ($exitCode -eq 0) { 'success' } else { 'failure' }
-            } | ConvertTo-Json -Compress
+            }
+            $bodyJson  = $payload | ConvertTo-Json -Depth 10 -Compress
+            $bodyBytes = [System.Text.Encoding]::UTF8.GetBytes($bodyJson)
 
-            Invoke-RestMethod -Uri $DiscordWebhookUrl -Method Post -Body $payload `
-                -ContentType 'application/json' -ErrorAction Stop | Out-Null
+            Invoke-RestMethod -Uri $DiscordWebhookUrl -Method Post -Body $bodyBytes `
+                -ContentType 'application/json; charset=utf-8' -ErrorAction Stop | Out-Null
         }
         catch {
             Write-Warning "Discord webhook failed: $_"
