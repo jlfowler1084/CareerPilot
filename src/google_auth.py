@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import logging
+import os
+import sys
 from pathlib import Path
 
 from google.auth.transport.requests import Request
@@ -11,6 +13,51 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 
 logger = logging.getLogger(__name__)
+
+NON_INTERACTIVE_ENV_VAR = "CAREERPILOT_NONINTERACTIVE"
+
+_TRUTHY = frozenset({"1", "true", "yes", "on"})
+_FALSY = frozenset({"0", "false", "no", "off"})
+
+
+class NonInteractiveAuthRequired(RuntimeError):
+    """Interactive Google consent is needed but no human can complete it.
+
+    Raised instead of calling ``InstalledAppFlow.run_local_server()`` when the
+    process has no interactive session. See CAR-226: under a Windows S4U
+    scheduled task the flow calls ``webbrowser.open()``, which launches Chrome
+    against the user's default profile inside Session 0. That Chrome takes the
+    profile singleton lock but can never render a window, so the flow blocks
+    forever and the orphaned browser makes Chrome unlaunchable on the desktop
+    until reboot.
+    """
+
+
+def _is_non_interactive() -> bool:
+    """Decide whether interactive OAuth consent is possible here.
+
+    ``CAREERPILOT_NONINTERACTIVE`` is authoritative in both directions when
+    set, so a scheduled task can assert it and a human can override it. With
+    the variable unset, fall back to whether stdin is a terminal.
+    """
+    raw = os.environ.get(NON_INTERACTIVE_ENV_VAR)
+    if raw is not None:
+        value = raw.strip().lower()
+        if value in _TRUTHY:
+            return True
+        if value in _FALSY:
+            return False
+        logger.warning(
+            "Unrecognized %s=%r; falling back to terminal detection",
+            NON_INTERACTIVE_ENV_VAR,
+            raw,
+        )
+
+    try:
+        return not sys.stdin.isatty()
+    except (AttributeError, ValueError, OSError):
+        # No usable stdin at all (detached service): fail closed.
+        return True
 
 
 def get_google_service(
@@ -37,6 +84,8 @@ def get_google_service(
 
     Raises:
         FileNotFoundError: If credentials_file does not exist.
+        NonInteractiveAuthRequired: If consent is required but the process is
+            running without an interactive session (CAR-226).
     """
     if not credentials_file.exists():
         raise FileNotFoundError(
@@ -65,6 +114,21 @@ def get_google_service(
             creds = None
 
     if not creds or not creds.valid:
+        if _is_non_interactive():
+            raise NonInteractiveAuthRequired(
+                f"Google OAuth for '{api_name}' needs interactive consent, but this "
+                f"process has no interactive session, so no one can complete it. "
+                f"Refusing to open a browser.\n"
+                f"  Token:       {token_path}\n"
+                f"  Credentials: {credentials_file}\n"
+                f"Re-authenticate by running the same command from an interactive "
+                f"terminal, where a human can finish Google consent in a browser. "
+                f"Set {NON_INTERACTIVE_ENV_VAR}=0 to force the interactive flow "
+                f"here, or =1 to assert this context is headless.\n"
+                f"Opening a browser from a Windows service session hijacks the "
+                f"default Chrome profile and hangs forever (CAR-226)."
+            )
+
         logger.info("Starting OAuth flow for %s — a browser window will open", api_name)
         flow = InstalledAppFlow.from_client_secrets_file(str(credentials_file), scopes)
         creds = flow.run_local_server(port=0)

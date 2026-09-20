@@ -135,6 +135,15 @@ try {
         throw "pip install failed (exit $LASTEXITCODE)"
     }
 
+    # CAR-226: declare this context headless so the shared Google OAuth helper
+    # refuses to open a consent browser instead of blocking forever.
+    # This task runs S4U in Windows Session 0, which has no visible desktop.
+    # Without this, a dead refresh token sends InstalledAppFlow.run_local_server()
+    # into webbrowser.open(), which launches Chrome against the operator's real
+    # default profile, takes the profile singleton lock, and never returns. The
+    # orphaned Session 0 Chrome then makes the desktop browser unlaunchable.
+    $env:CAREERPILOT_NONINTERACTIVE = '1'
+
     "[{0}] Starting python -m cli search run-profiles ({1})" -f (Get-Date -Format 'o'), $pythonExe |
         Tee-Object -FilePath $LogFile -Append | Out-Null
 
@@ -164,4 +173,61 @@ catch {
     "[{0}] FATAL: {1}" -f (Get-Date -Format 'o'), $_.Exception.Message |
         Out-File -FilePath $LogFile -Append -Encoding utf8
     exit 1
+}
+finally {
+    # CAR-226 defense in depth: never leave a descendant process behind.
+    #
+    # On 2026-09-20 six orphaned python.exe processes were found, one per day,
+    # each holding a Session 0 Chrome that had taken the operator's default
+    # profile lock. They survived because Task Scheduler's stop-on-time-limit
+    # terminates the task's top-level process without reaping grandchildren.
+    #
+    # Scope limit: PowerShell runs finally on normal exit and on a thrown
+    # error, but NOT when the process is hard-killed. This closes the graceful
+    # paths only. A hard guarantee needs a Win32 job object with
+    # JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE, which is tracked separately.
+    try {
+        $allProcs = Get-CimInstance -ClassName Win32_Process -ErrorAction Stop
+
+        $childrenOf = @{}
+        foreach ($proc in $allProcs) {
+            $parentId = [int]$proc.ParentProcessId
+            if (-not $childrenOf.ContainsKey($parentId)) {
+                $childrenOf[$parentId] = [System.Collections.Generic.List[object]]::new()
+            }
+            $childrenOf[$parentId].Add($proc)
+        }
+
+        $pending = [System.Collections.Generic.Queue[int]]::new()
+        $pending.Enqueue($PID)
+        $descendants = [System.Collections.Generic.List[object]]::new()
+
+        while ($pending.Count -gt 0) {
+            $current = $pending.Dequeue()
+            if ($childrenOf.ContainsKey($current)) {
+                foreach ($child in $childrenOf[$current]) {
+                    $descendants.Add($child)
+                    $pending.Enqueue([int]$child.ProcessId)
+                }
+            }
+        }
+
+        foreach ($victim in $descendants) {
+            $victimId = [int]$victim.ProcessId
+            if ($victimId -eq $PID) { continue }
+            try {
+                Stop-Process -Id $victimId -Force -ErrorAction Stop
+                "[{0}] Reaped surviving descendant PID {1} ({2})" -f (Get-Date -Format 'o'), $victimId, $victim.Name |
+                    Out-File -FilePath $LogFile -Append -Encoding utf8
+            }
+            catch {
+                "[{0}] Could not reap PID {1} ({2}): {3}" -f (Get-Date -Format 'o'), $victimId, $victim.Name, $_.Exception.Message |
+                    Out-File -FilePath $LogFile -Append -Encoding utf8
+            }
+        }
+    }
+    catch {
+        "[{0}] Descendant reap pass failed: {1}" -f (Get-Date -Format 'o'), $_.Exception.Message |
+            Out-File -FilePath $LogFile -Append -Encoding utf8
+    }
 }
